@@ -127,3 +127,28 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.entity_type}#{self.entity_id} por {self.user}"
+
+
+class PasswordResetToken(models.Model):
+    """
+    RF-USR-04: token de recuperación de acceso para staff (enviado por
+    correo). Los pacientes recuperan acceso reenviando un OTP, así que
+    este modelo solo aplica a usuarios con contraseña.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reset_tokens")
+    token_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Token de recuperación"
+        verbose_name_plural = "Tokens de recuperación"
+
+    @property
+    def is_valid(self):
+        from django.utils import timezone
+
+        return self.used_at is None and self.expires_at > timezone.now()

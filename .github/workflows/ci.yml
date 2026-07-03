@@ -49,7 +49,7 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
       - name: Tests
         working-directory: django-api
-        run: python manage.py test
+        run: python manage.py test --settings=config.settings_test
 
   whatsapp-gateway-tests:
     runs-on: ubuntu-latest

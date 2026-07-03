@@ -34,4 +34,13 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("role", "admin")
         if not password:
             raise ValueError("El superusuario requiere contraseña.")
+        if "tenant" not in extra_fields and "tenant_id" not in extra_fields:
+            from apps.common.models import Tenant
+
+            tenant = Tenant.objects.filter(is_active=True).order_by("created_at").first()
+            if tenant is None:
+                raise ValueError(
+                    "No existe ningún Tenant. Ejecutá primero: python manage.py bootstrap"
+                )
+            extra_fields["tenant"] = tenant
         return self._create_user(email, phone, password, **extra_fields)

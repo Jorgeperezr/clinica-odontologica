@@ -36,3 +36,7 @@ class AuditLogAdmin(admin.ModelAdmin):
 
 admin.site.register(OTPCode)
 admin.site.register(DeviceToken)
+
+from apps.accounts.models import PasswordResetToken  # noqa: E402
+
+admin.site.register(PasswordResetToken)

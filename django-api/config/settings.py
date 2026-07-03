@@ -141,7 +141,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "user": "60/min",
         "anon": "20/min",
-        "otp": "5/10min",
+        "otp": "5/min",  # aprox. válida; ventana exacta de 10 min se afina en Sprint 10
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "apps.common.exceptions.custom_exception_handler",
