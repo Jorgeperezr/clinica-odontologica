@@ -10,10 +10,10 @@ urlpatterns = [
     path("api/v1/", include("apps.patients.urls")),
     # path("api/v1/", include("apps.agenda.urls")),
     # path("api/v1/", include("apps.clinical.urls")),
-    # path("api/v1/", include("apps.specialties.urls")),
+    path("api/v1/", include("apps.specialties.urls")),
     # path("api/v1/", include("apps.billing.urls")),
     # path("api/v1/", include("apps.inventory.urls")),
-    # path("api/v1/", include("apps.configuration.urls")),
+    path("api/v1/", include("apps.configuration.urls")),
     path("internal/", include("apps.whatsapp.internal_urls")),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(

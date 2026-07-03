@@ -1,3 +1,16 @@
+"""
+Comando de arranque en frío.
+
+Resuelve el problema chicken-and-egg del primer despliegue: el modelo
+User exige un tenant, pero para crear el primer usuario (superuser) aún
+no existe ningún tenant. Este comando:
+  1. Crea un tenant por defecto.
+  2. Siembra las 5 especialidades base del SRS.
+  3. Siembra los parámetros del sistema por defecto.
+  4. Opcionalmente crea un superusuario.
+Todo de forma idempotente (se puede correr varias veces sin duplicar).
+"""
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -6,7 +19,7 @@ from apps.common.models import Tenant
 
 
 class Command(BaseCommand):
-    help = "Crea un tenant por defecto (y opcionalmente un superusuario)."
+    help = "Prepara el primer arranque: tenant, especialidades, parámetros y (opcional) superusuario."
 
     def add_arguments(self, parser):
         parser.add_argument("--tenant-name", default="Clínica Principal")
@@ -25,6 +38,9 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Tenant ya existia: {tenant.name}")
 
+        self._seed_specialties(tenant)
+        self._seed_parameters(tenant)
+
         email = options["superuser_email"]
         password = options["superuser_password"]
         if email and password:
@@ -37,3 +53,32 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"Superusuario creado: {email}"))
         else:
             self.stdout.write("Tenant listo. Cree el superusuario con: python manage.py createsuperuser")
+
+    def _seed_specialties(self, tenant):
+        from apps.specialties.models import Specialty
+
+        base = [
+            "Clínica general",
+            "Ortodoncia",
+            "Endodoncia",
+            "Periodoncia",
+            "Odontopediatría",
+        ]
+        added = 0
+        for name in base:
+            _, was_created = Specialty.objects.get_or_create(tenant=tenant, name=name)
+            added += int(was_created)
+        if added:
+            self.stdout.write(self.style.SUCCESS(f"Especialidades sembradas: {added} nuevas."))
+
+    def _seed_parameters(self, tenant):
+        from apps.configuration.models import SystemParameter
+
+        added = 0
+        for key, (value, description) in SystemParameter.DEFAULTS.items():
+            _, was_created = SystemParameter.objects.get_or_create(
+                tenant=tenant, key=key, defaults={"value": value, "description": description}
+            )
+            added += int(was_created)
+        if added:
+            self.stdout.write(self.style.SUCCESS(f"Parámetros del sistema sembrados: {added} nuevos."))

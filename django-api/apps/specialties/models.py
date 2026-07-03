@@ -1,11 +1,34 @@
 """
-Especialidades — modelos definidos en 04-Modelo-de-Datos-Clinica-Odontologica.md.
-
-Implementacion programada para: Sprint 7 (ver 07-Roadmap-Clinica-Odontologica.md).
-Se deja el modulo vacio (solo el AppConfig registrado en INSTALLED_APPS)
-para que el proyecto ya tenga la estructura completa desde el Sprint 0,
-sin implementar logica de negocio antes de que corresponda en el Roadmap.
+Especialidades (RF-ESP) — ver 04-Modelo-de-Datos, sección 5.
+Sprint 2: el catálogo de Specialty (base para tratamientos y agenda).
+Los formularios clínicos por especialidad (SpecialtyForm) se implementan
+en el Sprint 7, cuando exista la historia clínica.
 """
 
-# from apps.common.models import TenantAwareModel
-# (los modelos de este modulo se agregan aqui en su sprint correspondiente)
+from django.db import models
+
+from apps.common.models import TenantAwareModel
+
+
+class Specialty(TenantAwareModel):
+    """
+    Catálogo de especialidades odontológicas (RF-CFG-01).
+    Las 5 base del SRS: Clínica general, Ortodoncia, Endodoncia,
+    Periodoncia, Odontopediatría. Es ABM: el admin puede agregar más.
+    """
+
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Especialidad"
+        verbose_name_plural = "Especialidades"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "name"], name="unique_specialty_name_per_tenant"
+            )
+        ]
+
+    def __str__(self):
+        return self.name
