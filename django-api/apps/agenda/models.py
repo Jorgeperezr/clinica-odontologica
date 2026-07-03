@@ -1,0 +1,11 @@
+"""
+Agenda — modelos definidos en 04-Modelo-de-Datos-Clinica-Odontologica.md.
+
+Implementacion programada para: Sprint 3, con el bloqueo por morosidad en el Sprint 9 (ver 07-Roadmap-Clinica-Odontologica.md).
+Se deja el modulo vacio (solo el AppConfig registrado en INSTALLED_APPS)
+para que el proyecto ya tenga la estructura completa desde el Sprint 0,
+sin implementar logica de negocio antes de que corresponda en el Roadmap.
+"""
+
+# from apps.common.models import TenantAwareModel
+# (los modelos de este modulo se agregan aqui en su sprint correspondiente)
