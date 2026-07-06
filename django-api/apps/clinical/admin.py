@@ -4,7 +4,9 @@ from apps.clinical.models import (
     ClinicalRecord,
     Diagnosis,
     Evolution,
+    InformedConsent,
     OdontogramState,
+    RadiographPhoto,
     ToothRecord,
     TreatmentPlan,
     TreatmentPlanItem,
@@ -45,3 +47,11 @@ class ToothRecordAdmin(admin.ModelAdmin):
 
 admin.site.register(ClinicalRecord)
 admin.site.register(Diagnosis)
+admin.site.register(RadiographPhoto)
+
+
+@admin.register(InformedConsent)
+class InformedConsentAdmin(admin.ModelAdmin):
+    list_display = ["title", "patient", "signed_at", "created_at"]
+    list_filter = ["tenant"]
+    readonly_fields = ["signed_at", "ip_address", "pdf_file", "signature_image"]

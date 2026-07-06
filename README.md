@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 5 completado
+## Estado actual: Sprint 6 completado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -69,6 +69,14 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Auditoría** de todo acceso al odontograma.
 - **Fix de CI (GitHub Actions):** corregidos 4 errores de lint, reescrito el workflow (usa SQLite en tests, sin Postgres service innecesario, secret key larga para evitar HMAC warning, gateway como lint-only hasta que tenga tests).
 - **Tests:** 6 nuevos (39 en total) — todos en verde.
+
+### Sprint 6 — Cierre del módulo clínico (hecho)
+- **Consentimientos informados** con firma capturada en pantalla táctil (base64), generación de PDF con la firma incrustada usando reportlab, y registro de fecha/hora/IP como evidencia — registro interno según la legislación ecuatoriana (RF-HCL-07).
+- **Radiografías y fotografías clínicas** asociadas a fecha y opcionalmente a pieza dental (RF-HCL-06).
+- **Exportación de la historia clínica completa a PDF** (diagnósticos, evoluciones, planes) (RF-HCL-08).
+- **Validación robusta:** firmas ilegibles o base64 inválido se rechazan sin romper la generación del PDF.
+- **Tests:** 4 nuevos (43 en total) — todos en verde.
+- **Bug corregido:** `status` no estaba importado en la vista de firma, lo que habría causado un crash en producción al recibir una firma inválida.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

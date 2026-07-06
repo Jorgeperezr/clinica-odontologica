@@ -1,4 +1,4 @@
-from rest_framework import generics
+from rest_framework import generics, status
 
 from apps.accounts.models import AuditLog
 from apps.agenda.models import Doctor
@@ -236,3 +236,153 @@ class CurrentOdontogramView(generics.GenericAPIView):
         _audit(request, "view_odontogram", "Odontogram", patient.id)
         serializer = ToothRecordSerializer(list(current.values()), many=True)
         return Response({"patient_id": str(patient.id), "teeth": serializer.data})
+
+
+class RadiographPhotoListCreateView(generics.ListCreateAPIView):
+    """GET/POST /api/v1/patients/{id}/radiographs/ — RF-HCL-06."""
+
+    permission_classes = [CAN_EDIT_CLINICAL]
+    filterset_fields = ["type", "tooth_fdi_code"]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import RadiographPhotoSerializer
+        return RadiographPhotoSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import RadiographPhoto
+        return RadiographPhoto.objects.filter(
+            patient_id=self.kwargs["pk"], tenant=self.request.tenant
+        ).order_by("-date")
+
+    def perform_create(self, serializer):
+        patient = _get_patient(self.request, self.kwargs["pk"])
+        serializer.save(
+            tenant=self.request.tenant, patient=patient, uploaded_by=self.request.user
+        )
+
+
+class InformedConsentListCreateView(generics.ListCreateAPIView):
+    """GET/POST /api/v1/patients/{id}/consents/ — RF-HCL-07."""
+
+    permission_classes = [HasRole.for_roles("admin", "doctor", "reception")]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import InformedConsentSerializer
+        return InformedConsentSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import InformedConsent
+        return InformedConsent.objects.filter(
+            patient_id=self.kwargs["pk"], tenant=self.request.tenant
+        ).order_by("-created_at")
+
+    def perform_create(self, serializer):
+        patient = _get_patient(self.request, self.kwargs["pk"])
+        serializer.save(
+            tenant=self.request.tenant, patient=patient, created_by=self.request.user
+        )
+
+
+class ConsentSignView(generics.GenericAPIView):
+    """
+    POST /api/v1/consents/{id}/sign/ — RF-HCL-07.
+    Recibe la firma en base64, la guarda, genera el PDF con la firma
+    incrustada y registra fecha/hora/IP como evidencia (registro interno).
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor", "reception")]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import ConsentSignSerializer
+        return ConsentSignSerializer
+
+    def post(self, request, pk):
+        import base64
+
+        from django.core.files.base import ContentFile
+        from django.utils import timezone
+        from rest_framework.response import Response
+
+        from apps.clinical.models import InformedConsent
+        from apps.clinical.pdf_utils import generate_consent_pdf
+        from apps.clinical.serializers import (
+            ConsentSignSerializer,
+            InformedConsentSerializer,
+        )
+
+        consent = generics.get_object_or_404(
+            InformedConsent, pk=pk, tenant=request.tenant
+        )
+        serializer = ConsentSignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Decodificar la firma base64 (formato "data:image/png;base64,....")
+        raw = serializer.validated_data["signature_image_base64"]
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        try:
+            image_bytes = base64.b64decode(raw, validate=True)
+            # Verificar que sea realmente una imagen legible
+            from io import BytesIO
+
+            from PIL import Image as PILImage
+            PILImage.open(BytesIO(image_bytes)).verify()
+        except Exception:
+            return Response(
+                {"detail": "La firma no es una imagen base64 válida."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Guardar la imagen de la firma
+        sig_name = f"consent_{consent.id}_signature.png"
+        consent.signature_image.save(sig_name, ContentFile(image_bytes), save=False)
+        consent.signed_at = timezone.now()
+        consent.ip_address = self._get_ip(request)
+        consent.save()
+
+        # Generar el PDF con la firma incrustada
+        pdf_bytes = generate_consent_pdf(consent, consent.signature_image.path)
+        pdf_name = f"consent_{consent.id}.pdf"
+        consent.pdf_file.save(pdf_name, ContentFile(pdf_bytes), save=True)
+
+        _audit(request, "sign_consent", "InformedConsent", consent.id)
+        return Response(InformedConsentSerializer(consent).data)
+
+    @staticmethod
+    def _get_ip(request):
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR")
+
+
+class ClinicalHistoryExportView(generics.GenericAPIView):
+    """GET /api/v1/patients/{id}/clinical-record/export-pdf/ — RF-HCL-08."""
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from apps.clinical.models import Diagnosis, Evolution, TreatmentPlan
+        from apps.clinical.pdf_utils import generate_clinical_history_pdf
+
+        patient = _get_patient(request, pk)
+        evolutions = Evolution.objects.filter(
+            patient=patient, tenant=request.tenant
+        ).order_by("-date")
+        diagnoses = Diagnosis.objects.filter(
+            patient=patient, tenant=request.tenant
+        ).order_by("-date")
+        plans = TreatmentPlan.objects.filter(
+            patient=patient, tenant=request.tenant
+        ).prefetch_related("items", "items__treatment")
+
+        pdf_bytes = generate_clinical_history_pdf(patient, evolutions, diagnoses, plans)
+        _audit(request, "export_clinical_history", "ClinicalRecord", patient.id)
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="historia_clinica_{patient.national_id}.pdf"'
+        )
+        return response

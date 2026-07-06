@@ -4,7 +4,9 @@ from apps.clinical.models import (
     ClinicalRecord,
     Diagnosis,
     Evolution,
+    InformedConsent,
     OdontogramState,
+    RadiographPhoto,
     ToothRecord,
     TreatmentPlan,
     TreatmentPlanItem,
@@ -87,3 +89,37 @@ class ToothRecordSerializer(serializers.ModelSerializer):
             "doctor", "treatment_plan_item", "date", "notes", "created_at",
         ]
         read_only_fields = ["id", "created_at", "doctor"]
+
+
+class RadiographPhotoSerializer(serializers.ModelSerializer):
+    type_display = serializers.CharField(source="get_type_display", read_only=True)
+
+    class Meta:
+        model = RadiographPhoto
+        fields = [
+            "id", "tooth_fdi_code", "file", "type", "type_display",
+            "description", "date", "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class InformedConsentSerializer(serializers.ModelSerializer):
+    is_signed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = InformedConsent
+        fields = [
+            "id", "patient", "treatment_plan", "title", "body_text",
+            "pdf_file", "signature_image", "signed_at", "ip_address",
+            "is_signed", "created_at",
+        ]
+        read_only_fields = [
+            "id", "patient", "pdf_file", "signature_image",
+            "signed_at", "ip_address", "is_signed", "created_at",
+        ]
+
+
+class ConsentSignSerializer(serializers.Serializer):
+    """Recibe la firma capturada en pantalla táctil como base64 PNG."""
+
+    signature_image_base64 = serializers.CharField()

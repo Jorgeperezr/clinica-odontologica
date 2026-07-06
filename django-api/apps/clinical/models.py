@@ -10,6 +10,7 @@ import uuid
 
 from django.db import models
 
+from apps.accounts.models import User
 from apps.agenda.models import Doctor
 from apps.common.models import TenantAwareModel
 from apps.patients.models import Patient
@@ -266,3 +267,78 @@ class ToothRecord(TenantAwareModel):
 
     def __str__(self):
         return f"Pieza {self.tooth_fdi_code} ({self.surface}) — {self.state.code}"
+
+
+class RadiographPhoto(TenantAwareModel):
+    """Radiografía o fotografía clínica (RF-HCL-06)."""
+
+    class Type(models.TextChoices):
+        RADIOGRAPH = "radiograph", "Radiografía"
+        PHOTO = "photo", "Fotografía"
+
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="radiographs"
+    )
+    tooth_fdi_code = models.CharField(max_length=2, blank=True)
+    file = models.FileField(upload_to="clinical/radiographs/")
+    type = models.CharField(max_length=15, choices=Type.choices, default=Type.RADIOGRAPH)
+    description = models.CharField(max_length=255, blank=True)
+    date = models.DateField()
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Radiografía / Fotografía"
+        verbose_name_plural = "Radiografías / Fotografías"
+
+    def __str__(self):
+        return f"{self.get_type_display()} — {self.patient} ({self.date})"
+
+
+class InformedConsent(TenantAwareModel):
+    """
+    Consentimiento informado firmado en pantalla táctil (RF-HCL-07).
+    Para Ecuador se usa como REGISTRO INTERNO (sin firma electrónica
+    calificada): se guarda la imagen de la firma incrustada en un PDF
+    y se registra fecha/hora/IP como evidencia del acto.
+    """
+
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="consents"
+    )
+    treatment_plan = models.ForeignKey(
+        TreatmentPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="consents",
+    )
+    title = models.CharField(max_length=200, default="Consentimiento informado")
+    body_text = models.TextField(
+        help_text="Texto del consentimiento que el paciente acepta."
+    )
+    pdf_file = models.FileField(upload_to="clinical/consents/", null=True, blank=True)
+    signature_image = models.ImageField(
+        upload_to="clinical/signatures/", null=True, blank=True
+    )
+    signed_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    device_info = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Consentimiento informado"
+        verbose_name_plural = "Consentimientos informados"
+
+    def __str__(self):
+        estado = "firmado" if self.signed_at else "pendiente"
+        return f"{self.title} — {self.patient} ({estado})"
+
+    @property
+    def is_signed(self):
+        return self.signed_at is not None

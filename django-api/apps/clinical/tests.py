@@ -194,3 +194,77 @@ class OdontogramTests(APITestCase):
         self.assertTrue(
             AuditLog.objects.filter(entity_type="Odontogram").exists()
         )
+
+
+class ConsentAndExportTests(APITestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Clínica Test", ruc="1234567890001")
+        self.doctor_user = User.objects.create_user(
+            email="doc@test.com", password="superseguro123", role="doctor", tenant=self.tenant
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=self.doctor_user)
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Luis", last_name="Mora", national_id="1111111111"
+        )
+
+    def test_create_consent(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(
+            reverse("consent-list", kwargs={"pk": self.patient.id}),
+            {"title": "Consentimiento para extracción",
+             "body_text": "Autorizo el procedimiento de extracción dental."},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(resp.data["is_signed"])
+
+    def test_sign_consent_generates_pdf(self):
+        from apps.clinical.models import InformedConsent
+
+        consent = InformedConsent.objects.create(
+            tenant=self.tenant, patient=self.patient,
+            title="Consentimiento", body_text="Autorizo el tratamiento.",
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+        # PNG mínimo válido (1x1 transparente) en base64
+        tiny_png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAGElEQVR4nGNkYGD4z0AEYCJG0ahC6ikEAKYXARPmwrp4AAAAAElFTkSuQmCC"
+        resp = self.client.post(
+            reverse("consent-sign", kwargs={"pk": consent.id}),
+            {"signature_image_base64": tiny_png},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["is_signed"])
+        consent.refresh_from_db()
+        self.assertIsNotNone(consent.signed_at)
+        self.assertIsNotNone(consent.ip_address)
+        self.assertTrue(consent.pdf_file.name.endswith(".pdf"))
+
+    def test_export_clinical_history_pdf(self):
+        from datetime import date
+
+        from apps.clinical.models import Evolution
+        Evolution.objects.create(
+            tenant=self.tenant, patient=self.patient, doctor=self.doctor,
+            type="clinical_note", date=date.today(), notes="Primera consulta.",
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.get(
+            reverse("clinical-history-export", kwargs={"pk": self.patient.id})
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        # El contenido debe empezar con la firma de un PDF
+        self.assertTrue(resp.content.startswith(b"%PDF"))
+
+    def test_invalid_signature_rejected(self):
+        from apps.clinical.models import InformedConsent
+
+        consent = InformedConsent.objects.create(
+            tenant=self.tenant, patient=self.patient,
+            title="C", body_text="texto",
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(
+            reverse("consent-sign", kwargs={"pk": consent.id}),
+            {"signature_image_base64": "no-es-base64-valido!!!"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
