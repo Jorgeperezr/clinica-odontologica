@@ -40,6 +40,7 @@ class Command(BaseCommand):
 
         self._seed_specialties(tenant)
         self._seed_parameters(tenant)
+        self._seed_odontogram_states(tenant)
 
         email = options["superuser_email"]
         password = options["superuser_password"]
@@ -82,3 +83,16 @@ class Command(BaseCommand):
             added += int(was_created)
         if added:
             self.stdout.write(self.style.SUCCESS(f"Parámetros del sistema sembrados: {added} nuevos."))
+
+    def _seed_odontogram_states(self, tenant):
+        from apps.clinical.models import OdontogramState
+
+        added = 0
+        for code, (label, color, order) in OdontogramState.DEFAULTS.items():
+            _, was_created = OdontogramState.objects.get_or_create(
+                tenant=tenant, code=code,
+                defaults={"label": label, "color": color, "order": order},
+            )
+            added += int(was_created)
+        if added:
+            self.stdout.write(self.style.SUCCESS(f"Estados del odontograma sembrados: {added} nuevos."))

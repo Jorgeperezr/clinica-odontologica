@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 4 completado
+## Estado actual: Sprint 5 completado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -61,6 +61,14 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Permisos:** solo roles clínicos (admin/doctor/auxiliar); recepción no accede a datos clínicos.
 - **Pendiente para Sprints 5-6:** odontograma interactivo, radiografías, consentimientos con firma; descuento de inventario al completar un ítem (Sprint 11).
 - **Tests:** 6 nuevos (33 en total) — todos en verde.
+
+### Sprint 5 — Odontograma interactivo + fix de CI (hecho)
+- **Catálogo de 12 estados dentales** parametrizable (sano, caries, obturado, corona, ausente, etc.), sembrado por `bootstrap` y editable desde el admin sin tocar código (RF-HCL-02, SRS 3.4.1).
+- **Registro histórico** por pieza (FDI) y superficie — nunca se sobrescribe; cada cambio crea una fila nueva (trazabilidad clínica completa).
+- **Vista "estado actual de la boca"** (`/odontogram/current/`): calcula el último estado por cada pieza/superficie para que el frontend dibuje el odontograma.
+- **Auditoría** de todo acceso al odontograma.
+- **Fix de CI (GitHub Actions):** corregidos 4 errores de lint, reescrito el workflow (usa SQLite en tests, sin Postgres service innecesario, secret key larga para evitar HMAC warning, gateway como lint-only hasta que tenga tests).
+- **Tests:** 6 nuevos (39 en total) — todos en verde.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

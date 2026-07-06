@@ -156,3 +156,83 @@ class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
         serializer.save()
         # TODO (Sprint 11): si el ítem pasa a 'done' y el tratamiento
         # consume inventario, descontar stock automáticamente (RF-INV-05).
+
+
+class OdontogramStateListView(generics.ListAPIView):
+    """GET /api/v1/odontogram-states/ — catálogo de estados (RF-HCL-02)."""
+
+    serializer_class = None
+    permission_classes = [CAN_VIEW_CLINICAL]
+    pagination_class = None  # Catálogo fijo (~12 estados), no se pagina
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import OdontogramStateSerializer
+        return OdontogramStateSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import OdontogramState
+        return OdontogramState.objects.filter(
+            tenant=self.request.tenant, is_active=True
+        ).order_by("order")
+
+
+class ToothRecordListCreateView(generics.ListCreateAPIView):
+    """
+    GET/POST /api/v1/patients/{id}/tooth-records/ — RF-HCL-02.
+    GET devuelve el historial completo; POST crea un nuevo registro
+    (nunca actualiza uno existente — así se preserva la trazabilidad).
+    """
+
+    permission_classes = [CAN_EDIT_CLINICAL]
+    filterset_fields = ["tooth_fdi_code", "surface"]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import ToothRecordSerializer
+        return ToothRecordSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import ToothRecord
+        return ToothRecord.objects.filter(
+            patient_id=self.kwargs["pk"], tenant=self.request.tenant
+        ).select_related("state", "doctor").order_by("-created_at")
+
+    def perform_create(self, serializer):
+        patient = _get_patient(self.request, self.kwargs["pk"])
+        doctor = _get_doctor(self.request)
+        serializer.save(tenant=self.request.tenant, patient=patient, doctor=doctor)
+        _audit(self.request, "create_tooth_record", "ToothRecord", patient.id)
+
+
+class CurrentOdontogramView(generics.GenericAPIView):
+    """
+    GET /api/v1/patients/{id}/odontogram/current/ — RF-HCL-02.
+    Vista calculada: el último estado vigente por cada (pieza, superficie),
+    derivado del historial de ToothRecord. Esto es lo que el frontend
+    dibuja como "estado actual de la boca".
+    """
+
+    permission_classes = [CAN_VIEW_CLINICAL]
+
+    def get(self, request, pk):
+        from rest_framework.response import Response
+
+        from apps.clinical.models import ToothRecord
+        from apps.clinical.serializers import ToothRecordSerializer
+
+        patient = _get_patient(request, pk)
+        # Traer todos los registros del paciente, más recientes primero;
+        # nos quedamos con el primero visto por cada (pieza, superficie).
+        records = (
+            ToothRecord.objects.filter(patient=patient, tenant=request.tenant)
+            .select_related("state", "doctor")
+            .order_by("-created_at")
+        )
+        current = {}
+        for rec in records:
+            key = (rec.tooth_fdi_code, rec.surface)
+            if key not in current:
+                current[key] = rec
+
+        _audit(request, "view_odontogram", "Odontogram", patient.id)
+        serializer = ToothRecordSerializer(list(current.values()), many=True)
+        return Response({"patient_id": str(patient.id), "teeth": serializer.data})

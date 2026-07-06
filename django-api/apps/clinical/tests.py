@@ -101,3 +101,96 @@ class ClinicalTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         item.refresh_from_db()
         self.assertEqual(item.status, "done")
+
+
+class OdontogramTests(APITestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Clínica Test", ruc="1234567890001")
+        self.doctor_user = User.objects.create_user(
+            email="doc@test.com", password="superseguro123", role="doctor", tenant=self.tenant
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=self.doctor_user)
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Ana", last_name="López", national_id="0909090909"
+        )
+        # Sembrar estados del odontograma vía bootstrap
+        from django.core.management import call_command
+        call_command("bootstrap", tenant_name=self.tenant.name)
+
+    def _get_state(self, code):
+        from apps.clinical.models import OdontogramState
+        return OdontogramState.objects.get(tenant=self.tenant, code=code)
+
+    def test_odontogram_states_seeded(self):
+        from apps.clinical.models import OdontogramState
+        self.assertEqual(OdontogramState.objects.filter(tenant=self.tenant).count(), 12)
+
+    def test_list_odontogram_states(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.get(reverse("odontogram-state-list"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 12)
+
+    def test_create_tooth_record(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        state = self._get_state("CARIES")
+        resp = self.client.post(
+            reverse("tooth-record-list", kwargs={"pk": self.patient.id}),
+            {"tooth_fdi_code": "16", "surface": "occlusal",
+             "state": str(state.id), "date": "2026-07-06"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data["state_code"], "CARIES")
+
+    def test_tooth_record_history_not_overwritten(self):
+        """Cada registro crea una fila nueva, nunca actualiza (trazabilidad)."""
+        from apps.clinical.models import ToothRecord
+        self.client.force_authenticate(user=self.doctor_user)
+        caries = self._get_state("CARIES")
+        obturado = self._get_state("OBTURADO")
+        # Registrar caries en la pieza 16
+        self.client.post(
+            reverse("tooth-record-list", kwargs={"pk": self.patient.id}),
+            {"tooth_fdi_code": "16", "surface": "occlusal",
+             "state": str(caries.id), "date": "2026-01-01"},
+        )
+        # Luego registrar obturado (no borra el anterior)
+        self.client.post(
+            reverse("tooth-record-list", kwargs={"pk": self.patient.id}),
+            {"tooth_fdi_code": "16", "surface": "occlusal",
+             "state": str(obturado.id), "date": "2026-03-15"},
+        )
+        self.assertEqual(ToothRecord.objects.filter(patient=self.patient).count(), 2)
+
+    def test_current_odontogram_returns_latest(self):
+        """La vista current/ devuelve el estado más reciente por pieza/superficie."""
+        self.client.force_authenticate(user=self.doctor_user)
+        caries = self._get_state("CARIES")
+        obturado = self._get_state("OBTURADO")
+        self.client.post(
+            reverse("tooth-record-list", kwargs={"pk": self.patient.id}),
+            {"tooth_fdi_code": "16", "surface": "occlusal",
+             "state": str(caries.id), "date": "2026-01-01"},
+        )
+        self.client.post(
+            reverse("tooth-record-list", kwargs={"pk": self.patient.id}),
+            {"tooth_fdi_code": "16", "surface": "occlusal",
+             "state": str(obturado.id), "date": "2026-03-15"},
+        )
+        resp = self.client.get(
+            reverse("odontogram-current", kwargs={"pk": self.patient.id})
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        teeth = resp.data["teeth"]
+        self.assertEqual(len(teeth), 1)  # Solo 1 pieza/superficie
+        self.assertEqual(teeth[0]["state_code"], "OBTURADO")  # La más reciente
+
+    def test_tooth_record_access_is_audited(self):
+        from apps.accounts.models import AuditLog
+        self.client.force_authenticate(user=self.doctor_user)
+        self.client.get(
+            reverse("odontogram-current", kwargs={"pk": self.patient.id})
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(entity_type="Odontogram").exists()
+        )

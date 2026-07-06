@@ -4,6 +4,8 @@ from apps.clinical.models import (
     ClinicalRecord,
     Diagnosis,
     Evolution,
+    OdontogramState,
+    ToothRecord,
     TreatmentPlan,
     TreatmentPlanItem,
 )
@@ -62,3 +64,26 @@ class TreatmentPlanSerializer(serializers.ModelSerializer):
             "notes", "items", "created_at",
         ]
         read_only_fields = ["id", "created_at", "items", "created_by"]
+
+
+class OdontogramStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OdontogramState
+        fields = ["id", "code", "label", "color", "order", "is_active"]
+        read_only_fields = ["id"]
+
+
+class ToothRecordSerializer(serializers.ModelSerializer):
+    state_code = serializers.CharField(source="state.code", read_only=True)
+    state_label = serializers.CharField(source="state.label", read_only=True)
+    state_color = serializers.CharField(source="state.color", read_only=True)
+    surface_display = serializers.CharField(source="get_surface_display", read_only=True)
+
+    class Meta:
+        model = ToothRecord
+        fields = [
+            "id", "tooth_fdi_code", "surface", "surface_display",
+            "state", "state_code", "state_label", "state_color",
+            "doctor", "treatment_plan_item", "date", "notes", "created_at",
+        ]
+        read_only_fields = ["id", "created_at", "doctor"]

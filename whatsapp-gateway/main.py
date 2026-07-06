@@ -12,7 +12,6 @@ from fastapi import Depends, FastAPI, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.config import settings
-from app.django_client import notify_django
 from app.meta_client import send_template_message
 from app.schemas import SendTemplateRequest, SendTemplateResponse
 from app.security import verify_internal_token, verify_meta_signature

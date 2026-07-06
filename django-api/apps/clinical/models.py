@@ -167,3 +167,102 @@ class TreatmentPlanItem(models.Model):
 
     def __str__(self):
         return f"{self.treatment.name} ({self.get_status_display()})"
+
+
+class OdontogramState(TenantAwareModel):
+    """
+    Catálogo de estados de una pieza dental (SRS, sección 3.4.1).
+    Basado en notación FDI/ISO 3950. Parametrizable: el admin/doctor
+    puede editar los estados sin tocar código. Los 12 estados base se
+    siembran por el comando bootstrap.
+    """
+
+    code = models.CharField(max_length=30)
+    label = models.CharField(max_length=100)
+    color = models.CharField(max_length=7, default="#000000", help_text="Color hex para la UI.")
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Estado de odontograma"
+        verbose_name_plural = "Estados de odontograma"
+        ordering = ["order", "code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"], name="unique_odontogram_state_code_per_tenant"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.code} — {self.label}"
+
+    # Catálogo base sembrado por bootstrap (SRS 3.4.1). Formato:
+    # code: (label, color, order)
+    DEFAULTS = {
+        "SANO": ("Sano", "#ffffff", 1),
+        "CARIES": ("Caries activa", "#dc2626", 2),
+        "OBTURADO": ("Obturado / restauración", "#2563eb", 3),
+        "CORONA": ("Corona protésica", "#eab308", 4),
+        "AUSENTE": ("Ausente", "#111827", 5),
+        "INDICADA_EXTRACCION": ("Indicada para extracción", "#f97316", 6),
+        "ENDODONCIA": ("Endodoncia realizada", "#7c3aed", 7),
+        "IMPLANTE": ("Implante", "#0891b2", 8),
+        "FRACTURA": ("Fractura", "#be123c", 9),
+        "PROTESIS_REMOVIBLE": ("Prótesis removible", "#6b7280", 10),
+        "SELLANTE": ("Sellante", "#16a34a", 11),
+        "EN_TRATAMIENTO": ("En tratamiento (planificado)", "#94a3b8", 12),
+    }
+
+
+class ToothRecord(TenantAwareModel):
+    """
+    Registro histórico del estado de una pieza dental por superficie
+    (RF-HCL-02). NUNCA se actualiza un registro existente: cada cambio
+    crea una fila nueva, formando el historial. El "estado actual" de una
+    pieza es el registro más reciente por (pieza, superficie).
+    """
+
+    class Surface(models.TextChoices):
+        WHOLE = "whole", "Toda la pieza"
+        VESTIBULAR = "vestibular", "Vestibular"
+        PALATAL_LINGUAL = "palatal_lingual", "Palatina/Lingual"
+        MESIAL = "mesial", "Mesial"
+        DISTAL = "distal", "Distal"
+        OCCLUSAL = "occlusal", "Oclusal"
+
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="tooth_records"
+    )
+    tooth_fdi_code = models.CharField(
+        max_length=2, help_text="Código FDI: 11-48 (permanente), 51-85 (temporal)."
+    )
+    surface = models.CharField(
+        max_length=20, choices=Surface.choices, default=Surface.WHOLE
+    )
+    state = models.ForeignKey(
+        OdontogramState, on_delete=models.PROTECT, related_name="tooth_records"
+    )
+    doctor = models.ForeignKey(
+        Doctor, on_delete=models.PROTECT, related_name="tooth_records"
+    )
+    treatment_plan_item = models.ForeignKey(
+        TreatmentPlanItem,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tooth_records",
+    )
+    date = models.DateField()
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Registro de pieza dental"
+        verbose_name_plural = "Registros de piezas dentales"
+        indexes = [
+            models.Index(fields=["patient", "tooth_fdi_code", "surface"]),
+            models.Index(fields=["patient", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Pieza {self.tooth_fdi_code} ({self.surface}) — {self.state.code}"
