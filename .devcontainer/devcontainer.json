@@ -1,0 +1,23 @@
+{
+  "name": "Clínica Odontológica",
+  "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "cp -n .env.example .env || true",
+  "postStartCommand": "cp -n .env.example .env || true && docker compose up -d",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+  "forwardPorts": [80, 8000, 8001],
+  "portsAttributes": {
+    "80": { "label": "Nginx (app)" },
+    "8000": { "label": "Django API" },
+    "8001": { "label": "WhatsApp Gateway" }
+  }
+}
