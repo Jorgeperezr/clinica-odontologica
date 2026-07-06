@@ -9,7 +9,7 @@ urlpatterns = [
     # implementan en los próximos sprints del Roadmap (Sprints 1-11).
     path("api/v1/", include("apps.patients.urls")),
     path("api/v1/", include("apps.agenda.urls")),
-    # path("api/v1/", include("apps.clinical.urls")),
+    path("api/v1/", include("apps.clinical.urls")),
     path("api/v1/", include("apps.specialties.urls")),
     # path("api/v1/", include("apps.billing.urls")),
     # path("api/v1/", include("apps.inventory.urls")),

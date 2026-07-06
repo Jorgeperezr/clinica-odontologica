@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 2 completado
+## Estado actual: Sprint 4 completado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -41,6 +41,26 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Parámetros del sistema:** clave-valor (días de morosidad, ventana de recordatorio, stock mínimo, alerta de vencimiento), sembrados por `bootstrap` y editables solo por admin (RF-CFG-05).
 - **Permisos:** escritura de configuración solo admin; lectura para todo el staff clínico.
 - **Tests:** 9 tests nuevos (19 en total), incluyendo aislamiento entre clínicas y seed idempotente del bootstrap — todos en verde.
+
+### Sprint 3 — Agenda (hecho)
+- **Doctores:** perfil extendido del usuario (color de agenda, especialidades, preparado para token de Google Calendar).
+- **Citas:** creación con validación de solapamiento por doctor y bloqueo de citas en el pasado (RF-AGN-03).
+- **Estados:** pendiente, confirmada, cancelada, reagendada, completada, no asistió (RF-AGN-04).
+- **Check-in / check-out** con marca de tiempo (RF-AGN-05).
+- **Vista de agenda** diaria/semanal/mensual, filtrable por doctor; un doctor solo ve su propia agenda (RF-AGN-01, 02).
+- **Reagendar / cancelar** con validación de conflictos.
+- **Pendiente para sprints siguientes:** bloqueo por morosidad (Sprint 9, requiere billing); sincronización Google Calendar (OAuth2) y aviso de llegada por WhatsApp (Sprint 10).
+- **Tests:** 8 nuevos (27 en total) — todos en verde.
+
+### Sprint 4 — Historia clínica, parte 1 (hecho)
+- **Historia clínica general** por paciente (RF-HCL-01).
+- **Evoluciones** fechadas con tipo (nota clínica / receta / indicación de cuidado) y flag `visible_to_patient` que controla qué ve la app móvil (RF-HCL-03, RF-APP-03/04/06).
+- **Diagnósticos** asociados a pieza dental (FDI) o generales (RF-HCL-04).
+- **Planes de tratamiento** con secuencia de procedimientos, cada uno con estado (planificado/en progreso/realizado) (RF-HCL-05).
+- **Auditoría explícita** de todo acceso a datos clínicos, incluso lectura (exigencia LOPDP / RNF-004).
+- **Permisos:** solo roles clínicos (admin/doctor/auxiliar); recepción no accede a datos clínicos.
+- **Pendiente para Sprints 5-6:** odontograma interactivo, radiografías, consentimientos con firma; descuento de inventario al completar un ítem (Sprint 11).
+- **Tests:** 6 nuevos (33 en total) — todos en verde.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

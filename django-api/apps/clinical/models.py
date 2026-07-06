@@ -1,11 +1,169 @@
 """
-Historia clínica — modelos definidos en 04-Modelo-de-Datos-Clinica-Odontologica.md.
-
-Implementacion programada para: Sprints 4-7 (ver 07-Roadmap-Clinica-Odontologica.md).
-Se deja el modulo vacio (solo el AppConfig registrado en INSTALLED_APPS)
-para que el proyecto ya tenga la estructura completa desde el Sprint 0,
-sin implementar logica de negocio antes de que corresponda en el Roadmap.
+Historia clínica (RF-HCL) — ver 04-Modelo-de-Datos, sección 4.
+Sprint 4: ClinicalRecord, Evolution (con type y visible_to_patient),
+Diagnosis, TreatmentPlan y TreatmentPlanItem.
+El odontograma (OdontogramState, ToothRecord) y consentimientos/
+radiografías van en los Sprints 5-6.
 """
 
-# from apps.common.models import TenantAwareModel
-# (los modelos de este modulo se agregan aqui en su sprint correspondiente)
+import uuid
+
+from django.db import models
+
+from apps.agenda.models import Doctor
+from apps.common.models import TenantAwareModel
+from apps.patients.models import Patient
+
+
+class ClinicalRecord(models.Model):
+    """Historia clínica general, uno a uno con el paciente (RF-HCL-01)."""
+
+    patient = models.OneToOneField(
+        Patient, on_delete=models.CASCADE, related_name="clinical_record"
+    )
+    general_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Historia clínica"
+        verbose_name_plural = "Historias clínicas"
+
+    def __str__(self):
+        return f"HC de {self.patient}"
+
+
+class Evolution(TenantAwareModel):
+    """
+    Nota clínica fechada por cita (RF-HCL-03). El campo 'type' (aprobado
+    en la adenda de la Fase 5) permite que una misma tabla represente
+    notas clínicas, recetas e indicaciones de cuidado — estas dos últimas
+    son las que la app móvil muestra al paciente (RF-APP-04, RF-APP-06).
+    """
+
+    class Type(models.TextChoices):
+        CLINICAL_NOTE = "clinical_note", "Nota clínica"
+        PRESCRIPTION = "prescription", "Receta"
+        CARE_INSTRUCTION = "care_instruction", "Indicación de cuidado"
+
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="evolutions"
+    )
+    doctor = models.ForeignKey(
+        Doctor, on_delete=models.PROTECT, related_name="evolutions"
+    )
+    appointment = models.ForeignKey(
+        "agenda.Appointment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="evolutions",
+    )
+    type = models.CharField(
+        max_length=20, choices=Type.choices, default=Type.CLINICAL_NOTE
+    )
+    date = models.DateField()
+    notes = models.TextField()
+    visible_to_patient = models.BooleanField(
+        default=False,
+        help_text="Si es True, el paciente lo ve en la app (RF-APP-03).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Evolución"
+        verbose_name_plural = "Evoluciones"
+        indexes = [
+            models.Index(fields=["patient", "date"]),
+            models.Index(fields=["patient", "type", "visible_to_patient"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_type_display()} — {self.patient} ({self.date})"
+
+
+class Diagnosis(TenantAwareModel):
+    """Diagnóstico asociado a una pieza o general (RF-HCL-04)."""
+
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="diagnoses"
+    )
+    doctor = models.ForeignKey(
+        Doctor, on_delete=models.PROTECT, related_name="diagnoses"
+    )
+    tooth_fdi_code = models.CharField(
+        max_length=2, blank=True,
+        help_text="Código FDI (ej. '26'); vacío si es diagnóstico general.",
+    )
+    code = models.CharField(max_length=20, blank=True)
+    description = models.TextField()
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Diagnóstico"
+        verbose_name_plural = "Diagnósticos"
+
+    def __str__(self):
+        target = f"pieza {self.tooth_fdi_code}" if self.tooth_fdi_code else "general"
+        return f"Dx {target} — {self.patient}"
+
+
+class TreatmentPlan(TenantAwareModel):
+    """Plan de tratamiento: secuencia de procedimientos (RF-HCL-05)."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Borrador"
+        ACTIVE = "active", "Activo"
+        COMPLETED = "completed", "Completado"
+
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="treatment_plans"
+    )
+    created_by = models.ForeignKey(
+        Doctor, on_delete=models.PROTECT, related_name="treatment_plans"
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.DRAFT
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Plan de tratamiento"
+        verbose_name_plural = "Planes de tratamiento"
+
+    def __str__(self):
+        return f"Plan {self.get_status_display()} — {self.patient}"
+
+
+class TreatmentPlanItem(models.Model):
+    """Procedimiento individual dentro de un plan (RF-HCL-05)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planificado"
+        IN_PROGRESS = "in_progress", "En progreso"
+        DONE = "done", "Realizado"
+
+    treatment_plan = models.ForeignKey(
+        TreatmentPlan, on_delete=models.CASCADE, related_name="items"
+    )
+    treatment = models.ForeignKey(
+        "configuration.Treatment", on_delete=models.PROTECT, related_name="+"
+    )
+    tooth_fdi_code = models.CharField(max_length=2, blank=True)
+    order = models.PositiveIntegerField(default=1)
+    status = models.CharField(
+        max_length=15, choices=Status.choices, default=Status.PLANNED
+    )
+    estimated_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        verbose_name = "Ítem de plan de tratamiento"
+        verbose_name_plural = "Ítems de plan de tratamiento"
+        ordering = ["order"]
+
+    def __str__(self):
+        return f"{self.treatment.name} ({self.get_status_display()})"
