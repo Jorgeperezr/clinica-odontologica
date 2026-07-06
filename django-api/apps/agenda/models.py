@@ -1,11 +1,115 @@
 """
-Agenda — modelos definidos en 04-Modelo-de-Datos-Clinica-Odontologica.md.
-
-Implementacion programada para: Sprint 3, con el bloqueo por morosidad en el Sprint 9 (ver 07-Roadmap-Clinica-Odontologica.md).
-Se deja el modulo vacio (solo el AppConfig registrado en INSTALLED_APPS)
-para que el proyecto ya tenga la estructura completa desde el Sprint 0,
-sin implementar logica de negocio antes de que corresponda en el Roadmap.
+Agenda (RF-AGN) — ver 04-Modelo-de-Datos, sección 3.
+Sprint 3: Doctor (perfil extendido) y Appointment (citas) con estados,
+check-in/out y validación de solapamiento. El bloqueo por morosidad
+(RF-AGN-07) se activa en el Sprint 9, cuando exista billing.
+La sincronización con Google Calendar (RF-AGN-06) se estructura aquí y
+se completa con OAuth2 más adelante en este mismo sprint.
 """
 
-# from apps.common.models import TenantAwareModel
-# (los modelos de este modulo se agregan aqui en su sprint correspondiente)
+from django.db import models
+
+from apps.accounts.models import User
+from apps.common.models import TenantAwareModel
+from apps.specialties.models import Specialty
+
+
+class Doctor(TenantAwareModel):
+    """
+    Perfil extendido de un User con role=doctor. Se separa del User para
+    guardar datos propios del doctor (color en agenda, token de Google
+    Calendar) sin ensuciar el modelo de autenticación.
+    """
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="doctor_profile"
+    )
+    specialties = models.ManyToManyField(
+        Specialty, related_name="doctors", blank=True
+    )
+    calendar_color = models.CharField(
+        max_length=7, default="#3b82f6", help_text="Color hex para distinguirlo en la agenda."
+    )
+    google_calendar_token = models.JSONField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Doctor"
+        verbose_name_plural = "Doctores"
+
+    def __str__(self):
+        return self.user.email or str(self.user_id)
+
+    @property
+    def full_name(self):
+        # Si en el futuro el User tiene nombre/apellido, se usa aquí.
+        return self.user.email or str(self.user_id)
+
+
+class Appointment(TenantAwareModel):
+    """Cita odontológica (RF-AGN-03, 04, 05)."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        CONFIRMED = "confirmed", "Confirmada"
+        CANCELLED = "cancelled", "Cancelada"
+        RESCHEDULED = "rescheduled", "Reagendada"
+        COMPLETED = "completed", "Completada"
+        NO_SHOW = "no_show", "No asistió"
+
+    patient = models.ForeignKey(
+        "patients.Patient", on_delete=models.PROTECT, related_name="appointments"
+    )
+    doctor = models.ForeignKey(
+        Doctor, on_delete=models.PROTECT, related_name="appointments"
+    )
+    # Tratamiento estimado (opcional al agendar). FK textual para no crear
+    # dependencia circular con configuration en tiempo de import.
+    treatment = models.ForeignKey(
+        "configuration.Treatment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="appointments",
+    )
+    scheduled_start = models.DateTimeField()
+    scheduled_end = models.DateTimeField()
+    status = models.CharField(
+        max_length=15, choices=Status.choices, default=Status.PENDING
+    )
+    notes = models.TextField(blank=True)
+
+    checkin_at = models.DateTimeField(null=True, blank=True)
+    checkout_at = models.DateTimeField(null=True, blank=True)
+
+    google_calendar_event_id = models.CharField(max_length=255, blank=True)
+
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+
+    class Meta:
+        verbose_name = "Cita"
+        verbose_name_plural = "Citas"
+        indexes = [
+            models.Index(fields=["tenant", "doctor", "scheduled_start"]),
+            models.Index(fields=["tenant", "scheduled_start"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.patient} con {self.doctor} — {self.scheduled_start:%Y-%m-%d %H:%M}"
+
+    def overlaps_with_existing(self):
+        """
+        Valida que la cita no se solape con otra del mismo doctor que no
+        esté cancelada. Regla de negocio en el modelo, no en el cliente.
+        """
+        clash = Appointment.objects.filter(
+            doctor=self.doctor,
+            scheduled_start__lt=self.scheduled_end,
+            scheduled_end__gt=self.scheduled_start,
+        ).exclude(status=self.Status.CANCELLED)
+        if self.pk:
+            clash = clash.exclude(pk=self.pk)
+        return clash.exists()
