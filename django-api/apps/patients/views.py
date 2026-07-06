@@ -1,5 +1,5 @@
 from django.db.models import Q
-from rest_framework import generics, permissions
+from rest_framework import generics
 
 from apps.accounts.models import AuditLog
 from apps.common.permissions import HasRole

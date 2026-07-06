@@ -7,7 +7,6 @@ Se deja aquí el modelo de plantillas porque Configuración (RF-CFG-05)
 y el cliente del gateway (gateway_client.py) ya lo referencian.
 """
 
-import uuid
 
 from apps.common.models import TenantAwareModel
 from django.db import models
