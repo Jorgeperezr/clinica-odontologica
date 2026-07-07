@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 8 completado
+## Estado actual: Sprint 9 completado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -92,6 +92,13 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Estado de cuenta** del paciente: total, pagado, saldo y detección de cuotas vencidas (RF-TRP-04) — esto es lo que el Sprint 9 usará para el bloqueo por morosidad.
 - **Honorarios por doctor** (porcentaje o monto fijo) (RF-TRP-05).
 - **Tests:** 9 nuevos (58 en total), incluyendo el reparto exacto de centavos y pagos parciales — todos en verde.
+
+### Sprint 9 — Cierre financiero + bloqueo por morosidad (hecho)
+- **Bloqueo por morosidad activo** (RF-AGN-07 / RN-AGN-01): al crear una cita, el backend verifica si el paciente tiene cuotas vencidas más allá del umbral configurable (`dias_morosidad`). Si es moroso, devuelve 409; admin/recepción pueden forzar con `override=true` (excepción manual). La regla vive en el backend, aplica igual desde web o app.
+- **Lógica de morosidad centralizada** (`billing/services.py`): una sola definición de "paciente moroso" usada por agenda, reportes y la tarea programada.
+- **Reportes:** financiero (ingresos por método de pago), morosidad (quién debe, cuánto, desde cuándo), producción por doctor (RF-REP-01/02/03, RF-TRP-06).
+- **Tarea Celery diaria** (`mark_overdue_installments`) que marca automáticamente las cuotas vencidas — programada vía Celery Beat a las 00:30.
+- **Tests:** 8 nuevos (66 en total), incluyendo bloqueo, override, umbral configurable, cuota pagada que no bloquea, y la tarea de vencimiento — todos en verde.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

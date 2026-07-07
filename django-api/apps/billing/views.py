@@ -235,3 +235,120 @@ class DoctorFeeListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant, doctor_id=self.kwargs["pk"])
+
+
+class FinancialReportView(APIView):
+    """
+    GET /api/v1/reports/financial/?date_from=&date_to= — RF-TRP-06, RF-REP-01.
+    Ingresos por período, desglosados por método de pago.
+    """
+
+    permission_classes = [HasRole.for_roles("admin")]
+
+    def get(self, request):
+        from django.utils.dateparse import parse_date
+
+        payments = Payment.objects.filter(tenant=request.tenant)
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        if date_from:
+            payments = payments.filter(date__gte=parse_date(date_from))
+        if date_to:
+            payments = payments.filter(date__lte=parse_date(date_to))
+
+        by_method = {}
+        total = Decimal("0.00")
+        for p in payments:
+            by_method[p.method] = by_method.get(p.method, Decimal("0.00")) + p.amount
+            total += p.amount
+
+        return Response({
+            "total_income": str(total),
+            "by_method": {k: str(v) for k, v in by_method.items()},
+            "payment_count": payments.count(),
+        })
+
+
+class DelinquencyReportView(APIView):
+    """
+    GET /api/v1/reports/delinquency/ — RF-REP-02.
+    Lista de pacientes con cuotas vencidas: quién debe, cuánto y desde cuándo.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "reception")]
+
+    def get(self, request):
+        from apps.billing.services import get_delinquency_days
+
+        threshold = get_delinquency_days(request.tenant)
+        today = timezone.now().date()
+
+        overdue = (
+            Installment.objects.filter(tenant=request.tenant, due_date__lt=today)
+            .exclude(status=Installment.Status.PAID)
+            .select_related("patient")
+        )
+
+        by_patient = {}
+        for inst in overdue:
+            pid = str(inst.patient_id)
+            if pid not in by_patient:
+                by_patient[pid] = {
+                    "patient_id": pid,
+                    "patient_name": inst.patient.full_name,
+                    "overdue_amount": Decimal("0.00"),
+                    "oldest_due_date": inst.due_date,
+                    "installment_count": 0,
+                }
+            entry = by_patient[pid]
+            entry["overdue_amount"] += inst.balance
+            entry["installment_count"] += 1
+            if inst.due_date < entry["oldest_due_date"]:
+                entry["oldest_due_date"] = inst.due_date
+
+        result = []
+        for entry in by_patient.values():
+            days_overdue = (today - entry["oldest_due_date"]).days
+            result.append({
+                **entry,
+                "overdue_amount": str(entry["overdue_amount"]),
+                "oldest_due_date": str(entry["oldest_due_date"]),
+                "days_overdue": days_overdue,
+                "is_blocking": days_overdue >= threshold,
+            })
+
+        return Response({"delinquency_threshold_days": threshold, "patients": result})
+
+
+class ProductionByDoctorReportView(APIView):
+    """
+    GET /api/v1/reports/production-by-doctor/?doctor_id= — RF-REP-03.
+    Producción (citas completadas y evoluciones) por doctor.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get(self, request):
+        from apps.agenda.models import Appointment, Doctor
+
+        doctors = Doctor.objects.filter(tenant=request.tenant, is_active=True)
+        doctor_id = request.query_params.get("doctor_id")
+        if doctor_id:
+            doctors = doctors.filter(id=doctor_id)
+
+        # Un doctor solo ve su propia producción
+        if request.user.role == "doctor":
+            doctors = doctors.filter(user=request.user)
+
+        result = []
+        for doc in doctors.select_related("user"):
+            completed = Appointment.objects.filter(
+                tenant=request.tenant, doctor=doc, status=Appointment.Status.COMPLETED
+            ).count()
+            result.append({
+                "doctor_id": str(doc.id),
+                "doctor_name": doc.full_name,
+                "completed_appointments": completed,
+            })
+
+        return Response({"doctors": result})

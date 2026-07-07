@@ -59,11 +59,37 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(scheduled_start__date__lte=parse_date(date_to))
         return qs.order_by("scheduled_start")
 
-    def perform_create(self, serializer):
-        # NOTA (Sprint 9): aquí se insertará la verificación de morosidad
-        # (RF-AGN-07) una vez exista el módulo billing. Por ahora, crear
-        # cita no valida deuda.
-        serializer.save(tenant=self.request.tenant, created_by=self.request.user)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Bloqueo por morosidad (RF-AGN-07 / RN-AGN-01): antes de crear la
+        # cita se verifica que el paciente no esté moroso. La regla vive en
+        # el backend, no en el cliente, para que aplique igual desde la web
+        # o la app. Admin/recepción pueden forzar con override=true (excepción
+        # manual documentada en el SRS).
+        from apps.billing.services import is_patient_delinquent
+
+        patient = serializer.validated_data["patient"]
+        override = str(request.data.get("override", "")).lower() in ("true", "1", "yes")
+
+        if not override and is_patient_delinquent(patient, request.tenant):
+            return Response(
+                {
+                    "error": {
+                        "code": "patient_delinquent",
+                        "message": (
+                            "El paciente tiene cuotas vencidas. Regularice el pago o "
+                            "use override=true para agendar de todas formas."
+                        ),
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer.save(tenant=request.tenant, created_by=request.user)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class AppointmentDetailView(generics.RetrieveUpdateAPIView):
