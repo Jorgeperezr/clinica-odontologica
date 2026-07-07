@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 9 completado
+## Estado actual: Sprint 10 completado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -99,6 +99,16 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Reportes:** financiero (ingresos por método de pago), morosidad (quién debe, cuánto, desde cuándo), producción por doctor (RF-REP-01/02/03, RF-TRP-06).
 - **Tarea Celery diaria** (`mark_overdue_installments`) que marca automáticamente las cuotas vencidas — programada vía Celery Beat a las 00:30.
 - **Tests:** 8 nuevos (66 en total), incluyendo bloqueo, override, umbral configurable, cuota pagada que no bloquea, y la tarea de vencimiento — todos en verde.
+
+### Sprint 10 — Automatización WhatsApp (hecho, modo simulado)
+- **Tareas de mensajería** (Celery): recordatorios de cita (según ventana configurable), recordatorios de pago, aviso de llegada del paciente al doctor. OTP ya existía del Sprint 1.
+- **Opt-in del paciente** (RN-WSP-02): registro de consentimiento con canal y fecha; los mensajes solo se envían a pacientes con opt-in activo (exigencia de Meta y LOPDP).
+- **Webhook de Meta completado** (lado FastAPI): parseo real de eventos — estados de entrega (sent/delivered/read/failed) y mensajes entrantes. Una respuesta afirmativa del paciente confirma su cita automáticamente (RF-WSP-03).
+- **Gestión de plantillas** de WhatsApp (RN-WSP-01).
+- **Celery Beat:** recordatorios de cita cada hora, recordatorios de pago diarios.
+- **Modo simulado:** sin credenciales de Meta, el gateway simula el envío. Cuando la verificación de negocio en Meta esté aprobada, solo hay que poner las credenciales en el `.env` — no requiere cambios de código.
+- **Bugs corregidos:** firma incorrecta de `has_permission` en el endpoint interno (habría roto en runtime); import perdido de `notify_django` en el gateway; check-in ahora resiliente a fallos del broker Celery.
+- **Tests:** 6 nuevos (72 en total) — todos en verde.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

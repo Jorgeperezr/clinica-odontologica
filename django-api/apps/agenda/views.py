@@ -172,7 +172,16 @@ class AppointmentCheckinView(_AppointmentActionView):
         appt = self.get_appointment(request, pk)
         appt.checkin_at = timezone.now()
         appt.save(update_fields=["checkin_at"])
-        # TODO (Sprint 10): notificar al doctor vía WhatsApp que su paciente llegó.
+        # Aviso al doctor por WhatsApp de que su paciente llegó (RF-WSP-05).
+        # Se dispara de forma asíncrona (Celery) para no bloquear el check-in.
+        # Si el broker no está disponible, el check-in NO debe fallar: el
+        # aviso es secundario, el registro de llegada es lo crítico.
+        try:
+            from apps.whatsapp.tasks import notify_doctor_patient_arrived
+
+            notify_doctor_patient_arrived.delay(str(appt.id))
+        except Exception:
+            pass
         return Response(AppointmentSerializer(appt).data)
 
 

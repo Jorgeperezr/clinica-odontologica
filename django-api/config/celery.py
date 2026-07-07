@@ -18,4 +18,14 @@ app.conf.beat_schedule = {
         # Todos los días a las 00:30 (hora del servidor)
         "schedule": crontab(hour=0, minute=30),
     },
+    "recordatorios-cita": {
+        "task": "apps.whatsapp.tasks.send_appointment_reminders",
+        # Cada hora, revisa citas dentro de la ventana de recordatorio
+        "schedule": crontab(minute=0),
+    },
+    "recordatorios-pago": {
+        "task": "apps.whatsapp.tasks.send_payment_reminders",
+        # Una vez al día a las 09:00
+        "schedule": crontab(hour=9, minute=0),
+    },
 }

@@ -50,3 +50,33 @@ class WhatsAppMessageLog(TenantAwareModel):
     class Meta:
         verbose_name = "Registro de mensaje WhatsApp"
         verbose_name_plural = "Registros de mensajes WhatsApp"
+
+
+class WhatsAppOptIn(TenantAwareModel):
+    """
+    Registro de consentimiento del paciente para recibir mensajes por
+    WhatsApp (RN-WSP-02). Exigencia de Meta y de la LOPDP: guardamos
+    cuándo y por qué canal el paciente aceptó, y si revocó.
+    """
+
+    patient = models.ForeignKey(
+        "patients.Patient", on_delete=models.CASCADE, related_name="whatsapp_optins"
+    )
+    opted_in_at = models.DateTimeField(auto_now_add=True)
+    channel = models.CharField(
+        max_length=50, default="registro_recepcion",
+        help_text="Canal por el que el paciente dio su consentimiento.",
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Opt-in de WhatsApp"
+        verbose_name_plural = "Opt-ins de WhatsApp"
+
+    def __str__(self):
+        estado = "revocado" if self.revoked_at else "activo"
+        return f"Opt-in {self.patient} ({estado})"
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None

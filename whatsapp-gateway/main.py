@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.config import settings
+from app.django_client import notify_django
 from app.meta_client import send_template_message
 from app.schemas import SendTemplateRequest, SendTemplateResponse
 from app.security import verify_internal_token, verify_meta_signature
@@ -59,25 +60,51 @@ async def verify_webhook(
 @app.post("/whatsapp/webhook", dependencies=[Depends(verify_meta_signature)], tags=["webhook"])
 async def receive_webhook(request: Request):
     """
-    Recibe eventos entrantes de Meta (mensajes, cambios de estado).
-    Reenvía a Django solo lo relevante para el dominio (05-APIs, 13.2).
-
-    Implementación completa del parseo de eventos programada para el
-    Sprint 10 del Roadmap; aquí queda el esqueleto validado por firma.
+    Recibe eventos entrantes de Meta (mensajes, cambios de estado) y
+    reenvía a Django solo lo relevante para el dominio (05-APIs, 13.2).
     """
     payload = await request.json()
-    logger.info("Webhook de Meta recibido: %s", payload)
+    logger.info("Webhook de Meta recibido")
 
-    # TODO (Sprint 10): parsear `payload["entry"]` según el formato de
-    # Meta y llamar a notify_django(event_type=..., ...) por cada
-    # mensaje de estado o respuesta entrante relevante. Se deja el
-    # llamado de ejemplo comentado como referencia del contrato:
-    # await notify_django(
-    #     event_type="message_status",
-    #     patient_phone="...",
-    #     provider_message_id="...",
-    #     status="delivered",
-    #     raw_payload=payload,
-    # )
+    for event in _parse_meta_events(payload):
+        await notify_django(**event)
 
     return {"received": True}
+
+
+def _parse_meta_events(payload: dict) -> list[dict]:
+    """
+    Traduce el formato de webhook de Meta a los eventos internos que
+    Django entiende. Meta anida los datos en entry[].changes[].value.
+    Devuelve una lista de dicts listos para notify_django().
+    """
+    events: list[dict] = []
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+
+            # Cambios de estado de mensajes que enviamos (sent/delivered/read/failed)
+            for st in value.get("statuses", []):
+                events.append({
+                    "event_type": "message_status",
+                    "provider_message_id": st.get("id", ""),
+                    "status": st.get("status", ""),
+                    "patient_phone": st.get("recipient_id", ""),
+                    "raw_payload": st,
+                })
+
+            # Mensajes entrantes del paciente (ej. confirmación de cita)
+            for msg in value.get("messages", []):
+                text_body = ""
+                if msg.get("type") == "text":
+                    text_body = msg.get("text", {}).get("body", "")
+                elif msg.get("type") == "button":
+                    text_body = msg.get("button", {}).get("text", "")
+                events.append({
+                    "event_type": "inbound_message",
+                    "patient_phone": msg.get("from", ""),
+                    "text": text_body,
+                    "provider_message_id": msg.get("id", ""),
+                    "raw_payload": msg,
+                })
+    return events
