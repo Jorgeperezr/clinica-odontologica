@@ -35,6 +35,7 @@ services:
     command: >
       sh -c "python manage.py migrate &&
              python manage.py bootstrap &&
+             python manage.py collectstatic --noinput &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --reload --workers 3"
 
   celery-worker:

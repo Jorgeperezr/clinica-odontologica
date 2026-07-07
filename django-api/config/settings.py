@@ -18,6 +18,15 @@ SECRET_KEY = config("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-m
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
+# Orígenes confiables para CSRF. Necesario cuando el sitio se sirve
+# detrás de un proxy TLS externo (Codespaces, Cloudflare Tunnel, etc.)
+# porque Django requiere que el 'Origin' del POST coincida con uno de estos.
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="http://localhost,http://127.0.0.1",
+    cast=Csv(),
+)
+
 # --------------------------------------------------------------------------
 # Apps
 # --------------------------------------------------------------------------
@@ -51,6 +60,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -120,6 +130,10 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 # --------------------------------------------------------------------------
 # Django REST Framework
