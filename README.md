@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 7 completado
+## Estado actual: Sprint 8 completado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -84,6 +84,14 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Multi-especialidad:** un paciente puede tener formularios de varias especialidades simultáneamente (RF-ESP-03).
 - **Fix (detectado en revisión de arquitectura):** faltaba `rest_framework_simplejwt.token_blacklist` en INSTALLED_APPS. Sin él, la rotación de tokens y el logout no invalidaban tokens de verdad. Corregido y verificado (aplica sus migraciones).
 - **Tests:** 6 nuevos (49 en total) — todos en verde.
+
+### Sprint 8 — Tratamientos y pagos (hecho)
+- **Presupuestos** con líneas de tratamiento; el total se recalcula automáticamente al agregar ítems (RF-TRP-01).
+- **Aprobación** de presupuestos y conversión a **plan de pago en cuotas mensuales** (RF-TRP-02). El reparto de centavos es exacto: la última cuota absorbe el redondeo para que la suma sea siempre el total.
+- **Registro de cobros** parciales o totales; una cuota se marca como pagada solo cuando su saldo llega a cero (RF-TRP-03).
+- **Estado de cuenta** del paciente: total, pagado, saldo y detección de cuotas vencidas (RF-TRP-04) — esto es lo que el Sprint 9 usará para el bloqueo por morosidad.
+- **Honorarios por doctor** (porcentaje o monto fijo) (RF-TRP-05).
+- **Tests:** 9 nuevos (58 en total), incluyendo el reparto exacto de centavos y pagos parciales — todos en verde.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
