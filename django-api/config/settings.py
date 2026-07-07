@@ -26,18 +26,7 @@ CSRF_TRUSTED_ORIGINS = config(
     default="http://localhost,http://127.0.0.1",
     cast=Csv(),
 )
-# --------------------------------------------------------------------------
-# Proxy inverso (GitHub Codespaces / Nginx / Cloudflare)
-# --------------------------------------------------------------------------
-# Indica a Django que confíe en el encabezado enviado por el proxy
-# para determinar si la petición original llegó mediante HTTPS.
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# Permite utilizar el host original enviado por el proxy.
-USE_X_FORWARDED_HOST = True
-
-# Permite utilizar el puerto original enviado por el proxy.
-USE_X_FORWARDED_PORT = True
 # --------------------------------------------------------------------------
 # Apps
 # --------------------------------------------------------------------------
@@ -51,6 +40,7 @@ INSTALLED_APPS = [
     # Terceros
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "corsheaders",
     "drf_spectacular",

@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 6 completado
+## Estado actual: Sprint 7 completado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -77,6 +77,13 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Validación robusta:** firmas ilegibles o base64 inválido se rechazan sin romper la generación del PDF.
 - **Tests:** 4 nuevos (43 en total) — todos en verde.
 - **Bug corregido:** `status` no estaba importado en la vista de firma, lo que habría causado un crash en producción al recibir una firma inválida.
+
+### Sprint 7 — Formularios por especialidad + fix JWT blacklist (hecho)
+- **Formularios clínicos por especialidad** (Ortodoncia, Endodoncia, Periodoncia, Odontopediatría) usando JSONField flexible: el doctor puede registrar campos base sugeridos o personalizados sin requerir cambios de código (RF-ESP-01, RF-ESP-02).
+- **Plantillas de campos** por especialidad, expuestas vía `/specialties/{id}/form-template/` para que el frontend sepa qué mostrar. Ajustables sin migraciones.
+- **Multi-especialidad:** un paciente puede tener formularios de varias especialidades simultáneamente (RF-ESP-03).
+- **Fix (detectado en revisión de arquitectura):** faltaba `rest_framework_simplejwt.token_blacklist` en INSTALLED_APPS. Sin él, la rotación de tokens y el logout no invalidaban tokens de verdad. Corregido y verificado (aplica sus migraciones).
+- **Tests:** 6 nuevos (49 en total) — todos en verde.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
