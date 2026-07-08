@@ -396,3 +396,25 @@ class ClinicalHistoryExportView(generics.GenericAPIView):
             f'attachment; filename="historia_clinica_{patient.national_id}.pdf"'
         )
         return response
+
+
+class ToothRecordDeleteView(generics.DestroyAPIView):
+    """
+    DELETE /api/v1/tooth-records/{id}/ — corrección de un registro erróneo.
+    El historial del odontograma es inmutable por diseño (trazabilidad
+    clínica): no se permite editar registros, solo eliminar uno ingresado
+    por error. La eliminación queda auditada (quién y cuándo).
+    """
+
+    permission_classes = [CAN_EDIT_CLINICAL]
+
+    def get_queryset(self):
+        from apps.clinical.models import ToothRecord
+        return ToothRecord.objects.filter(tenant=self.request.tenant)
+
+    def perform_destroy(self, instance):
+        _audit(
+            self.request, "delete_tooth_record", "ToothRecord",
+            f"{instance.patient_id}:{instance.tooth_fdi_code}:{instance.id}",
+        )
+        instance.delete()

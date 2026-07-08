@@ -96,7 +96,28 @@ function OdontogramTab({ patientId }) {
     loadHistory(code);
   }
 
+  async function deleteRecord(rec) {
+    const ok = window.confirm(
+      `¿Eliminar el registro "${rec.state_label}" (${rec.date}) de la pieza ${rec.tooth_fdi_code}?\n` +
+      "Esta acción es para corregir un registro erróneo y queda auditada."
+    );
+    if (!ok) return;
+    setError("");
+    try {
+      const resp = await api(`/tooth-records/${rec.id}/`, { method: "DELETE" });
+      if (!resp.ok && resp.status !== 204) throw new Error(`No se pudo eliminar (error ${resp.status}).`);
+      await loadCurrent();
+      await loadHistory(selected);
+    } catch (err) { setError(err.message); }
+  }
+
   async function registerState(stateId) {
+    const stateLabel = states.find((s) => s.id === stateId)?.label || "este estado";
+    const ok = window.confirm(
+      `¿Registrar "${stateLabel}" en la pieza ${selected}?\n` +
+      "El registro se añade al historial de la pieza."
+    );
+    if (!ok) return;
     setError("");
     try {
       const resp = await api(`/patients/${patientId}/tooth-records/`, {
@@ -167,7 +188,7 @@ function OdontogramTab({ patientId }) {
             ) : (
               <table>
                 <thead>
-                  <tr><th>Fecha</th><th>Estado</th><th>Superficie</th><th>Notas</th></tr>
+                  <tr><th>Fecha</th><th>Estado</th><th>Superficie</th><th>Notas</th><th></th></tr>
                 </thead>
                 <tbody>
                   {history.map((h) => (
@@ -181,6 +202,13 @@ function OdontogramTab({ patientId }) {
                       </td>
                       <td>{h.surface_display}</td>
                       <td style={{ color: "var(--ink-soft)" }}>{h.notes || "—"}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <button className="btn btn-ghost"
+                                style={{ padding: "4px 10px", fontSize: 12, color: "var(--red)" }}
+                                onClick={() => deleteRecord(h)}>
+                          Eliminar
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -17,6 +17,7 @@ urlpatterns = [
     path("odontogram-states/", views.OdontogramStateListView.as_view(), name="odontogram-state-list"),
     path("patients/<uuid:pk>/tooth-records/", views.ToothRecordListCreateView.as_view(), name="tooth-record-list"),
     path("patients/<uuid:pk>/odontogram/current/", views.CurrentOdontogramView.as_view(), name="odontogram-current"),
+    path("tooth-records/<uuid:pk>/", views.ToothRecordDeleteView.as_view(), name="tooth-record-delete"),
     # Radiografías y consentimientos (Sprint 6)
     path("patients/<uuid:pk>/radiographs/", views.RadiographPhotoListCreateView.as_view(), name="radiograph-list"),
     path("patients/<uuid:pk>/consents/", views.InformedConsentListCreateView.as_view(), name="consent-list"),

@@ -304,3 +304,25 @@ class ClinicalWithoutDoctorProfileTests(APITestCase):
              "state": str(state.id), "date": "2026-07-08"},
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+    def test_delete_tooth_record_is_audited(self):
+        """Corrección de un registro erróneo: se elimina y queda auditado."""
+        from django.core.management import call_command
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        from apps.accounts.models import AuditLog
+        from apps.clinical.models import OdontogramState, ToothRecord
+
+        state = OdontogramState.objects.filter(tenant=self.tenant, code="CARIES").first()
+        record = ToothRecord.objects.create(
+            tenant=self.tenant, patient=self.patient,
+            tooth_fdi_code="16", surface="whole", state=state, date="2026-07-08",
+        )
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.delete(
+            reverse("tooth-record-delete", kwargs={"pk": record.id})
+        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ToothRecord.objects.filter(id=record.id).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(action="delete_tooth_record").exists()
+        )
