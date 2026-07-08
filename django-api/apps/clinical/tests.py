@@ -326,3 +326,50 @@ class ClinicalWithoutDoctorProfileTests(APITestCase):
         self.assertTrue(
             AuditLog.objects.filter(action="delete_tooth_record").exists()
         )
+
+    def test_edit_evolution_keeps_previous_in_audit(self):
+        """Editar una evolución guarda constancia del texto anterior."""
+        from datetime import date
+        from apps.accounts.models import AuditLog
+        from apps.clinical.models import Evolution
+
+        evo = Evolution.objects.create(
+            tenant=self.tenant, patient=self.patient, created_by=self.admin,
+            type="clinical_note", date=date.today(), notes="Texto original.",
+        )
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch(
+            reverse("evolution-detail", kwargs={"pk": evo.id}),
+            {"notes": "Texto corregido."},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        evo.refresh_from_db()
+        self.assertEqual(evo.notes, "Texto corregido.")
+        log = AuditLog.objects.filter(action="update_evolution", entity_id=str(evo.id)).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.metadata["previous_notes"], "Texto original.")
+
+    def test_delete_evolution_is_audited_with_content(self):
+        from datetime import date
+        from apps.accounts.models import AuditLog
+        from apps.clinical.models import Evolution
+
+        evo = Evolution.objects.create(
+            tenant=self.tenant, patient=self.patient, created_by=self.admin,
+            type="clinical_note", date=date.today(), notes="Para borrar.",
+        )
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.delete(reverse("evolution-detail", kwargs={"pk": evo.id}))
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        log = AuditLog.objects.filter(action="delete_evolution").first()
+        self.assertEqual(log.metadata["notes"], "Para borrar.")
+
+    def test_registered_by_shows_admin_when_no_doctor(self):
+        from datetime import date
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse("evolution-list", kwargs={"pk": self.patient.id}),
+            {"type": "clinical_note", "date": str(date.today()), "notes": "x"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data["registered_by"], "admin@test.com")

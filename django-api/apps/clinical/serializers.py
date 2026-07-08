@@ -23,14 +23,23 @@ class ClinicalRecordSerializer(serializers.ModelSerializer):
 class EvolutionSerializer(serializers.ModelSerializer):
     type_display = serializers.CharField(source="get_type_display", read_only=True)
     doctor_name = serializers.CharField(source="doctor.full_name", read_only=True)
+    registered_by = serializers.SerializerMethodField()
 
     class Meta:
         model = Evolution
         fields = [
-            "id", "doctor", "doctor_name", "appointment", "type", "type_display",
-            "date", "notes", "visible_to_patient", "created_at",
+            "id", "doctor", "doctor_name", "registered_by", "appointment",
+            "type", "type_display", "date", "notes", "visible_to_patient", "created_at",
         ]
-        read_only_fields = ["id", "created_at", "doctor_name", "doctor"]
+        read_only_fields = ["id", "created_at", "doctor_name", "doctor", "registered_by"]
+
+    def get_registered_by(self, obj):
+        if obj.doctor:
+            return obj.doctor.full_name
+        u = obj.created_by
+        if not u:
+            return None
+        return u.full_name or u.email
 
 
 class DiagnosisSerializer(serializers.ModelSerializer):

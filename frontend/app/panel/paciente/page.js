@@ -59,6 +59,7 @@ function PatientDetail() {
 
 function OdontogramTab({ patientId }) {
   const [confirm, ConfirmUI] = useConfirm();
+  const [toothNotes, setToothNotes] = useState("");
   const [states, setStates] = useState([]);       // catálogo de estados
   const [teeth, setTeeth] = useState({});          // { "16": {color,label,...} }
   const [selected, setSelected] = useState(null);  // pieza seleccionada
@@ -131,6 +132,7 @@ function OdontogramTab({ patientId }) {
           tooth_fdi_code: selected,
           surface: "whole",
           state: stateId,
+          notes: toothNotes,
           date: new Date().toISOString().slice(0, 10),
         }),
       });
@@ -144,6 +146,7 @@ function OdontogramTab({ patientId }) {
       }
       await loadCurrent();
       await loadHistory(selected);
+      setToothNotes("");
     } catch (err) { setError(err.message); }
   }
 
@@ -170,9 +173,15 @@ function OdontogramTab({ patientId }) {
         <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18, alignItems: "start" }}>
           <div className="card">
             <h3 style={{ marginBottom: 4 }}>Pieza {selected}</h3>
-            <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+            <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 10 }}>
               Registrar nuevo estado (no borra el historial):
             </p>
+            <div className="field" style={{ marginBottom: 10 }}>
+              <label>Notas (opcional, se guardan con el estado)</label>
+              <textarea rows={2} value={toothNotes}
+                        onChange={(e) => setToothNotes(e.target.value)}
+                        placeholder="Ej: caries oclusal profunda…" />
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {states.map((s) => (
                 <button key={s.id} className="btn btn-ghost"
@@ -240,6 +249,9 @@ const EVOLUTION_TYPES = {
 };
 
 function EvolutionsTab({ patientId }) {
+  const [confirm, ConfirmUI] = useConfirm();
+  const [editing, setEditing] = useState(null);   // id en edición
+  const [editText, setEditText] = useState("");
   const [evolutions, setEvolutions] = useState([]);
   const [form, setForm] = useState({ type: "clinical_note", notes: "", visible_to_patient: false });
   const [error, setError] = useState("");
@@ -281,8 +293,36 @@ function EvolutionsTab({ patientId }) {
     finally { setSaving(false); }
   }
 
+  async function saveEdit(ev) {
+    try {
+      const resp = await api(`/evolutions/${ev.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes: editText }),
+      });
+      if (!resp.ok) throw new Error(`No se pudo editar (error ${resp.status}).`);
+      setEditing(null);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function removeEvolution(ev) {
+    const ok = await confirm({
+      title: "Eliminar evolución",
+      message: `Se eliminará la ${ev.type_display.toLowerCase()} del ${ev.date}.\nEl contenido queda en el registro de auditoría.`,
+      confirmLabel: "Eliminar",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const resp = await api(`/evolutions/${ev.id}/`, { method: "DELETE" });
+      if (!resp.ok && resp.status !== 204) throw new Error(`No se pudo eliminar (error ${resp.status}).`);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 18, alignItems: "start" }}>
+      {ConfirmUI}
       <form onSubmit={submit} className="card">
         <h3 style={{ marginBottom: 12 }}>Nueva evolución</h3>
         {error && <div className="error-box">{error}</div>}
@@ -313,15 +353,42 @@ function EvolutionsTab({ patientId }) {
         ) : (
           <table>
             <thead>
-              <tr><th>Fecha</th><th>Tipo</th><th>Notas</th><th>Doctor</th></tr>
+              <tr><th>Fecha</th><th>Tipo</th><th>Notas</th><th>Registrado por</th><th></th></tr>
             </thead>
             <tbody>
               {evolutions.map((ev) => (
                 <tr key={ev.id}>
                   <td className="tabular" style={{ whiteSpace: "nowrap" }}>{ev.date}</td>
                   <td><span className="badge badge-ok">{ev.type_display}</span></td>
-                  <td>{ev.notes}</td>
-                  <td style={{ color: "var(--ink-soft)" }}>{ev.doctor_name || "—"}</td>
+                  <td>
+                    {editing === ev.id ? (
+                      <div>
+                        <textarea rows={3} value={editText}
+                                  onChange={(e) => setEditText(e.target.value)}
+                                  style={{ width: "100%", padding: 8, border: "1px solid var(--line)", borderRadius: 8 }} />
+                        <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                          <button className="btn btn-primary" style={{ padding: "4px 12px", fontSize: 12 }}
+                                  onClick={() => saveEdit(ev)}>Guardar</button>
+                          <button className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 12 }}
+                                  onClick={() => setEditing(null)}>Cancelar</button>
+                        </div>
+                        <p style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
+                          El texto anterior queda en el registro de auditoría.
+                        </p>
+                      </div>
+                    ) : ev.notes}
+                  </td>
+                  <td style={{ color: "var(--ink-soft)" }}>{ev.registered_by || "—"}</td>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    {editing !== ev.id && (
+                      <>
+                        <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
+                                onClick={() => { setEditing(ev.id); setEditText(ev.notes); }}>Editar</button>
+                        <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12, color: "var(--red)", marginLeft: 6 }}
+                                onClick={() => removeEvolution(ev)}>Eliminar</button>
+                      </>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

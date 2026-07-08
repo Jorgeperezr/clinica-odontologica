@@ -75,7 +75,10 @@ class EvolutionListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         patient = _get_patient(self.request, self.kwargs["pk"])
         doctor = _get_doctor(self.request)
-        serializer.save(tenant=self.request.tenant, patient=patient, doctor=doctor)
+        serializer.save(
+            tenant=self.request.tenant, patient=patient,
+            doctor=doctor, created_by=self.request.user,
+        )
         _audit(self.request, "create_evolution", "Evolution", patient.id)
 
 
@@ -426,6 +429,58 @@ class ToothRecordDeleteView(generics.DestroyAPIView):
                 "tooth_fdi_code": instance.tooth_fdi_code,
                 "state": instance.state.code,
                 "date": str(instance.date),
+            },
+        )
+        instance.delete()
+
+
+
+class EvolutionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET/PATCH/DELETE /api/v1/evolutions/{id}/.
+    La edición guarda CONSTANCIA del contenido anterior en el log de
+    auditoría (metadata) — la historia clínica nunca pierde lo que decía
+    antes. La eliminación también queda auditada con el contenido completo.
+    """
+
+    permission_classes = [CAN_EDIT_CLINICAL]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import EvolutionSerializer
+        return EvolutionSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import Evolution
+        return Evolution.objects.filter(tenant=self.request.tenant)
+
+    def perform_update(self, serializer):
+        previous = serializer.instance
+        AuditLog.objects.create(
+            tenant=self.request.tenant,
+            user=self.request.user,
+            action="update_evolution",
+            entity_type="Evolution",
+            entity_id=str(previous.id),
+            metadata={
+                "previous_notes": previous.notes,
+                "previous_type": previous.type,
+                "previous_visible_to_patient": previous.visible_to_patient,
+            },
+        )
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        AuditLog.objects.create(
+            tenant=self.request.tenant,
+            user=self.request.user,
+            action="delete_evolution",
+            entity_type="Evolution",
+            entity_id=str(instance.id),
+            metadata={
+                "patient_id": str(instance.patient_id),
+                "type": instance.type,
+                "date": str(instance.date),
+                "notes": instance.notes,
             },
         )
         instance.delete()

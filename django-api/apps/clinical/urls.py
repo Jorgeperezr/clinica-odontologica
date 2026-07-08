@@ -7,6 +7,7 @@ urlpatterns = [
     path("patients/<uuid:pk>/clinical-record/", views.ClinicalRecordView.as_view(), name="clinical-record"),
     path("patients/<uuid:pk>/clinical-record/export-pdf/", views.ClinicalHistoryExportView.as_view(), name="clinical-history-export"),
     path("patients/<uuid:pk>/evolutions/", views.EvolutionListCreateView.as_view(), name="evolution-list"),
+    path("evolutions/<uuid:pk>/", views.EvolutionDetailView.as_view(), name="evolution-detail"),
     path("patients/<uuid:pk>/diagnoses/", views.DiagnosisListCreateView.as_view(), name="diagnosis-list"),
     # Planes de tratamiento
     path("patients/<uuid:pk>/treatment-plans/", views.TreatmentPlanListCreateView.as_view(), name="treatment-plan-list"),

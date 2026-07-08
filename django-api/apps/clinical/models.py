@@ -71,6 +71,10 @@ class Evolution(TenantAwareModel):
         default=False,
         help_text="Si es True, el paciente lo ve en la app (RF-APP-03).",
     )
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Usuario que registró la evolución (doctor, admin o auxiliar).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
