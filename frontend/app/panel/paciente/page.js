@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 import Odontogram from "../../../lib/Odontogram";
+import { useConfirm } from "../../../lib/ConfirmDialog";
 
 export default function PatientDetailPage() {
   return (
@@ -57,6 +58,7 @@ function PatientDetail() {
 /* ───────────────────────── Odontograma ───────────────────────── */
 
 function OdontogramTab({ patientId }) {
+  const [confirm, ConfirmUI] = useConfirm();
   const [states, setStates] = useState([]);       // catálogo de estados
   const [teeth, setTeeth] = useState({});          // { "16": {color,label,...} }
   const [selected, setSelected] = useState(null);  // pieza seleccionada
@@ -97,10 +99,12 @@ function OdontogramTab({ patientId }) {
   }
 
   async function deleteRecord(rec) {
-    const ok = window.confirm(
-      `¿Eliminar el registro "${rec.state_label}" (${rec.date}) de la pieza ${rec.tooth_fdi_code}?\n` +
-      "Esta acción es para corregir un registro erróneo y queda auditada."
-    );
+    const ok = await confirm({
+      title: `Eliminar registro de la pieza ${rec.tooth_fdi_code}`,
+      message: `Se eliminará "${rec.state_label}" (${rec.date}).\nEsta acción corrige un registro erróneo y queda auditada.`,
+      confirmLabel: "Eliminar",
+      danger: true,
+    });
     if (!ok) return;
     setError("");
     try {
@@ -113,10 +117,11 @@ function OdontogramTab({ patientId }) {
 
   async function registerState(stateId) {
     const stateLabel = states.find((s) => s.id === stateId)?.label || "este estado";
-    const ok = window.confirm(
-      `¿Registrar "${stateLabel}" en la pieza ${selected}?\n` +
-      "El registro se añade al historial de la pieza."
-    );
+    const ok = await confirm({
+      title: `Registrar estado en la pieza ${selected}`,
+      message: `Se añadirá "${stateLabel}" al historial de la pieza.\nEl historial no se sobrescribe.`,
+      confirmLabel: "Registrar",
+    });
     if (!ok) return;
     setError("");
     try {
@@ -144,6 +149,7 @@ function OdontogramTab({ patientId }) {
 
   return (
     <div>
+      {ConfirmUI}
       {error && <div className="error-box">{error}</div>}
 
       <div className="card" style={{ marginBottom: 18 }}>

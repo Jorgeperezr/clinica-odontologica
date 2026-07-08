@@ -413,8 +413,19 @@ class ToothRecordDeleteView(generics.DestroyAPIView):
         return ToothRecord.objects.filter(tenant=self.request.tenant)
 
     def perform_destroy(self, instance):
-        _audit(
-            self.request, "delete_tooth_record", "ToothRecord",
-            f"{instance.patient_id}:{instance.tooth_fdi_code}:{instance.id}",
+        # entity_id tiene max_length=64: solo el UUID del registro.
+        # El contexto (paciente y pieza) va en metadata (JSON).
+        AuditLog.objects.create(
+            tenant=self.request.tenant,
+            user=self.request.user,
+            action="delete_tooth_record",
+            entity_type="ToothRecord",
+            entity_id=str(instance.id),
+            metadata={
+                "patient_id": str(instance.patient_id),
+                "tooth_fdi_code": instance.tooth_fdi_code,
+                "state": instance.state.code,
+                "date": str(instance.date),
+            },
         )
         instance.delete()
