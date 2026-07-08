@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 15 completado — pagos en el panel
+## Estado actual: Sprint 16 completado — PANEL WEB COMPLETO
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -148,6 +148,14 @@ Los 11 módulos del sistema están implementados y probados: usuarios, pacientes
 - **Plan de cuotas:** número de cuotas y primera fecha; el reparto exacto de centavos del Sprint 8, ahora visible.
 - **Cobros:** formulario inline por cuota (monto editable para pagos parciales + método efectivo/transferencia/tarjeta); la cuota pasa a Pagada cuando el saldo llega a cero.
 - **Backend:** `payment_plan_id` expuesto en el serializer de presupuestos para enlazar presupuesto → cuotas.
+
+### Sprint 16 — Inventario, Reportes y Configuración en el panel (hecho) — PANEL WEB COMPLETO
+- **Inventario:** productos con badge de stock bajo, alertas visibles (stock bajo + lotes por vencer en 30 días con días restantes en color), registro de productos y de lotes (cada lote genera su movimiento de entrada).
+- **Reportes (admin):** ingresos del período con desglose por método de pago, producción por doctor, tabla de morosidad (monto, cuotas, días, si bloquea agendamiento) y pacientes nuevos — con rango de fechas y **descarga a Excel** (pacientes e inventario).
+- **Configuración (admin):** pestañas de Tratamientos (crear con especialidad y precio base — alimenta los presupuestos), Especialidades, y Parámetros del sistema con edición inline (morosidad, recordatorios, alertas) con nombres legibles.
+
+## 🎉 Panel web completo (Sprints 12-16)
+Los 7 módulos de la barra lateral funcionan de punta a punta contra la API: Inicio, Pacientes (con ficha + odontograma interactivo), Agenda (con morosidad), Pagos (presupuestos → cuotas → cobros), Inventario, Reportes y Configuración. Pendiente del Roadmap: app móvil de pacientes (Flutter), QA integral y despliegue (Fase 12).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
