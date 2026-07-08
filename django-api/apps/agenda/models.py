@@ -38,12 +38,13 @@ class Doctor(TenantAwareModel):
         verbose_name_plural = "Doctores"
 
     def __str__(self):
-        return self.user.email or str(self.user_id)
+        return self.full_name
 
     @property
     def full_name(self):
-        # Si en el futuro el User tiene nombre/apellido, se usa aquí.
-        return self.user.email or str(self.user_id)
+        # Usa el nombre del usuario (añadido en el Sprint 12); si el
+        # usuario no tiene nombre cargado, cae al email como respaldo.
+        return self.user.full_name or self.user.email or str(self.user_id)
 
 
 class Appointment(TenantAwareModel):

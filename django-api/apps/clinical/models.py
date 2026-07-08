@@ -51,7 +51,9 @@ class Evolution(TenantAwareModel):
         Patient, on_delete=models.CASCADE, related_name="evolutions"
     )
     doctor = models.ForeignKey(
-        Doctor, on_delete=models.PROTECT, related_name="evolutions"
+        Doctor, on_delete=models.PROTECT, related_name="evolutions",
+        null=True, blank=True,
+        help_text="Nulo si registró un usuario clínico sin perfil de doctor (admin/auxiliar).",
     )
     appointment = models.ForeignKey(
         "agenda.Appointment",
@@ -90,7 +92,8 @@ class Diagnosis(TenantAwareModel):
         Patient, on_delete=models.CASCADE, related_name="diagnoses"
     )
     doctor = models.ForeignKey(
-        Doctor, on_delete=models.PROTECT, related_name="diagnoses"
+        Doctor, on_delete=models.PROTECT, related_name="diagnoses",
+        null=True, blank=True,
     )
     tooth_fdi_code = models.CharField(
         max_length=2, blank=True,
@@ -122,7 +125,8 @@ class TreatmentPlan(TenantAwareModel):
         Patient, on_delete=models.CASCADE, related_name="treatment_plans"
     )
     created_by = models.ForeignKey(
-        Doctor, on_delete=models.PROTECT, related_name="treatment_plans"
+        Doctor, on_delete=models.PROTECT, related_name="treatment_plans",
+        null=True, blank=True,
     )
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.DRAFT
@@ -244,7 +248,8 @@ class ToothRecord(TenantAwareModel):
         OdontogramState, on_delete=models.PROTECT, related_name="tooth_records"
     )
     doctor = models.ForeignKey(
-        Doctor, on_delete=models.PROTECT, related_name="tooth_records"
+        Doctor, on_delete=models.PROTECT, related_name="tooth_records",
+        null=True, blank=True,
     )
     treatment_plan_item = models.ForeignKey(
         TreatmentPlanItem,

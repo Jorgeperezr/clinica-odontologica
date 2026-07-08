@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 12 completado — frontend iniciado
+## Estado actual: Sprint 14 completado — odontograma interactivo
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -128,6 +128,19 @@ Los 11 módulos del sistema están implementados y probados: usuarios, pacientes
 - **Panel protegido** con navegación lateral filtrada por rol (matriz del SRS): recepción no ve reportes, auxiliar no ve pagos, etc.
 - **Módulo de Pacientes:** listado con búsqueda (nombre/cédula), registro de pacientes con validación.
 - **Detección automática de la URL del backend en Codespaces** (puerto 3000 → 80) sin configuración manual.
+
+### Sprint 13 — Agenda visual (hecho)
+- **Vista de agenda día/semana** con navegación de fechas (←/hoy/→), filtro por doctor y estados con color (pendiente/confirmada/completada/cancelada/no asistió).
+- **Creación de citas** con búsqueda de paciente en vivo (nombre o cédula), selección de doctor, fecha y horario. Las validaciones del backend (solapamiento, citas en pasado) se muestran como mensajes claros.
+- **Bloqueo por morosidad integrado en la UI:** si el backend devuelve 409 `patient_delinquent`, el panel muestra la advertencia y ofrece la excepción manual (`override`) con un clic — el flujo completo RF-AGN-07 de punta a punta.
+- **Acciones por estado:** Confirmar/Cancelar (pendiente), Llegó = check-in (confirmada), Finalizar = check-out (en atención). El check-in dispara el aviso WhatsApp al doctor (Sprint 10).
+
+### Sprint 14 — Ficha del paciente + odontograma interactivo (hecho)
+- **Ficha del paciente** (clic en cualquier fila del listado): cabecera con datos, pestañas de Odontograma y Evoluciones.
+- **Odontograma FDI interactivo (SVG):** 32 piezas en 4 cuadrantes, cada una pintada con el color del estado actual del catálogo. Clic en una pieza → panel para registrar un nuevo estado (histórico, nunca sobrescribe) + historial completo de esa pieza con fechas y colores. La firma visual del sistema (RF-HCL-02).
+- **Leyenda del catálogo** de 12 estados con sus colores (parametrizable desde el admin).
+- **Evoluciones:** registro de notas clínicas / recetas / indicaciones con el flag "visible para el paciente" (lo que la app móvil mostrará), y listado con doctor y tipo.
+- **Fix:** `Doctor.full_name` devolvía el email (quedó del Sprint 3, cuando User no tenía nombre); ahora usa el nombre real con email de respaldo.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

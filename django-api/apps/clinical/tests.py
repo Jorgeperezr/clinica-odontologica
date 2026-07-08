@@ -268,3 +268,39 @@ class ConsentAndExportTests(APITestCase):
             {"signature_image_base64": "no-es-base64-valido!!!"},
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ClinicalWithoutDoctorProfileTests(APITestCase):
+    """Admin/auxiliar (roles clínicos) sin perfil de Doctor pueden registrar."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Clínica Test", ruc="1234567890001")
+        self.admin = User.objects.create_user(
+            email="admin@test.com", password="superseguro123", role="admin", tenant=self.tenant
+        )
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Eva", last_name="Cruz", national_id="1717171717"
+        )
+
+    def test_admin_without_doctor_profile_creates_evolution(self):
+        from datetime import date
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse("evolution-list", kwargs={"pk": self.patient.id}),
+            {"type": "clinical_note", "date": str(date.today()), "notes": "Nota del admin."},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(resp.data["doctor"])
+
+    def test_admin_without_doctor_profile_creates_tooth_record(self):
+        from django.core.management import call_command
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        from apps.clinical.models import OdontogramState
+        state = OdontogramState.objects.filter(tenant=self.tenant, code="CARIES").first()
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse("tooth-record-list", kwargs={"pk": self.patient.id}),
+            {"tooth_fdi_code": "16", "surface": "whole",
+             "state": str(state.id), "date": "2026-07-08"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)

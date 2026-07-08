@@ -76,7 +76,8 @@ export default function PacientesPage() {
             </thead>
             <tbody>
               {patients.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id} onClick={() => window.location.href = `/panel/paciente/?id=${p.id}`}
+                    style={{ cursor: "pointer" }}>
                   <td style={{ fontWeight: 600 }}>{p.full_name}</td>
                   <td className="tabular">{p.national_id}</td>
                   <td className="tabular">{p.phone || "—"}</td>
