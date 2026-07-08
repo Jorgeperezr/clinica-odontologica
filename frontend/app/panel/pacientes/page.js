@@ -77,7 +77,7 @@ export default function PacientesPage() {
             <tbody>
               {patients.map((p) => (
                 <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.first_name} {p.last_name}</td>
+                  <td style={{ fontWeight: 600 }}>{p.full_name}</td>
                   <td className="tabular">{p.national_id}</td>
                   <td className="tabular">{p.phone || "—"}</td>
                   <td className="tabular">{(p.created_at || "").slice(0, 10)}</td>
