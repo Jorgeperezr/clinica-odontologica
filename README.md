@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 11 completado — BACKEND COMPLETO
+## Estado actual: Sprint 12 completado — frontend iniciado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -120,6 +120,14 @@ cd django-api && python manage.py test --settings=config.settings_test
 
 ## 🎉 Backend completo (Sprints 0-11)
 Los 11 módulos del sistema están implementados y probados: usuarios, pacientes, agenda, historia clínica, odontograma, especialidades, tratamientos/pagos, inventario, WhatsApp, reportes y configuración. **80 tests, CI verde.** Siguiente fase: frontend (panel web Next.js) y app móvil Flutter.
+
+### Sprint 12 — Frontend web: fundaciones (hecho)
+- **Proyecto Next.js 14** (`frontend/`) con export estático para producción y servidor de desarrollo en Docker (puerto 3000).
+- **Sistema de diseño propio:** paleta petrol/menta (identidad dental sin el azul-hospital genérico), tokens CSS, números tabulares para montos y cédulas, foco visible y movimiento reducido (accesibilidad).
+- **Login** con JWT contra la API Django, manejo de errores y refresh automático de tokens.
+- **Panel protegido** con navegación lateral filtrada por rol (matriz del SRS): recepción no ve reportes, auxiliar no ve pagos, etc.
+- **Módulo de Pacientes:** listado con búsqueda (nombre/cédula), registro de pacientes con validación.
+- **Detección automática de la URL del backend en Codespaces** (puerto 3000 → 80) sin configuración manual.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

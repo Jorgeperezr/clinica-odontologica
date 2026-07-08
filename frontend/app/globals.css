@@ -1,0 +1,100 @@
+/* ── Sistema de diseño: Clínica Odontológica ─────────────────────────
+   Paleta petrol/menta: salud dental sin el azul-hospital genérico.
+   Datos en tipografía de sistema con números tabulares. */
+
+:root {
+  --petrol: #0e5a5e;
+  --petrol-deep: #0a4144;
+  --petrol-soft: #eaf3f2;
+  --ink: #16282b;
+  --ink-soft: #4c6367;
+  --paper: #f7f8f6;
+  --card: #ffffff;
+  --mint: #ddeee9;
+  --amber: #b7791f;
+  --amber-soft: #fdf3e0;
+  --red: #a83a3a;
+  --red-soft: #fbeaea;
+  --line: #dce3e0;
+  --radius: 10px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: var(--font);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+a { color: var(--petrol); text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; font-size: inherit; }
+
+/* Números tabulares para montos, cédulas y fechas */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* ── Botones ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: var(--radius);
+  border: 1px solid transparent; font-weight: 600; font-size: 14px;
+  transition: background .15s ease;
+}
+.btn-primary { background: var(--petrol); color: #fff; }
+.btn-primary:hover { background: var(--petrol-deep); }
+.btn-ghost { background: transparent; color: var(--petrol); border-color: var(--line); }
+.btn-ghost:hover { background: var(--petrol-soft); }
+
+/* ── Formularios ── */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.field input, .field select, .field textarea {
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: #fff; outline: none;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--petrol); box-shadow: 0 0 0 3px var(--petrol-soft);
+}
+
+/* ── Tarjetas y tablas ── */
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 20px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-soft);
+  padding: 10px 12px; border-bottom: 2px solid var(--line);
+}
+td { padding: 11px 12px; border-bottom: 1px solid var(--line); }
+tr:hover td { background: var(--petrol-soft); }
+
+/* ── Badges de estado ── */
+.badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+}
+.badge-ok { background: var(--mint); color: var(--petrol-deep); }
+.badge-warn { background: var(--amber-soft); color: var(--amber); }
+.badge-danger { background: var(--red-soft); color: var(--red); }
+
+/* ── Mensajes ── */
+.error-box {
+  background: var(--red-soft); color: var(--red);
+  border-radius: var(--radius); padding: 12px 14px; font-size: 14px;
+  margin-bottom: 14px;
+}
+.empty {
+  padding: 40px; text-align: center; color: var(--ink-soft);
+}
+
+/* Accesibilidad: foco visible y movimiento reducido */
+:focus-visible { outline: 2px solid var(--petrol); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
