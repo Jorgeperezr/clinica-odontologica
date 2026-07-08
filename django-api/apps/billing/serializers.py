@@ -28,14 +28,19 @@ class BudgetItemSerializer(serializers.ModelSerializer):
 class BudgetSerializer(serializers.ModelSerializer):
     items = BudgetItemSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    payment_plan_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Budget
         fields = [
             "id", "patient", "status", "status_display",
-            "total_amount", "notes", "items", "created_at",
+            "total_amount", "notes", "items", "payment_plan_id", "created_at",
         ]
         read_only_fields = ["id", "created_at", "total_amount", "items", "status"]
+
+    def get_payment_plan_id(self, obj):
+        plan = getattr(obj, "payment_plan", None)
+        return str(plan.id) if plan else None
 
     def validate_patient(self, value):
         if value.tenant_id != self.context["request"].tenant.id:

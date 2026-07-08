@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 14 completado — odontograma interactivo
+## Estado actual: Sprint 15 completado — pagos en el panel
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -141,6 +141,13 @@ Los 11 módulos del sistema están implementados y probados: usuarios, pacientes
 - **Leyenda del catálogo** de 12 estados con sus colores (parametrizable desde el admin).
 - **Evoluciones:** registro de notas clínicas / recetas / indicaciones con el flag "visible para el paciente" (lo que la app móvil mostrará), y listado con doctor y tipo.
 - **Fix:** `Doctor.full_name` devolvía el email (quedó del Sprint 3, cuando User no tenía nombre); ahora usa el nombre real con email de respaldo.
+
+### Sprint 15 — Pagos en el panel (hecho)
+- **Búsqueda de paciente** y su **estado de cuenta** en tarjetas: total, pagado, saldo y cuotas vencidas (la tarjeta se pinta en rojo si hay morosidad).
+- **Presupuestos:** creación, ítems desde el catálogo de tratamientos (el precio se pre-carga desde el tarifario y es editable), total autocalculado, aprobación con confirmación.
+- **Plan de cuotas:** número de cuotas y primera fecha; el reparto exacto de centavos del Sprint 8, ahora visible.
+- **Cobros:** formulario inline por cuota (monto editable para pagos parciales + método efectivo/transferencia/tarjeta); la cuota pasa a Pagada cuando el saldo llega a cero.
+- **Backend:** `payment_plan_id` expuesto en el serializer de presupuestos para enlazar presupuesto → cuotas.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
