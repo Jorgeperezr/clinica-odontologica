@@ -56,7 +56,7 @@ export default function PanelLayout({ children }) {
         </nav>
 
         <div style={styles.userBox}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{user.first_name || user.email}</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{user.full_name || user.email}</div>
           <div style={{ fontSize: 12, color: "var(--mint)" }}>{ROLE_LABELS[user.role] || user.role}</div>
           <button onClick={logout} style={styles.logoutBtn}>Cerrar sesión</button>
         </div>

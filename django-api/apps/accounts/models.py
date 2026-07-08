@@ -26,6 +26,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(unique=True, null=True, blank=True)
     phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    full_name = models.CharField(max_length=150, blank=True)
     role = models.CharField(max_length=20, choices=Role.choices)
 
     is_active = models.BooleanField(default=True)  # baja lógica — RF-USR-06

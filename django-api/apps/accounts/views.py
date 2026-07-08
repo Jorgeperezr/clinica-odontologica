@@ -279,3 +279,20 @@ class DeviceTokenRegisterView(generics.CreateAPIView):
                 "is_active": True,
             },
         )
+
+
+class MeView(APIView):
+    """
+    GET /api/v1/auth/me/ — perfil del usuario autenticado.
+    El panel web lo usa tras el login para conocer nombre y rol
+    (la navegación se filtra por rol en el cliente).
+    """
+
+    def get(self, request):
+        u = request.user
+        return Response({
+            "id": str(u.id),
+            "email": u.email,
+            "full_name": u.full_name,
+            "role": u.role,
+        })

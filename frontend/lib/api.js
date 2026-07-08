@@ -52,7 +52,13 @@ export async function login(email, password) {
     throw new Error(msg);
   }
   tokens.set(data.access, data.refresh);
-  localStorage.setItem("user", JSON.stringify(data.user || {}));
+  // El login devuelve solo tokens; el perfil (nombre y rol) se
+  // consulta a /auth/me/ para poder filtrar la navegación por rol.
+  const meResp = await fetch(`${apiBase()}/api/v1/auth/me/`, {
+    headers: { Authorization: `Bearer ${data.access}` },
+  });
+  const me = meResp.ok ? await meResp.json() : {};
+  localStorage.setItem("user", JSON.stringify(me));
   return data;
 }
 
@@ -63,7 +69,7 @@ export function logout() {
 
 async function refreshAccess() {
   if (!tokens.refresh) return false;
-  const resp = await fetch(`${apiBase()}/api/v1/auth/refresh/`, {
+  const resp = await fetch(`${apiBase()}/api/v1/auth/token/refresh/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh: tokens.refresh }),

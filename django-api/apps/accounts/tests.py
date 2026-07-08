@@ -47,3 +47,22 @@ class AuthTests(APITestCase):
         self.client.force_authenticate(user=self.admin)
         resp = self.client.get(reverse("user-list"))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class MeEndpointTests(APITestCase):
+    def test_me_returns_profile(self):
+        from apps.common.models import Tenant
+        tenant = Tenant.objects.create(name="T me")
+        user = User.objects.create_user(
+            email="me@test.com", password="superseguro123",
+            role="reception", tenant=tenant, full_name="Laura Vera",
+        )
+        self.client.force_authenticate(user=user)
+        resp = self.client.get("/api/v1/auth/me/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["role"], "reception")
+        self.assertEqual(resp.data["full_name"], "Laura Vera")
+
+    def test_me_requires_auth(self):
+        resp = self.client.get("/api/v1/auth/me/")
+        self.assertIn(resp.status_code, [401, 403])

@@ -13,7 +13,7 @@ export default function Dashboard() {
   return (
     <div>
       <h1 style={{ fontSize: 24, marginBottom: 6 }}>
-        Hola, {user.first_name || user.email}
+        Hola, {user.full_name || user.email}
       </h1>
       <p style={{ color: "var(--ink-soft)", marginBottom: 24 }}>
         Bienvenido al panel de gestión de la clínica.
