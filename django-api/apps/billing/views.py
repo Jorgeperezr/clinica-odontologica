@@ -352,3 +352,97 @@ class ProductionByDoctorReportView(APIView):
             })
 
         return Response({"doctors": result})
+
+
+class NewPatientsReportView(APIView):
+    """
+    GET /api/v1/reports/new-patients/?date_from=&date_to=&format=json|excel — RF-REP-04.
+    """
+
+    permission_classes = [HasRole.for_roles("admin")]
+
+    def get(self, request):
+        from django.http import HttpResponse
+        from django.utils.dateparse import parse_date
+
+        from apps.billing.report_export import build_xlsx
+        from apps.patients.models import Patient
+
+        patients = Patient.objects.filter(tenant=request.tenant, is_active=True)
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        if date_from:
+            patients = patients.filter(created_at__date__gte=parse_date(date_from))
+        if date_to:
+            patients = patients.filter(created_at__date__lte=parse_date(date_to))
+        patients = patients.order_by("created_at")
+
+        if request.query_params.get("export") == "excel":
+            rows = [
+                [p.full_name, p.national_id, p.phone or "", p.created_at.strftime("%Y-%m-%d")]
+                for p in patients
+            ]
+            xlsx = build_xlsx(
+                "Pacientes nuevos",
+                ["Nombre", "Identificación", "Teléfono", "Fecha de registro"],
+                rows,
+            )
+            response = HttpResponse(
+                xlsx,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = 'attachment; filename="pacientes_nuevos.xlsx"'
+            return response
+
+        return Response({
+            "count": patients.count(),
+            "patients": [
+                {"name": p.full_name, "national_id": p.national_id,
+                 "registered": p.created_at.strftime("%Y-%m-%d")}
+                for p in patients
+            ],
+        })
+
+
+class InventoryReportView(APIView):
+    """
+    GET /api/v1/reports/inventory/?format=json|excel — RF-REP-05.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "auxiliary")]
+
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from apps.billing.report_export import build_xlsx
+        from apps.inventory.models import Product
+
+        products = Product.objects.filter(
+            tenant=request.tenant, is_active=True
+        ).prefetch_related("batches").order_by("name")
+
+        if request.query_params.get("export") == "excel":
+            rows = [
+                [p.name, p.unit, str(p.current_stock), str(p.min_stock),
+                 "SÍ" if p.is_low_stock else "NO"]
+                for p in products
+            ]
+            xlsx = build_xlsx(
+                "Inventario",
+                ["Producto", "Unidad", "Stock actual", "Stock mínimo", "Stock bajo"],
+                rows,
+            )
+            response = HttpResponse(
+                xlsx,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = 'attachment; filename="inventario.xlsx"'
+            return response
+
+        return Response({
+            "products": [
+                {"name": p.name, "current_stock": str(p.current_stock),
+                 "is_low_stock": p.is_low_stock}
+                for p in products
+            ],
+        })

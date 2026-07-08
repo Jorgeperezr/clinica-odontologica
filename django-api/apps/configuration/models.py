@@ -117,3 +117,27 @@ class SystemParameter(TenantAwareModel):
         "stock_minimo_default": ("5", "Stock mínimo por defecto para productos nuevos de inventario."),
         "dias_alerta_vencimiento": ("30", "Días antes del vencimiento para alertar sobre un lote de inventario."),
     }
+
+
+class TreatmentInventoryItem(models.Model):
+    """
+    Vincula un tratamiento con los insumos que consume y en qué cantidad
+    (RF-INV-05). Cuando el tratamiento se marca como realizado, estos
+    insumos se descuentan automáticamente del inventario.
+    """
+
+    id = models.UUIDField(primary_key=True, default=__import__("uuid").uuid4, editable=False)
+    treatment = models.ForeignKey(
+        Treatment, on_delete=models.CASCADE, related_name="inventory_items"
+    )
+    product = models.ForeignKey(
+        "inventory.Product", on_delete=models.CASCADE, related_name="+"
+    )
+    quantity_used = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Insumo de tratamiento"
+        verbose_name_plural = "Insumos de tratamiento"
+
+    def __str__(self):
+        return f"{self.treatment.name} usa {self.quantity_used} de {self.product.name}"

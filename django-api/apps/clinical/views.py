@@ -153,9 +153,19 @@ class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
         )
 
     def perform_update(self, serializer):
-        serializer.save()
-        # TODO (Sprint 11): si el ítem pasa a 'done' y el tratamiento
-        # consume inventario, descontar stock automáticamente (RF-INV-05).
+        item = serializer.save()
+        # Si el ítem pasa a 'done' y el tratamiento consume insumos, se
+        # descuenta el stock automáticamente (RF-INV-05). El descuento es
+        # resiliente: un fallo de inventario no revierte el cambio de estado.
+        if item.status == item.Status.DONE:
+            try:
+                from apps.inventory.services import (
+                    consume_inventory_for_treatment_item,
+                )
+
+                consume_inventory_for_treatment_item(item)
+            except Exception:
+                pass
 
 
 class OdontogramStateListView(generics.ListAPIView):

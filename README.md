@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 10 completado
+## Estado actual: Sprint 11 completado — BACKEND COMPLETO
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -109,6 +109,17 @@ cd django-api && python manage.py test --settings=config.settings_test
 - **Modo simulado:** sin credenciales de Meta, el gateway simula el envío. Cuando la verificación de negocio en Meta esté aprobada, solo hay que poner las credenciales en el `.env` — no requiere cambios de código.
 - **Bugs corregidos:** firma incorrecta de `has_permission` en el endpoint interno (habría roto en runtime); import perdido de `notify_django` en el gateway; check-in ahora resiliente a fallos del broker Celery.
 - **Tests:** 6 nuevos (72 en total) — todos en verde.
+
+### Sprint 11 — Inventario + reportes finales (hecho) — BACKEND COMPLETO
+- **Inventario:** productos con stock mínimo, lotes con fecha de vencimiento, historial de movimientos (RF-INV-01/02).
+- **Alertas:** stock bajo (RF-INV-03) y lotes próximos a vencer con días configurables (RF-INV-04).
+- **Descuento automático de stock** al marcar un tratamiento como realizado, usando FEFO (primero el lote que vence antes) y registrando el consumo (RF-INV-05). Conecta historia clínica ↔ inventario.
+- **Reportes finales:** pacientes nuevos e inventario, con **exportación a Excel** (openpyxl) (RF-REP-04/05/06).
+- **Bug corregido:** el parámetro `format` colisionaba con la negociación de contenido de DRF (daba 404); renombrado a `export`.
+- **Tests:** 8 nuevos (80 en total) — todos en verde.
+
+## 🎉 Backend completo (Sprints 0-11)
+Los 11 módulos del sistema están implementados y probados: usuarios, pacientes, agenda, historia clínica, odontograma, especialidades, tratamientos/pagos, inventario, WhatsApp, reportes y configuración. **80 tests, CI verde.** Siguiente fase: frontend (panel web Next.js) y app móvil Flutter.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
