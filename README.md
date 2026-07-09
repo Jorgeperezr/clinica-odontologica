@@ -1,5 +1,17 @@
 # Sistema de Gestión — Clínica Odontológica
 
+## Cómo correr los tests (comando canónico)
+
+```bash
+docker compose exec django-api python manage.py test --settings=config.settings_test
+```
+
+Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
+el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
+**Referencia actual: 89 tests** (si agregas tests, actualiza este número en
+el mismo commit para que sirva de verificación rápida).
+
+
 Monorepo con dos servicios de backend independientes:
 
 - **`django-api/`** — Backend principal (Django + Django REST Framework). Fuente de verdad de todo el dominio: usuarios, pacientes, agenda, historia clínica, tratamientos, pagos, inventario, reportes y configuración.
