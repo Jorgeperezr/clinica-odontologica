@@ -12,11 +12,15 @@
 export function apiBase() {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== "undefined") {
-    const host = window.location.hostname;
+    const { hostname, port, origin } = window.location;
     // Codespaces: algo-3000.app.github.dev → algo-80.app.github.dev
-    if (host.endsWith(".app.github.dev")) {
-      return `https://${host.replace("-3000.", "-80.")}`;
+    if (hostname.endsWith(".app.github.dev")) {
+      return `https://${hostname.replace("-3000.", "-80.")}`;
     }
+    // Dev local con next dev (puerto 3000): la API está en el 80
+    if (port === "3000") return "http://localhost";
+    // Producción: Nginx sirve panel y API en el mismo origen
+    return origin;
   }
   return "http://localhost";
 }

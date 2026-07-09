@@ -1,0 +1,94 @@
+# ── Producción ────────────────────────────────────────────────────────
+# Uso: docker compose -f docker-compose.prod.yml up -d --build
+# Diferencias con el compose de desarrollo:
+#  - gunicorn sin --reload y sin montar el código (imagen inmutable)
+#  - Postgres y Redis SIN puertos expuestos al host
+#  - el panel se compila a estático y lo sirve Nginx (sin next dev)
+#  - restart: unless-stopped en todos los servicios
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  django-api:
+    build: ./django-api
+    restart: unless-stopped
+    env_file: .env
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py bootstrap &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      - postgres
+      - redis
+
+  celery-worker:
+    build: ./django-api
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A config worker -l info --concurrency 2
+    depends_on:
+      - django-api
+      - redis
+
+  celery-beat:
+    build: ./django-api
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A config beat -l info
+    depends_on:
+      - django-api
+      - redis
+
+  whatsapp-gateway:
+    build: ./whatsapp-gateway
+    restart: unless-stopped
+    env_file: .env
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
+
+  # Compila el panel a estático y lo deja en el volumen que Nginx sirve.
+  # Corre una vez en cada despliegue y termina (restart: "no").
+  frontend-build:
+    image: node:20-alpine
+    working_dir: /app
+    restart: "no"
+    command: >
+      sh -c "npm install --no-audit --no-fund &&
+             NEXT_EXPORT=1 NEXT_TELEMETRY_DISABLED=1 npm run build &&
+             rm -rf /static-out/* && cp -r out/. /static-out/"
+    volumes:
+      - ./frontend:/app
+      - frontend_static:/static-out
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - frontend_static:/usr/share/nginx/html:ro
+      - media_data:/app/media:ro
+    depends_on:
+      - django-api
+      - whatsapp-gateway
+
+volumes:
+  postgres_data:
+  media_data:
+  frontend_static:

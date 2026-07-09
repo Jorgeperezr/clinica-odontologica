@@ -27,6 +27,34 @@ CSRF_TRUSTED_ORIGINS = config(
     cast=Csv(),
 )
 
+# ── Seguridad de producción (Fase 12) ────────────────────────────────
+# Activa cabeceras y cookies seguras cuando DEBUG=False. El TLS lo
+# termina el proxy (Nginx con certificado, o Cloudflare Tunnel), por lo
+# que Django confía en X-Forwarded-Proto para saber si el request
+# original fue HTTPS.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "same-origin"
+    X_FRAME_OPTIONS = "DENY"
+
+    # SSL redirect: apagado por defecto porque detrás de Cloudflare
+    # Tunnel el redirect puede generar bucles; encender solo con Nginx+TLS
+    # propio via env.
+    SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
+
+    # HSTS: empezar corto (1 hora) y subir a 31536000 cuando el dominio
+    # esté estable en HTTPS.
+    SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=3600, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+
 # --------------------------------------------------------------------------
 # Apps
 # --------------------------------------------------------------------------

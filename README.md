@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 17 completado — QA integral
+## Estado actual: Sprint 18 completado — listo para desplegar
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -162,6 +162,13 @@ Los 7 módulos de la barra lateral funcionan de punta a punta contra la API: Ini
 - **CI ampliado:** nuevo job `frontend-build` que compila el panel Next.js en cada push — un cambio que rompa el build ya no llega a main sin aviso.
 - **`QA-CHECKLIST.md`:** checklist de QA manual de la UI (roles, flujos, robustez) para recorrido sistemático en el navegador.
 - **Tests:** 91 en total (90 + E2E) — todos en verde.
+
+### Sprint 18 — Fase 12: preparación para producción (hecho)
+- **Settings endurecidos** (activos con `DEBUG=False`): cookies seguras, X-Frame DENY, nosniff, HSTS configurable, soporte de proxy TLS (X-Forwarded-Proto) — verificado con `check --deploy`.
+- **`docker-compose.prod.yml`:** imágenes inmutables (sin --reload ni volúmenes de código), Postgres/Redis sin puertos expuestos, panel compilado a estático y servido por Nginx, restart automático.
+- **`.env.production.example`:** plantilla con todos los valores a cambiar e instrucciones para generar la SECRET_KEY.
+- **`DEPLOY.md`:** comparativa de hosting (VM GCP vs PC + Cloudflare Tunnel) con pasos concretos por opción, backups con pg_dump + destino externo, procedimiento de actualización y checklist pre-pacientes-reales.
+- **Frontend:** `apiBase()` detecta producción (mismo origen vía Nginx) además de Codespaces y dev local.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
