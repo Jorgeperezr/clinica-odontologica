@@ -66,3 +66,40 @@ class MeEndpointTests(APITestCase):
     def test_me_requires_auth(self):
         resp = self.client.get("/api/v1/auth/me/")
         self.assertIn(resp.status_code, [401, 403])
+
+
+class StaffUserCreationTests(APITestCase):
+    def setUp(self):
+        from apps.common.models import Tenant
+        self.tenant = Tenant.objects.create(name="T staff")
+        self.admin = User.objects.create_user(
+            email="admin@staff.ec", password="superseguro123",
+            role="admin", tenant=self.tenant,
+        )
+
+    def test_create_doctor_user_creates_doctor_profile(self):
+        from apps.agenda.models import Doctor
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post("/api/v1/users/", {
+            "email": "nueva.doctora@clinica.ec",
+            "full_name": "Dra. Carla Ríos",
+            "role": "doctor",
+            "password": "ClaveSegura2026",
+        })
+        self.assertEqual(resp.status_code, 201, resp.content)
+        user = User.objects.get(email="nueva.doctora@clinica.ec")
+        self.assertEqual(user.full_name, "Dra. Carla Ríos")
+        self.assertTrue(user.check_password("ClaveSegura2026"))
+        # El perfil Doctor se creó solo y aparecerá en la agenda
+        self.assertTrue(Doctor.objects.filter(user=user, tenant=self.tenant).exists())
+
+    def test_reception_cannot_create_users(self):
+        reception = User.objects.create_user(
+            email="r@staff.ec", password="superseguro123",
+            role="reception", tenant=self.tenant,
+        )
+        self.client.force_authenticate(user=reception)
+        resp = self.client.post("/api/v1/users/", {
+            "email": "x@x.ec", "role": "doctor", "password": "ClaveSegura2026",
+        })
+        self.assertEqual(resp.status_code, 403)

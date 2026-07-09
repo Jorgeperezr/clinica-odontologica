@@ -82,15 +82,38 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
 5. `sudo cloudflared service install && sudo systemctl start cloudflared`
 6. En `.env`: `SECURE_SSL_REDIRECT=False` (Cloudflare ya fuerza HTTPS).
 
-## Backups (obligatorio en la Opción B, recomendado en la A)
+## Backups CIFRADOS (obligatorio en la Opción B, recomendado en la A)
 
-Cron diario en el host:
+El repo incluye `scripts/backup.sh` (exporta toda la base — pacientes,
+registros clínicos, pagos — y la cifra con AES-256) y `scripts/restore.sh`
+(restaura un backup ante un error, con confirmación explícita).
+
+Configuración (una vez):
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# → pegar el resultado en BACKUP_PASSPHRASE del .env
+# → guardar una COPIA de esa clave fuera del servidor (gestor de
+#   contraseñas / papel en caja fuerte): sin ella el backup no se
+#   puede descifrar.
+```
+
+Backup manual: `COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh`
+(incluye verificación de integridad automática al terminar).
+
+Cron diario:
 ```bash
 # /etc/cron.d/backup-clinica  (02:00 todos los días)
-0 2 * * * root docker compose -f /ruta/al/repo/docker-compose.prod.yml exec -T postgres pg_dump -U clinica clinica | gzip > /backups/clinica-$(date +\%F).sql.gz
+0 2 * * * root cd /ruta/al/repo && COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh >> /var/log/backup-clinica.log 2>&1
 ```
-Copiar `/backups/` a un destino EXTERNO (Google Drive con rclone, disco
-USB rotado, etc.). Un backup que vive en la misma máquina no es backup.
+
+Restauración ante un error:
+```bash
+COMPOSE_FILE=docker-compose.prod.yml ./scripts/restore.sh backups/clinica-2026-07-09_0200.sql.gz.enc
+```
+
+Copiar `backups/` a un destino EXTERNO (rclone a Google Drive, disco USB
+rotado). Un backup que vive en la misma máquina no es backup. Y probar la
+restauración al menos una vez antes de tener pacientes reales.
 
 ## Actualizaciones del sistema
 

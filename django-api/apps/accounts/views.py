@@ -238,7 +238,13 @@ class UserListCreateView(generics.ListCreateAPIView):
         return User.objects.filter(tenant=self.request.tenant).exclude(role=User.Role.PATIENT).order_by("email")
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
+        user = serializer.save(tenant=self.request.tenant)
+        # Si el nuevo usuario es doctor, crear su perfil Doctor para que
+        # aparezca en la agenda y pueda registrar actos clínicos atribuidos.
+        if user.role == User.Role.DOCTOR:
+            from apps.agenda.models import Doctor
+
+            Doctor.objects.get_or_create(tenant=self.request.tenant, user=user)
 
 
 class UserDetailView(generics.RetrieveUpdateAPIView):

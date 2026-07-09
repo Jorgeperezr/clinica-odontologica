@@ -20,7 +20,7 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["especialidades", "Especialidades"], ["parametros", "Parámetros"]].map(([k, label]) => (
+        {[["tratamientos", "Tratamientos"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -35,6 +35,7 @@ export default function ConfiguracionPage() {
 
       {tab === "tratamientos" && <TreatmentsTab />}
       {tab === "especialidades" && <SpecialtiesTab />}
+      {tab === "usuarios" && <UsersTab />}
       {tab === "parametros" && <ParametersTab />}
     </div>
   );
@@ -240,6 +241,99 @@ function ParametersTab() {
                             onClick={() => { setEditing(p.id); setValue(p.value); }}>Editar</button>
                   )}
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+
+/* ── Usuarios de staff ── */
+const ROLE_OPTIONS = {
+  doctor: "Doctor/a", reception: "Recepción",
+  auxiliary: "Auxiliar", admin: "Administrador",
+};
+
+function UsersTab() {
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({ full_name: "", email: "", role: "doctor", password: "" });
+  const [error, setError] = useState("");
+  const [okMsg, setOkMsg] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const resp = await api("/users/");
+      const data = await resp.json();
+      setUsers(data.results || data);
+    } catch { setError("No se pudieron cargar los usuarios."); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function submit(e) {
+    e.preventDefault();
+    setError(""); setOkMsg("");
+    try {
+      const resp = await api("/users/", { method: "POST", body: JSON.stringify(form) });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detail = data?.error?.details || data;
+        const first = typeof detail === "object" ? Object.values(detail)[0] : detail;
+        throw new Error(Array.isArray(first) ? first[0] : `Error ${resp.status}`);
+      }
+      setOkMsg(form.role === "doctor"
+        ? `Usuario creado. ${form.full_name} ya aparece como doctor en la Agenda.`
+        : "Usuario creado.");
+      setForm({ full_name: "", email: "", role: "doctor", password: "" });
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  return (
+    <div>
+      {error && <div className="error-box">{error}</div>}
+      {okMsg && (
+        <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>
+          ✓ {okMsg}
+        </div>
+      )}
+
+      <form onSubmit={submit} className="card" style={{ marginBottom: 18 }}>
+        <h3 style={{ marginBottom: 4 }}>Nuevo usuario de staff</h3>
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+          Si el rol es Doctor/a, su perfil de agenda se crea automáticamente.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.5fr 1fr 1fr auto", gap: "0 12px", alignItems: "end" }}>
+          <div className="field" style={{ marginBottom: 0 }}><label>Nombre completo *</label>
+            <input required value={form.full_name}
+                   onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
+          <div className="field" style={{ marginBottom: 0 }}><label>Correo *</label>
+            <input type="email" required value={form.email}
+                   onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+          <div className="field" style={{ marginBottom: 0 }}><label>Rol *</label>
+            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              {Object.entries(ROLE_OPTIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select></div>
+          <div className="field" style={{ marginBottom: 0 }}><label>Contraseña * (10+)</label>
+            <input type="password" required minLength={10} value={form.password}
+                   onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
+          <button className="btn btn-primary">Crear</button>
+        </div>
+      </form>
+
+      <div className="card" style={{ padding: 0 }}>
+        <table>
+          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Activo</th></tr></thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id}>
+                <td style={{ fontWeight: 600 }}>{u.full_name || "—"}</td>
+                <td>{u.email}</td>
+                <td><span className="badge badge-ok">{ROLE_OPTIONS[u.role] || u.role}</span></td>
+                <td>{u.is_active ? "Sí" : "No"}</td>
               </tr>
             ))}
           </tbody>

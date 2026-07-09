@@ -54,7 +54,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "phone", "role", "is_active", "password", "created_at"]
+        fields = ["id", "email", "phone", "full_name", "role", "is_active", "password", "created_at"]
         read_only_fields = ["id", "created_at"]
 
     def validate_role(self, value):
