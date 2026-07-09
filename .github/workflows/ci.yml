@@ -46,3 +46,20 @@ jobs:
         run: pip install -r whatsapp-gateway/requirements.txt ruff
       - name: Lint
         run: ruff check whatsapp-gateway/app whatsapp-gateway/main.py
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Build estático
+        working-directory: frontend
+        env:
+          NEXT_EXPORT: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm run build

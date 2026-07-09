@@ -7,7 +7,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 16 completado — PANEL WEB COMPLETO
+## Estado actual: Sprint 17 completado — QA integral
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -156,6 +156,12 @@ Los 11 módulos del sistema están implementados y probados: usuarios, pacientes
 
 ## 🎉 Panel web completo (Sprints 12-16)
 Los 7 módulos de la barra lateral funcionan de punta a punta contra la API: Inicio, Pacientes (con ficha + odontograma interactivo), Agenda (con morosidad), Pagos (presupuestos → cuotas → cobros), Inventario, Reportes y Configuración. Pendiente del Roadmap: app móvil de pacientes (Flutter), QA integral y despliegue (Fase 12).
+
+### Sprint 17 — QA integral (hecho)
+- **Prueba end-to-end** (`apps/common/tests_e2e.py`): simula el flujo completo de una clínica a través de TODOS los módulos en un solo test — registro de paciente, opt-in, catálogo, presupuesto con plan de cuotas vencidas, bloqueo por morosidad + override, cobro total, desbloqueo verificado, atención (confirmar/check-in/evolución/odontograma/check-out), descuento automático de inventario, reportes que reflejan todo, y exports Excel/PDF. Pasó a la primera: el sistema integra correctamente.
+- **CI ampliado:** nuevo job `frontend-build` que compila el panel Next.js en cada push — un cambio que rompa el build ya no llega a main sin aviso.
+- **`QA-CHECKLIST.md`:** checklist de QA manual de la UI (roles, flujos, robustez) para recorrido sistemático en el navegador.
+- **Tests:** 91 en total (90 + E2E) — todos en verde.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
