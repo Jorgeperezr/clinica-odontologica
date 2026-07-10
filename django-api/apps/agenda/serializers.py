@@ -25,9 +25,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "id", "patient", "patient_name", "doctor", "doctor_name",
             "treatment", "scheduled_start", "scheduled_end",
             "status", "status_display", "notes",
-            "checkin_at", "checkout_at", "created_at",
+            "checkin_at", "attention_started_at", "reminder_sent_at", "checkout_at", "created_at",
         ]
-        read_only_fields = ["id", "checkin_at", "checkout_at", "created_at", "status"]
+        read_only_fields = ["id", "checkin_at", "attention_started_at", "reminder_sent_at", "checkout_at", "created_at", "status"]
 
     def validate(self, attrs):
         start = attrs.get("scheduled_start")

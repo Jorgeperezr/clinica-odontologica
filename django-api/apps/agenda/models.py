@@ -7,6 +7,8 @@ La sincronización con Google Calendar (RF-AGN-06) se estructura aquí y
 se completa con OAuth2 más adelante en este mismo sprint.
 """
 
+import uuid
+
 from django.db import models
 
 from apps.accounts.models import User
@@ -36,6 +38,11 @@ class Doctor(TenantAwareModel):
     class Meta:
         verbose_name = "Doctor"
         verbose_name_plural = "Doctores"
+
+    calendar_token = models.UUIDField(
+        default=uuid.uuid4, unique=True, editable=False,
+        help_text="Token secreto del feed iCalendar (suscripción desde Google Calendar).",
+    )
 
     def __str__(self):
         return self.full_name
@@ -81,7 +88,15 @@ class Appointment(TenantAwareModel):
     notes = models.TextField(blank=True)
 
     checkin_at = models.DateTimeField(null=True, blank=True)
+    attention_started_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Cuándo el doctor inició la atención (flujo: llegó → en atención → finalizada).",
+    )
     checkout_at = models.DateTimeField(null=True, blank=True)
+    reminder_sent_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Cuándo se envió el recordatorio WhatsApp (evita duplicados).",
+    )
 
     google_calendar_event_id = models.CharField(max_length=255, blank=True)
 

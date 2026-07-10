@@ -238,3 +238,65 @@ class AgendaViewList(generics.ListAPIView):
             qs = qs.filter(doctor__user=user)
 
         return qs.order_by("scheduled_start")
+
+
+
+class AppointmentStartView(APIView):
+    """
+    POST /api/v1/appointments/{id}/start/ — inicio de la atención.
+    Flujo completo: check-in (llegó, en espera) → start (en atención)
+    → checkout (finalizada). Requiere check-in previo.
+    """
+
+    permission_classes = [CAN_MANAGE_AGENDA]
+
+    def post(self, request, pk):
+        try:
+            appt = Appointment.objects.get(pk=pk, tenant=request.tenant)
+        except Appointment.DoesNotExist:
+            return Response({"detail": "Cita no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not appt.checkin_at:
+            return Response(
+                {"detail": "El paciente aún no hizo check-in (botón Llegó)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if appt.attention_started_at:
+            return Response({"detail": "La atención ya fue iniciada."}, status=status.HTTP_400_BAD_REQUEST)
+
+        appt.attention_started_at = timezone.now()
+        appt.save(update_fields=["attention_started_at"])
+        return Response(AppointmentSerializer(appt).data)
+
+
+
+class DoctorCalendarURLView(APIView):
+    """
+    GET /api/v1/doctors/{id}/calendar-url/ — devuelve la URL secreta del
+    feed iCalendar para suscribirse desde Google/Apple/Outlook Calendar.
+    Solo admin o el propio doctor.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get(self, request, pk):
+        try:
+            doctor = Doctor.objects.get(pk=pk, tenant=request.tenant)
+        except Doctor.DoesNotExist:
+            return Response({"detail": "Doctor no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.role == "doctor" and doctor.user_id != request.user.id:
+            return Response(
+                {"detail": "Solo puedes ver la URL de tu propio calendario."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        path = f"/api/v1/calendar/{doctor.calendar_token}.ics"
+        return Response({
+            "url_path": path,
+            "url": request.build_absolute_uri(path),
+            "instructions": (
+                "En Google Calendar: Otros calendarios → + → Desde URL → pegar la URL. "
+                "Google actualiza las suscripciones cada varias horas."
+            ),
+        })

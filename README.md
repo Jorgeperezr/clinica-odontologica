@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 98 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 104 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 19 completado — SaaS multi-tenant
+## Estado actual: Sprint 20 completado — agenda avanzada
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -189,6 +189,12 @@ Jerarquía: **Super Administrador** (plataforma, sin clínica) → **Clínicas**
 - **Desactivación efectiva:** autenticación tenant-aware — al desactivar una clínica, sus usuarios pierden acceso al instante aunque tengan tokens vigentes (los datos no se borran).
 - **Aislamiento verificado por tests:** el staff de la Clínica A no puede listar NI leer por ID datos de la Clínica B (98 tests en total, 7 nuevos de plataforma, incluyendo el test de aislamiento).
 - El middleware de auditoría ahora soporta acciones de plataforma (sin tenant).
+
+### Sprint 20 — Agenda avanzada: mes, flujo de atención, calendario y recordatorios (hecho)
+- **Vista mensual:** cuadrícula del mes con conteo de citas por día (hoy resaltado); clic en un día abre su agenda en detalle. Backend `mode=monthly`.
+- **Flujo de atención completo:** Llegó (check-in, chip "En espera") → **Iniciar atención** (nuevo, chip "En atención") → Finalizar. Con validaciones (no se puede iniciar sin check-in, ni dos veces).
+- **Google Calendar Fase 1 (funciona hoy, sin credenciales):** feed iCalendar por doctor con URL secreta (botón "🗓 Calendario del doctor" en Agenda). Google/Apple/Outlook se suscriben y las citas aparecen y se actualizan solas en el calendario personal del dentista. La Fase 2 (bidireccional con OAuth) queda documentada en DEPLOY.md; `google_calendar_event_id` ya existe en el modelo.
+- **Recordatorios WhatsApp con confirmación:** ya existían del Sprint 10 (webhook entiende "CONFIRMO"/"sí" y confirma la cita). Este sprint: **fix de un bug real** — la tarea no marcaba las citas recordadas y habría enviado ~24 recordatorios por cita; ahora `reminder_sent_at` garantiza uno solo, la plantilla incluye la instrucción de confirmación, y la agenda muestra 📨 en las citas ya recordadas.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

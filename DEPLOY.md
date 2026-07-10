@@ -124,9 +124,27 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 (Las migraciones corren solas en el arranque.)
 
+## Google Calendar — estado y Fase 2
+
+**Fase 1 (ya funciona, sin credenciales):** cada doctor tiene un feed
+iCalendar con URL secreta (Agenda → filtrar por doctor → "🗓 Calendario
+del doctor"). Al suscribirla en Google Calendar (Otros calendarios → + →
+Desde URL), las citas de la clínica aparecen en su calendario personal y
+se actualizan solas (Google refresca las suscripciones cada varias horas).
+
+**Fase 2 (bidireccional real — pendiente de credenciales):** que un evento
+creado en el Google Calendar del doctor bloquee su agenda en la clínica.
+Requiere: proyecto en Google Cloud Console → habilitar Google Calendar API
+→ credenciales OAuth 2.0 (client ID + secret) → pantalla de consentimiento.
+El campo `Appointment.google_calendar_event_id` ya existe en el modelo
+para ese momento. Cuando tengas las credenciales, se implementa el flujo
+OAuth por doctor y la sincronización con webhooks push de Google.
+
 ## Pendientes ANTES de pacientes reales
 
 - [ ] Cambiar TODAS las contraseñas de desarrollo (Jorge2025 no va a producción).
+- [ ] Plantilla `recordatorio_cita` en Meta con 3 variables (nombre, fecha,
+      instrucción de confirmación) — el webhook ya entiende "CONFIRMO"/"sí".
 - [ ] Credenciales de Meta en `.env` cuando la verificación esté aprobada
       (sin esto, los recordatorios WhatsApp quedan en modo simulado).
 - [ ] Validar catálogo del odontograma y formularios por especialidad con el doctor.

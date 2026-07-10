@@ -52,6 +52,7 @@ def send_appointment_reminders():
             scheduled_start__gte=now,
             scheduled_start__lte=window_end,
             status__in=[Appointment.Status.PENDING, Appointment.Status.CONFIRMED],
+            reminder_sent_at__isnull=True,  # nunca recordar dos veces
         ).select_related("patient", "doctor")
 
         for appt in appointments:
@@ -64,10 +65,15 @@ def send_appointment_reminders():
                 variables={
                     "1": appt.patient.full_name,
                     "2": appt.scheduled_start.strftime("%d/%m/%Y %H:%M"),
+                    # La plantilla de Meta debe cerrar con la instrucción de
+                    # confirmación; el webhook ya entiende "confirmo"/"sí".
+                    "3": "Responde CONFIRMO para confirmar tu asistencia.",
                 },
                 patient_id=str(appt.patient.id),
                 context={"appointment_id": str(appt.id)},
             )
+            appt.reminder_sent_at = now
+            appt.save(update_fields=["reminder_sent_at"])
             sent += 1
 
     return {"reminders_sent": sent}

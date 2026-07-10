@@ -72,7 +72,7 @@ export default function AgendaPage() {
     }
   }
 
-  const shiftDays = mode === "weekly" ? 7 : 1;
+  const shiftDays = mode === "monthly" ? 30 : mode === "weekly" ? 7 : 1;
 
   return (
     <div>
@@ -96,14 +96,14 @@ export default function AgendaPage() {
       {/* Controles: día/semana, fecha, doctor */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18, flexWrap: "wrap" }}>
         <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: "var(--radius)", overflow: "hidden" }}>
-          {["daily", "weekly"].map((m) => (
+          {["daily", "weekly", "monthly"].map((m) => (
             <button key={m} onClick={() => setMode(m)}
               style={{
                 padding: "8px 16px", border: "none", fontWeight: 600, fontSize: 14,
                 background: mode === m ? "var(--petrol)" : "#fff",
                 color: mode === m ? "#fff" : "var(--ink)",
               }}>
-              {m === "daily" ? "Día" : "Semana"}
+              {m === "daily" ? "Día" : m === "weekly" ? "Semana" : "Mes"}
             </button>
           ))}
         </div>
@@ -114,6 +114,21 @@ export default function AgendaPage() {
         <button className="btn btn-ghost" onClick={() => shiftDate(shiftDays)} aria-label="Siguiente">→</button>
         <button className="btn btn-ghost" onClick={() => setDate(todayISO())}>Hoy</button>
 
+        {doctorId && (
+          <button className="btn btn-ghost" style={{ fontSize: 13 }}
+                  onClick={async () => {
+                    try {
+                      const r = await api(`/doctors/${doctorId}/calendar-url/`);
+                      const d = await r.json();
+                      if (!r.ok) throw new Error(d?.detail || "Sin permiso.");
+                      await navigator.clipboard.writeText(d.url);
+                      setError("");
+                      alert(`URL del calendario copiada al portapapeles.\n\n${d.instructions}`);
+                    } catch (err) { setError(err.message); }
+                  }}>
+            🗓 Calendario del doctor
+          </button>
+        )}
         <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}
                 style={{ padding: "8px 10px", border: "1px solid var(--line)", borderRadius: "var(--radius)", marginLeft: "auto" }}>
           <option value="">Todos los doctores</option>
@@ -121,6 +136,10 @@ export default function AgendaPage() {
         </select>
       </div>
 
+      {mode === "monthly" ? (
+        <MonthGrid date={date} appointments={appointments}
+                   onDayClick={(d) => { setDate(d); setMode("daily"); }} />
+      ) : (
       <div className="card" style={{ padding: 0 }}>
         {loading ? (
           <div className="empty">Cargando…</div>
@@ -151,7 +170,13 @@ export default function AgendaPage() {
                     )}
                     <td style={{ fontWeight: 600 }}>{a.patient_name}</td>
                     <td>{a.doctor_name}</td>
-                    <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
+                    <td>
+                      <span className={`badge ${st.cls}`}>{st.label}</span>
+                      {a.reminder_sent_at && (
+                        <span title="Recordatorio WhatsApp enviado"
+                              style={{ marginLeft: 6, fontSize: 12 }}>📨</span>
+                      )}
+                    </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <RowActions appt={a} onAction={doAction} />
                     </td>
@@ -162,6 +187,72 @@ export default function AgendaPage() {
           </table>
         )}
       </div>
+      )}
+    </div>
+  );
+}
+
+function MonthGrid({ date, appointments, onDayClick }) {
+  const base = new Date(date + "T12:00:00");
+  const year = base.getFullYear(), month = base.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Lunes=0 … Domingo=6
+  const startOffset = (firstDay.getDay() + 6) % 7;
+
+  const byDay = {};
+  for (const a of appointments) {
+    const d = a.scheduled_start.slice(0, 10);
+    (byDay[d] = byDay[d] || []).push(a);
+  }
+
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const monthName = base.toLocaleDateString("es-EC", { month: "long", year: "numeric" });
+
+  return (
+    <div className="card">
+      <h3 style={{ marginBottom: 12, textTransform: "capitalize" }}>{monthName}</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+        {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
+          <div key={d} style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-soft)",
+                                textTransform: "uppercase", textAlign: "center", padding: 4 }}>{d}</div>
+        ))}
+        {cells.map((day, i) => {
+          if (!day) return <div key={`e${i}`} />;
+          const appts = byDay[day] || [];
+          const active = appts.filter((a) => !["cancelled", "no_show"].includes(a.status)).length;
+          const isToday = day === todayStr;
+          return (
+            <button key={day} onClick={() => onDayClick(day)}
+              style={{
+                minHeight: 74, padding: 6, borderRadius: 8, cursor: "pointer",
+                border: isToday ? "2px solid var(--petrol)" : "1px solid var(--line)",
+                background: active > 0 ? "var(--petrol-soft)" : "#fff",
+                display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4,
+                textAlign: "left",
+              }}
+              aria-label={`Día ${day}: ${active} citas`}>
+              <span className="tabular" style={{ fontSize: 12, fontWeight: isToday ? 700 : 500 }}>
+                {Number(day.slice(8, 10))}
+              </span>
+              {active > 0 && (
+                <span className="badge badge-ok" style={{ fontSize: 11 }}>
+                  {active} cita{active > 1 ? "s" : ""}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 10 }}>
+        Haz clic en un día para ver su agenda en detalle.
+      </p>
     </div>
   );
 }
@@ -184,8 +275,21 @@ function RowActions({ appt, onAction }) {
       </>
     );
   }
-  if (appt.checkin_at && !appt.checkout_at) {
-    return <button className="btn btn-primary" style={btn} onClick={() => onAction(appt, "checkout")}>Finalizar</button>;
+  if (appt.checkin_at && !appt.attention_started_at && !appt.checkout_at) {
+    return (
+      <>
+        <span className="badge badge-warn" style={{ marginRight: 6 }}>En espera</span>
+        <button className="btn btn-primary" style={btn} onClick={() => onAction(appt, "start")}>Iniciar atención</button>
+      </>
+    );
+  }
+  if (appt.attention_started_at && !appt.checkout_at) {
+    return (
+      <>
+        <span className="badge badge-ok" style={{ marginRight: 6 }}>En atención</span>
+        <button className="btn btn-primary" style={btn} onClick={() => onAction(appt, "checkout")}>Finalizar</button>
+      </>
+    );
   }
   return null;
 }

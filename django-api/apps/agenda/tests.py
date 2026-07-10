@@ -120,3 +120,117 @@ class AgendaTests(APITestCase):
         self.client.force_authenticate(user=self.reception)
         resp = self.client.get(reverse("agenda-view"), {"mode": "weekly"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class Sprint20AgendaTests(APITestCase):
+    """Vista mensual, flujo de atención completo y feed iCalendar."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="T s20")
+        self.reception = User.objects.create_user(
+            email="r@s20.ec", password="superseguro123", role="reception", tenant=self.tenant,
+        )
+        du = User.objects.create_user(
+            email="d@s20.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dr. S20",
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=du)
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Mes", last_name="Prueba", national_id="2020202020",
+        )
+
+    def _create_appt(self, days_ahead):
+        start = timezone.now() + timedelta(days=days_ahead)
+        return Appointment.objects.create(
+            tenant=self.tenant, patient=self.patient, doctor=self.doctor,
+            scheduled_start=start, scheduled_end=start + timedelta(minutes=30),
+        )
+
+    def test_monthly_view_returns_whole_month(self):
+        self._create_appt(1)
+        self._create_appt(15)
+        self.client.force_authenticate(user=self.reception)
+        first_of_month = timezone.now().strftime("%Y-%m-01")
+        resp = self.client.get(f"/api/v1/agenda/view/?mode=monthly&date={first_of_month}")
+        self.assertEqual(resp.status_code, 200)
+        results = resp.data.get("results", resp.data)
+        in_month = [a for a in results]
+        self.assertGreaterEqual(len(in_month), 1)
+
+    def test_attention_flow_checkin_start_checkout(self):
+        appt = self._create_appt(1)
+        self.client.force_authenticate(user=self.reception)
+
+        # start sin check-in → 400
+        resp = self.client.post(f"/api/v1/appointments/{appt.id}/start/")
+        self.assertEqual(resp.status_code, 400)
+
+        # llegó → en atención → finalizada
+        self.client.post(f"/api/v1/appointments/{appt.id}/confirm/")
+        self.client.post(f"/api/v1/appointments/{appt.id}/checkin/")
+        resp = self.client.post(f"/api/v1/appointments/{appt.id}/start/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertIsNotNone(resp.data["attention_started_at"])
+
+        # doble start → 400
+        resp = self.client.post(f"/api/v1/appointments/{appt.id}/start/")
+        self.assertEqual(resp.status_code, 400)
+
+        resp = self.client.post(f"/api/v1/appointments/{appt.id}/checkout/")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_calendar_feed_serves_ics_without_auth(self):
+        appt = self._create_appt(2)
+        resp = self.client.get(f"/api/v1/calendar/{self.doctor.calendar_token}.ics")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertIn("BEGIN:VCALENDAR", body)
+        self.assertIn(f"UID:{appt.id}@clinica-odontologica", body)
+        self.assertIn("Mes Prueba", body)
+
+    def test_calendar_feed_wrong_token_404(self):
+        import uuid as _uuid
+        resp = self.client.get(f"/api/v1/calendar/{_uuid.uuid4()}.ics")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_calendar_url_only_own_doctor(self):
+        other_du = User.objects.create_user(
+            email="d2@s20.ec", password="superseguro123", role="doctor", tenant=self.tenant,
+        )
+        Doctor.objects.create(tenant=self.tenant, user=other_du)
+        self.client.force_authenticate(user=other_du)
+        resp = self.client.get(f"/api/v1/doctors/{self.doctor.id}/calendar-url/")
+        self.assertEqual(resp.status_code, 403)
+
+
+class ReminderNoDuplicatesTest(APITestCase):
+    def test_reminder_sent_only_once(self):
+        from apps.whatsapp.models import WhatsAppOptIn
+        from apps.whatsapp.tasks import send_appointment_reminders
+
+        tenant = Tenant.objects.create(name="T remind")
+        from django.core.management import call_command
+        call_command("bootstrap", tenant_name=tenant.name)
+        du = User.objects.create_user(
+            email="d@rem.ec", password="superseguro123", role="doctor", tenant=tenant,
+        )
+        doctor = Doctor.objects.create(tenant=tenant, user=du)
+        patient = Patient.objects.create(
+            tenant=tenant, first_name="Re", last_name="Cuerdo",
+            national_id="3030303030", phone="+593999999999",
+        )
+        WhatsAppOptIn.objects.create(tenant=tenant, patient=patient, channel="test")
+        start = timezone.now() + timedelta(hours=2)
+        appt = Appointment.objects.create(
+            tenant=tenant, patient=patient, doctor=doctor,
+            scheduled_start=start, scheduled_end=start + timedelta(minutes=30),
+        )
+
+        r1 = send_appointment_reminders()
+        appt.refresh_from_db()
+        self.assertIsNotNone(appt.reminder_sent_at)
+        self.assertEqual(r1["reminders_sent"], 1)
+
+        # Segunda corrida (Beat una hora después): NO vuelve a enviar
+        r2 = send_appointment_reminders()
+        self.assertEqual(r2["reminders_sent"], 0)
