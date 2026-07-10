@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 104 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 110 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 20 completado — agenda avanzada
+## Estado actual: Sprint 21 completado — panel de plataforma v2
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -195,6 +195,15 @@ Jerarquía: **Super Administrador** (plataforma, sin clínica) → **Clínicas**
 - **Flujo de atención completo:** Llegó (check-in, chip "En espera") → **Iniciar atención** (nuevo, chip "En atención") → Finalizar. Con validaciones (no se puede iniciar sin check-in, ni dos veces).
 - **Google Calendar Fase 1 (funciona hoy, sin credenciales):** feed iCalendar por doctor con URL secreta (botón "🗓 Calendario del doctor" en Agenda). Google/Apple/Outlook se suscriben y las citas aparecen y se actualizan solas en el calendario personal del dentista. La Fase 2 (bidireccional con OAuth) queda documentada en DEPLOY.md; `google_calendar_event_id` ya existe en el modelo.
 - **Recordatorios WhatsApp con confirmación:** ya existían del Sprint 10 (webhook entiende "CONFIRMO"/"sí" y confirma la cita). Este sprint: **fix de un bug real** — la tarea no marcaba las citas recordadas y habría enviado ~24 recordatorios por cita; ahora `reminder_sent_at` garantiza uno solo, la plantilla incluye la instrucción de confirmación, y la agenda muestra 📨 en las citas ya recordadas.
+
+### Sprint 21 — Panel de Plataforma v2 (según especificación) (hecho)
+El Super Administrador SOLO administra la plataforma — nunca la información operativa de las clínicas (verificado por test: los endpoints de pacientes/citas/reportes/inventario le devuelven 403).
+1. **Dashboard:** clínicas registradas / activas / suspendidas + total de administradores de clínica.
+2. **Gestión de Clínicas:** registrar y editar datos generales (nombre, RUC, dirección, teléfono, correo), activar/suspender (con efecto inmediato sobre las sesiones), estado visible.
+3. **Administradores de Clínicas:** solo el admin principal de cada una — crear, **restablecer contraseña** (temporal generada, se muestra UNA sola vez), activar/desactivar la cuenta, actualizar correo.
+4. **Auditoría:** solo las acciones del propio Super Administrador (crear/editar/suspender clínica, credenciales, configuración), con fecha, usuario y detalle.
+5. **Configuración General:** nombre y logo de la plataforma, SMTP (contraseña nunca se expone en la API), zona horaria y moneda.
+- **Fixes:** el GET del listado de clínicas fallaba (FieldError del Sprint 19, ahora con test de regresión); las clínicas nuevas nacen siempre activas; parseo booleano robusto.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

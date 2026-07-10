@@ -13,6 +13,9 @@ class Tenant(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     ruc = models.CharField(max_length=20, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -60,3 +63,35 @@ class SoftDeleteModel(models.Model):
         self.is_active = False
         self.deleted_at = timezone.now()
         self.save(update_fields=["is_active", "deleted_at"])
+
+
+
+class PlatformConfiguration(models.Model):
+    """
+    Configuración global del SaaS (singleton): identidad de la plataforma,
+    SMTP para correos, zona horaria y moneda. La edita únicamente el
+    Super Administrador desde su panel.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    platform_name = models.CharField(max_length=120, default="Plataforma Odontológica")
+    logo_url = models.URLField(blank=True)
+    smtp_host = models.CharField(max_length=255, blank=True)
+    smtp_port = models.PositiveIntegerField(default=587)
+    smtp_user = models.CharField(max_length=255, blank=True)
+    smtp_password = models.CharField(max_length=255, blank=True)  # nunca se expone en la API
+    timezone = models.CharField(max_length=64, default="America/Guayaquil")
+    currency = models.CharField(max_length=8, default="USD")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuración de plataforma"
+        verbose_name_plural = "Configuración de plataforma"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=cls.objects.values_list("pk", flat=True).first() or None)
+        return obj
+
+    def __str__(self):
+        return self.platform_name

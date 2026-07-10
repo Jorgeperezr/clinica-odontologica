@@ -5,7 +5,7 @@ import { currentUser, logout } from "../../lib/api";
 
 // Navegación por rol (matriz de permisos del SRS)
 const NAV = [
-  { href: "/panel/plataforma/", label: "Clínicas", roles: ["superadmin"] },
+  { href: "/panel/plataforma/", label: "Plataforma", roles: ["superadmin"] },
   { href: "/panel/", label: "Inicio", roles: ["admin", "reception", "doctor", "auxiliary"] },
   { href: "/panel/pacientes/", label: "Pacientes", roles: ["admin", "reception", "doctor", "auxiliary"] },
   { href: "/panel/agenda/", label: "Agenda", roles: ["admin", "reception", "doctor"] },
