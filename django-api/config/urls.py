@@ -4,6 +4,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/v1/", include("apps.common.urls")),
     path("api/v1/", include("apps.accounts.urls")),
     # Las siguientes apps exponen sus propias rutas a medida que se
     # implementan en los próximos sprints del Roadmap (Sprints 1-11).

@@ -28,6 +28,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const u = currentUser();
+    if (u?.role === "superadmin") {
+      window.location.href = "/panel/plataforma/";
+      return;
+    }
     setUser(u);
     if (!u) return;
 

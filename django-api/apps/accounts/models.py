@@ -15,6 +15,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     """
 
     class Role(models.TextChoices):
+        SUPERADMIN = "superadmin", "Super Administrador"
         ADMIN = "admin", "Administrador"
         RECEPTION = "reception", "Recepción"
         DOCTOR = "doctor", "Doctor"
@@ -22,7 +23,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         PATIENT = "patient", "Paciente"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.PROTECT, related_name="users")
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.PROTECT, related_name="users",
+        null=True, blank=True,
+        help_text="Nulo SOLO para el Super Administrador (opera sobre la plataforma, no dentro de una clínica).",
+    )
 
     email = models.EmailField(unique=True, null=True, blank=True)
     phone = models.CharField(max_length=20, unique=True, null=True, blank=True)

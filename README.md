@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 89 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 98 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 18 completado — listo para desplegar
+## Estado actual: Sprint 19 completado — SaaS multi-tenant
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -181,6 +181,14 @@ Los 7 módulos de la barra lateral funcionan de punta a punta contra la API: Ini
 - **`.env.production.example`:** plantilla con todos los valores a cambiar e instrucciones para generar la SECRET_KEY.
 - **`DEPLOY.md`:** comparativa de hosting (VM GCP vs PC + Cloudflare Tunnel) con pasos concretos por opción, backups con pg_dump + destino externo, procedimiento de actualización y checklist pre-pacientes-reales.
 - **Frontend:** `apiBase()` detecta producción (mismo origen vía Nginx) además de Codespaces y dev local.
+
+### Sprint 19 — SaaS multi-tenant con Super Administrador (hecho)
+Jerarquía: **Super Administrador** (plataforma, sin clínica) → **Clínicas** (tenants) → staff de cada clínica (admin, doctores, recepción, auxiliares).
+- **Rol `superadmin`** (sin tenant) + comando `python manage.py createsuperadmin --email … --password …` para crear el primero.
+- **Panel de Plataforma** (`/panel/plataforma/`, solo superadmin): indicadores globales, crear clínicas (con siembra automática del catálogo: especialidades, parámetros, 12 estados de odontograma), crear el Administrador inicial de cada clínica, y activar/desactivar clínicas.
+- **Desactivación efectiva:** autenticación tenant-aware — al desactivar una clínica, sus usuarios pierden acceso al instante aunque tengan tokens vigentes (los datos no se borran).
+- **Aislamiento verificado por tests:** el staff de la Clínica A no puede listar NI leer por ID datos de la Clínica B (98 tests en total, 7 nuevos de plataforma, incluyendo el test de aislamiento).
+- El middleware de auditoría ahora soporta acciones de plataforma (sin tenant).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

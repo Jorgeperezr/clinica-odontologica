@@ -23,8 +23,12 @@ class AuditLogMiddleware(MiddlewareMixin):
             and getattr(user, "is_authenticated", False)
             and 200 <= response.status_code < 300
         ):
+            # request.tenant es un SimpleLazyObject; forzar su evaluación.
+            # Para el superadmin (sin clínica) resuelve a None, que la FK
+            # nullable acepta — pero el proxy perezoso sin evaluar, no.
+            tenant = getattr(request, "tenant", None) or None
             AuditLog.objects.create(
-                tenant=getattr(request, "tenant", None),
+                tenant=tenant,
                 user=user,
                 action=request.method.lower(),
                 entity_type=request.path,
