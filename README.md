@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 110 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 119 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 21 completado — panel de plataforma v2
+## Estado actual: Sprint 22 completado — historia clínica avanzada
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -204,6 +204,15 @@ El Super Administrador SOLO administra la plataforma — nunca la información o
 4. **Auditoría:** solo las acciones del propio Super Administrador (crear/editar/suspender clínica, credenciales, configuración), con fecha, usuario y detalle.
 5. **Configuración General:** nombre y logo de la plataforma, SMTP (contraseña nunca se expone en la API), zona horaria y moneda.
 - **Fixes:** el GET del listado de clínicas fallaba (FieldError del Sprint 19, ahora con test de regresión); las clínicas nuevas nacen siempre activas; parseo booleano robusto.
+
+### Sprint 22 — Historia clínica avanzada (hecho)
+Las 5 características del paquete:
+1. **Planes con plantillas, presupuesto automático y progreso:** plantillas de planes (Configuración → Plantillas de plan: armar "Ortodoncia completa" con tratamientos del tarifario); en la ficha se aplican con un clic (crea el plan con precios), barra de progreso por ítems realizados, y botón "Generar presupuesto" que arma el presupuesto de billing desde el plan.
+2. **Diario clínico con línea de tiempo y alertas de seguimiento:** las evoluciones aceptan fecha de seguimiento; el dashboard muestra "Seguimientos pendientes" (con días de atraso, clic → ficha) para doctores/admin/auxiliares.
+3. **Documentos y fotos por paciente:** pestaña Documentos en la ficha — subir radiografías, fotos clínicas, exámenes, informes, identificación, órdenes y referencias, con galería de imágenes y filtros por categoría (RF-PAC-04).
+4. **Recetas profesionales:** PDF A5 con membrete de la clínica, datos del doctor con registro profesional y **firma manuscrita estampada** (los doctores la dibujan en "Mi firma", con dedo o mouse). firmaEC legal = Fase 2 (requiere el certificado .p12 de cada doctor — DEPLOY.md).
+5. **Consentimientos con firma táctil:** pestaña Consentimientos en la ficha — el paciente firma con el dedo en la pantalla (tablet/teléfono/mouse), se genera el PDF con la firma incrustada, fecha/hora e IP (RF-HCL-07, ahora con UI completa).
+- Fixes: plantillas nacen activas (checkbox semantics); precio base en ítems de plantilla.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

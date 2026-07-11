@@ -29,7 +29,7 @@ class EvolutionSerializer(serializers.ModelSerializer):
         model = Evolution
         fields = [
             "id", "doctor", "doctor_name", "registered_by", "appointment",
-            "type", "type_display", "date", "notes", "visible_to_patient", "created_at",
+            "type", "type_display", "date", "notes", "visible_to_patient", "follow_up_date", "created_at",
         ]
         read_only_fields = ["id", "created_at", "doctor_name", "doctor", "registered_by"]
 
@@ -67,14 +67,25 @@ class TreatmentPlanItemSerializer(serializers.ModelSerializer):
 class TreatmentPlanSerializer(serializers.ModelSerializer):
     items = TreatmentPlanItemSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    progress = serializers.SerializerMethodField()
 
     class Meta:
         model = TreatmentPlan
         fields = [
             "id", "created_by", "status", "status_display",
-            "notes", "items", "created_at",
+            "notes", "items", "progress", "created_at",
         ]
-        read_only_fields = ["id", "created_at", "items", "created_by"]
+        read_only_fields = ["id", "created_at", "items", "created_by", "progress"]
+
+    def get_progress(self, obj):
+        """Control de progreso: realizados / total y porcentaje (Sprint 22)."""
+        items = list(obj.items.all())
+        total = len(items)
+        done = sum(1 for i in items if i.status == "done")
+        return {
+            "done": done, "total": total,
+            "percent": round(done * 100 / total) if total else 0,
+        }
 
 
 class OdontogramStateSerializer(serializers.ModelSerializer):
@@ -132,3 +143,31 @@ class ConsentSignSerializer(serializers.Serializer):
     """Recibe la firma capturada en pantalla táctil como base64 PNG."""
 
     signature_image_base64 = serializers.CharField()
+
+
+
+class TemplateItemSerializer(serializers.ModelSerializer):
+    treatment_name = serializers.CharField(source="treatment.name", read_only=True)
+    base_price = serializers.DecimalField(
+        source="treatment.base_price", max_digits=10, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        from apps.clinical.models import TreatmentPlanTemplateItem
+        model = TreatmentPlanTemplateItem
+        fields = ["id", "treatment", "treatment_name", "base_price", "order", "notes"]
+        read_only_fields = ["id"]
+
+
+class TreatmentPlanTemplateSerializer(serializers.ModelSerializer):
+    items = TemplateItemSerializer(many=True, read_only=True)
+    total_estimated = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.clinical.models import TreatmentPlanTemplate
+        model = TreatmentPlanTemplate
+        fields = ["id", "name", "description", "is_active", "items", "total_estimated", "created_at"]
+        read_only_fields = ["id", "created_at", "items"]
+
+    def get_total_estimated(self, obj):
+        return str(sum((i.treatment.base_price for i in obj.items.all()), start=0))

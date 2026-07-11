@@ -39,6 +39,14 @@ class Doctor(TenantAwareModel):
         verbose_name = "Doctor"
         verbose_name_plural = "Doctores"
 
+    license_number = models.CharField(
+        max_length=50, blank=True,
+        help_text="Nº de registro profesional (aparece en las recetas).",
+    )
+    signature_image = models.TextField(
+        blank=True,
+        help_text="Firma manuscrita del doctor (imagen base64, dibujada en pantalla). Se estampa en las recetas.",
+    )
     calendar_token = models.UUIDField(
         default=uuid.uuid4, unique=True, editable=False,
         help_text="Token secreto del feed iCalendar (suscripción desde Google Calendar).",

@@ -20,7 +20,7 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"]].map(([k, label]) => (
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -35,6 +35,7 @@ export default function ConfiguracionPage() {
 
       {tab === "tratamientos" && <TreatmentsTab />}
       {tab === "especialidades" && <SpecialtiesTab />}
+      {tab === "plantillas" && <TemplatesTab />}
       {tab === "usuarios" && <UsersTab />}
       {tab === "parametros" && <ParametersTab />}
     </div>
@@ -339,6 +340,135 @@ function UsersTab() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+
+/* ── Plantillas de planes de tratamiento ── */
+function TemplatesTab() {
+  const [templates, setTemplates] = useState([]);
+  const [treatments, setTreatments] = useState([]);
+  const [form, setForm] = useState({ name: "", description: "" });
+  const [addingTo, setAddingTo] = useState(null);   // template al que se agrega ítem
+  const [newItem, setNewItem] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const [tResp, trResp] = await Promise.all([
+        api("/clinical/plan-templates/"), api("/config/treatments/?is_active=true"),
+      ]);
+      const t = await tResp.json(); setTemplates(t.results || t);
+      const tr = await trResp.json(); setTreatments(tr.results || tr);
+    } catch { setError("No se pudieron cargar las plantillas."); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function createTemplate(e) {
+    e.preventDefault();
+    setError("");
+    try {
+      const resp = await api("/clinical/plan-templates/", { method: "POST", body: JSON.stringify(form) });
+      if (!resp.ok) throw new Error(`No se pudo crear (error ${resp.status}).`);
+      setForm({ name: "", description: "" });
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function addItem(template) {
+    if (!newItem) return;
+    setError("");
+    try {
+      const resp = await api(`/clinical/plan-templates/${template.id}/items/`, {
+        method: "POST", body: JSON.stringify({ treatment: newItem }),
+      });
+      if (!resp.ok) throw new Error(`No se pudo agregar (error ${resp.status}).`);
+      setNewItem("");
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function removeItem(itemId) {
+    try {
+      const resp = await api(`/clinical/plan-template-items/${itemId}/`, { method: "DELETE" });
+      if (!resp.ok && resp.status !== 204) throw new Error(`Error ${resp.status}`);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+  return (
+    <div>
+      {error && <div className="error-box">{error}</div>}
+      <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 14 }}>
+        Una plantilla agrupa tratamientos frecuentes (ej. "Ortodoncia completa").
+        Desde la ficha del paciente se aplica con un clic: crea el plan con sus
+        ítems y precios del tarifario, listo para generar el presupuesto.
+      </p>
+
+      <form onSubmit={createTemplate} className="card" style={{ marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 2fr auto", gap: "0 12px", alignItems: "end" }}>
+          <div className="field" style={{ marginBottom: 0 }}><label>Nombre *</label>
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+          <div className="field" style={{ marginBottom: 0 }}><label>Descripción</label>
+            <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+          <button className="btn btn-primary">Crear plantilla</button>
+        </div>
+      </form>
+
+      {templates.length === 0 ? (
+        <div className="card"><div className="empty">Sin plantillas. Crea la primera.</div></div>
+      ) : templates.map((t) => (
+        <div key={t.id} className="card" style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div>
+              <strong>{t.name}</strong>
+              {t.description && <span style={{ color: "var(--ink-soft)", fontSize: 13, marginLeft: 8 }}>{t.description}</span>}
+            </div>
+            <span className="tabular" style={{ fontWeight: 700 }}>{money(t.total_estimated)}</span>
+          </div>
+
+          {t.items?.length > 0 && (
+            <table style={{ marginTop: 10 }}>
+              <thead><tr><th>#</th><th>Tratamiento</th><th>Precio base</th><th></th></tr></thead>
+              <tbody>
+                {t.items.map((it) => (
+                  <tr key={it.id}>
+                    <td className="tabular">{it.order}</td>
+                    <td>{it.treatment_name}</td>
+                    <td className="tabular">{money(it.base_price)}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <button className="btn btn-ghost" style={{ padding: "3px 10px", fontSize: 12, color: "var(--red)" }}
+                              onClick={() => removeItem(it.id)}>Quitar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {addingTo === t.id ? (
+            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+              <select value={newItem} onChange={(e) => setNewItem(e.target.value)}
+                      style={{ flex: 1, padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8 }}>
+                <option value="">Seleccionar tratamiento…</option>
+                {treatments.map((tr) => (
+                  <option key={tr.id} value={tr.id}>{tr.name} — {money(tr.base_price)}</option>
+                ))}
+              </select>
+              <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={() => addItem(t)}>Agregar</button>
+              <button className="btn btn-ghost" style={{ fontSize: 13 }}
+                      onClick={() => { setAddingTo(null); setNewItem(""); }}>Cerrar</button>
+            </div>
+          ) : (
+            <button className="btn btn-ghost" style={{ marginTop: 10, fontSize: 13 }}
+                    onClick={() => setAddingTo(t.id)}>+ Agregar tratamiento</button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -71,6 +71,10 @@ class Evolution(TenantAwareModel):
         default=False,
         help_text="Si es True, el paciente lo ve en la app (RF-APP-03).",
     )
+    follow_up_date = models.DateField(
+        null=True, blank=True,
+        help_text="Fecha de seguimiento: genera una alerta cuando llega (Sprint 22).",
+    )
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
         help_text="Usuario que registró la evolución (doctor, admin o auxiliar).",
@@ -351,3 +355,39 @@ class InformedConsent(TenantAwareModel):
     @property
     def is_signed(self):
         return self.signed_at is not None
+
+
+class TreatmentPlanTemplate(TenantAwareModel):
+    """
+    Plantilla de plan de tratamiento (Sprint 22): protocolos reutilizables
+    (ej. "Ortodoncia completa", "Rehabilitación superior") que al aplicarse
+    a un paciente crean el plan con todos sus ítems y precios del tarifario.
+    """
+
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Plantilla de plan de tratamiento"
+        verbose_name_plural = "Plantillas de planes de tratamiento"
+        unique_together = [("tenant", "name")]
+
+    def __str__(self):
+        return self.name
+
+
+class TreatmentPlanTemplateItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    template = models.ForeignKey(
+        TreatmentPlanTemplate, on_delete=models.CASCADE, related_name="items"
+    )
+    treatment = models.ForeignKey(
+        "configuration.Treatment", on_delete=models.PROTECT, related_name="+"
+    )
+    order = models.PositiveIntegerField(default=1)
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["order"]
+

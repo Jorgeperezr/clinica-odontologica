@@ -81,6 +81,10 @@ class PatientDocument(models.Model):
         IDENTIFICATION = "identification", "Identificación"
         MEDICAL_ORDER = "medical_order", "Orden médica"
         REFERRAL = "referral", "Referencia"
+        RADIOGRAPH = "radiograph", "Radiografía"
+        PHOTO = "photo", "Foto clínica"
+        EXAM = "exam", "Examen / laboratorio"
+        REPORT = "report", "Informe"
         OTHER = "other", "Otro"
 
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="documents")

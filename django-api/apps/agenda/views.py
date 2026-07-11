@@ -300,3 +300,42 @@ class DoctorCalendarURLView(APIView):
                 "Google actualiza las suscripciones cada varias horas."
             ),
         })
+
+
+
+class DoctorMySignatureView(APIView):
+    """
+    GET/POST /api/v1/doctors/me/signature/ — el doctor gestiona su propia
+    firma manuscrita (dibujada en pantalla táctil o con el mouse) y su
+    número de registro profesional. La firma se estampa en las recetas.
+    """
+
+    permission_classes = [HasRole.for_roles("doctor")]
+
+    def _my_doctor(self, request):
+        return Doctor.objects.filter(tenant=request.tenant, user=request.user).first()
+
+    def get(self, request):
+        doctor = self._my_doctor(request)
+        if not doctor:
+            return Response({"detail": "Tu usuario no tiene perfil de doctor."}, status=404)
+        return Response({
+            "license_number": doctor.license_number,
+            "has_signature": bool(doctor.signature_image),
+            "signature_image": doctor.signature_image or None,
+        })
+
+    def post(self, request):
+        doctor = self._my_doctor(request)
+        if not doctor:
+            return Response({"detail": "Tu usuario no tiene perfil de doctor."}, status=404)
+        signature = str(request.data.get("signature_image", ""))
+        if signature and not signature.startswith("data:image/"):
+            return Response({"detail": "Formato de firma inválido."}, status=400)
+        if "signature_image" in request.data:
+            doctor.signature_image = signature
+        if "license_number" in request.data:
+            doctor.license_number = str(request.data["license_number"]).strip()
+        doctor.save()
+        return Response({"has_signature": bool(doctor.signature_image),
+                         "license_number": doctor.license_number})

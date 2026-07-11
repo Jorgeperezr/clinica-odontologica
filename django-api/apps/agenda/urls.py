@@ -12,6 +12,7 @@ urlpatterns = [
     path("appointments/<uuid:pk>/reschedule/", views.AppointmentRescheduleView.as_view(), name="appointment-reschedule"),
     path("appointments/<uuid:pk>/checkin/", views.AppointmentCheckinView.as_view(), name="appointment-checkin"),
     path("appointments/<uuid:pk>/start/", views.AppointmentStartView.as_view(), name="appointment-start"),
+    path("doctors/me/signature/", views.DoctorMySignatureView.as_view(), name="doctor-my-signature"),
     path("doctors/<uuid:pk>/calendar-url/", views.DoctorCalendarURLView.as_view(), name="doctor-calendar-url"),
     path("calendar/<uuid:token>.ics", doctor_calendar_feed, name="doctor-calendar-feed"),
     path("appointments/<uuid:pk>/checkout/", views.AppointmentCheckoutView.as_view(), name="appointment-checkout"),

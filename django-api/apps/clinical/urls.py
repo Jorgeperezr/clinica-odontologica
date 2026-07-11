@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.clinical import views
+from apps.clinical import sprint22_views, views
 
 urlpatterns = [
     # Historia clínica
@@ -8,6 +8,14 @@ urlpatterns = [
     path("patients/<uuid:pk>/clinical-record/export-pdf/", views.ClinicalHistoryExportView.as_view(), name="clinical-history-export"),
     path("patients/<uuid:pk>/evolutions/", views.EvolutionListCreateView.as_view(), name="evolution-list"),
     path("evolutions/<uuid:pk>/", views.EvolutionDetailView.as_view(), name="evolution-detail"),
+    # Sprint 22
+    path("clinical/plan-templates/", sprint22_views.TemplateListCreateView.as_view(), name="plan-templates"),
+    path("clinical/plan-templates/<uuid:pk>/items/", sprint22_views.TemplateItemCreateView.as_view(), name="plan-template-item-create"),
+    path("clinical/plan-template-items/<uuid:pk>/", sprint22_views.TemplateItemDeleteView.as_view(), name="plan-template-item-delete"),
+    path("patients/<uuid:pk>/apply-plan-template/", sprint22_views.ApplyTemplateView.as_view(), name="apply-plan-template"),
+    path("treatment-plans/<uuid:pk>/generate-budget/", sprint22_views.PlanToBudgetView.as_view(), name="plan-to-budget"),
+    path("clinical/follow-ups/", sprint22_views.FollowUpAlertsView.as_view(), name="follow-up-alerts"),
+    path("evolutions/<uuid:pk>/prescription-pdf/", sprint22_views.PrescriptionPDFView.as_view(), name="prescription-pdf"),
     path("patients/<uuid:pk>/diagnoses/", views.DiagnosisListCreateView.as_view(), name="diagnosis-list"),
     # Planes de tratamiento
     path("patients/<uuid:pk>/treatment-plans/", views.TreatmentPlanListCreateView.as_view(), name="treatment-plan-list"),

@@ -140,6 +140,16 @@ El campo `Appointment.google_calendar_event_id` ya existe en el modelo
 para ese momento. Cuando tengas las credenciales, se implementa el flujo
 OAuth por doctor y la sincronización con webhooks push de Google.
 
+## firmaEC — firma electrónica legal (Fase 2)
+
+Las recetas se generan en PDF profesional con la firma manuscrita del
+doctor estampada (dibujada en "Mi firma"). Para la firma electrónica
+LEGAL de Ecuador (firmaEC): cada doctor necesita su certificado digital
+`.p12` emitido por una entidad acreditada (Registro Civil, Security Data,
+UANATACA, ANF). Con esos certificados se integra el firmado PAdES del
+PDF (librería endesive) — mismo patrón que Meta y Google: el código
+queda listo, faltan las credenciales del trámite.
+
 ## Pendientes ANTES de pacientes reales
 
 - [ ] Cambiar TODAS las contraseñas de desarrollo (Jorge2025 no va a producción).

@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [income, setIncome] = useState(null);
   const [delinquents, setDelinquents] = useState(null);
   const [lowStock, setLowStock] = useState(null);
+  const [followUps, setFollowUps] = useState(null);
 
   useEffect(() => {
     const u = currentUser();
@@ -53,6 +54,11 @@ export default function Dashboard() {
     if (["admin", "reception"].includes(u.role)) {
       api("/reports/delinquency/")
         .then(async (r) => { if (r.ok) { const d = await r.json(); setDelinquents(d.patients || []); } })
+        .catch(() => {});
+    }
+    if (["admin", "doctor", "auxiliary"].includes(u.role)) {
+      api("/clinical/follow-ups/")
+        .then(async (r) => { if (r.ok) { const d = await r.json(); setFollowUps(d.results || []); } })
         .catch(() => {});
     }
     if (["admin", "auxiliary"].includes(u.role)) {
@@ -105,6 +111,10 @@ export default function Dashboard() {
           <StatCard label="Stock bajo" value={lowStock.length}
                     danger={lowStock.length > 0} href="/panel/inventario/" />
         )}
+        {followUps !== null && (
+          <StatCard label="Seguimientos pendientes" value={followUps.length}
+                    danger={followUps.length > 0} />
+        )}
       </div>
 
       {/* Agenda de hoy */}
@@ -156,6 +166,29 @@ export default function Dashboard() {
                   <td style={{ fontWeight: 600 }}>{p.name}</td>
                   <td className="tabular" style={{ color: "var(--red)", fontWeight: 600 }}>{p.current_stock}</td>
                   <td className="tabular">{p.min_stock}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {followUps !== null && followUps.length > 0 && (
+        <div className="card" style={{ padding: 0, marginTop: 18 }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", fontWeight: 600, color: "var(--red)" }}>
+            🔔 Seguimientos clínicos pendientes
+          </div>
+          <table>
+            <thead><tr><th>Paciente</th><th>Seguimiento para</th><th>Atraso</th><th>Nota</th></tr></thead>
+            <tbody>
+              {followUps.slice(0, 5).map((f) => (
+                <tr key={f.id} onClick={() => window.location.href = `/panel/paciente/?id=${f.patient_id}`}
+                    style={{ cursor: "pointer" }}>
+                  <td style={{ fontWeight: 600 }}>{f.patient_name}</td>
+                  <td className="tabular">{f.follow_up_date}</td>
+                  <td className="tabular" style={{ color: f.days_overdue > 0 ? "var(--red)" : "var(--ink)" }}>
+                    {f.days_overdue > 0 ? `${f.days_overdue} día${f.days_overdue > 1 ? "s" : ""}` : "hoy"}
+                  </td>
+                  <td style={{ color: "var(--ink-soft)", fontSize: 13 }}>{f.notes}</td>
                 </tr>
               ))}
             </tbody>

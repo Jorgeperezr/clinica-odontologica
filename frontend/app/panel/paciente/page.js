@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 import Odontogram from "../../../lib/Odontogram";
 import { useConfirm } from "../../../lib/ConfirmDialog";
+import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
 
 export default function PatientDetailPage() {
   return (
@@ -36,7 +37,9 @@ function PatientDetail() {
       </div>
 
       <div style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
-        {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"]].map(([key, label]) => (
+        {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
+          ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
+          ["consentimientos", "Consentimientos"]].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -51,6 +54,9 @@ function PatientDetail() {
 
       {tab === "odontograma" && <OdontogramTab patientId={id} />}
       {tab === "evoluciones" && <EvolutionsTab patientId={id} />}
+      {tab === "plan" && <PlanTab patientId={id} />}
+      {tab === "documentos" && <DocumentsTab patientId={id} />}
+      {tab === "consentimientos" && <ConsentsTab patientId={id} />}
     </div>
   );
 }
@@ -253,7 +259,7 @@ function EvolutionsTab({ patientId }) {
   const [editing, setEditing] = useState(null);   // id en edición
   const [editText, setEditText] = useState("");
   const [evolutions, setEvolutions] = useState([]);
-  const [form, setForm] = useState({ type: "clinical_note", notes: "", visible_to_patient: false });
+  const [form, setForm] = useState({ type: "clinical_note", notes: "", visible_to_patient: false, follow_up_date: "" });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -276,6 +282,7 @@ function EvolutionsTab({ patientId }) {
         method: "POST",
         body: JSON.stringify({
           ...form,
+          follow_up_date: form.follow_up_date || null,
           date: new Date().toISOString().slice(0, 10),
         }),
       });
@@ -287,7 +294,7 @@ function EvolutionsTab({ patientId }) {
         } catch { /* respuesta no-JSON (página de error del servidor) */ }
         throw new Error(msg);
       }
-      setForm({ type: "clinical_note", notes: "", visible_to_patient: false });
+      setForm({ type: "clinical_note", notes: "", visible_to_patient: false, follow_up_date: "" });
       load();
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
@@ -337,6 +344,11 @@ function EvolutionsTab({ patientId }) {
           <textarea rows={4} required value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
+        <div className="field">
+          <label>Fecha de seguimiento (opcional — genera alerta)</label>
+          <input type="date" value={form.follow_up_date}
+                 onChange={(e) => setForm({ ...form, follow_up_date: e.target.value })} />
+        </div>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 14 }}>
           <input type="checkbox" checked={form.visible_to_patient}
                  onChange={(e) => setForm({ ...form, visible_to_patient: e.target.checked })} />
@@ -347,20 +359,63 @@ function EvolutionsTab({ patientId }) {
         </button>
       </form>
 
-      <div className="card" style={{ padding: 0 }}>
+      <div>
         {evolutions.length === 0 ? (
-          <div className="empty">Sin evoluciones registradas.</div>
+          <div className="card"><div className="empty">Sin evoluciones registradas.</div></div>
         ) : (
-          <table>
-            <thead>
-              <tr><th>Fecha</th><th>Tipo</th><th>Notas</th><th>Registrado por</th><th></th></tr>
-            </thead>
-            <tbody>
-              {evolutions.map((ev) => (
-                <tr key={ev.id}>
-                  <td className="tabular" style={{ whiteSpace: "nowrap" }}>{ev.date}</td>
-                  <td><span className="badge badge-ok">{ev.type_display}</span></td>
-                  <td>
+          <div style={{ position: "relative", paddingLeft: 22 }}>
+            {/* Línea vertical de la línea de tiempo */}
+            <div style={{ position: "absolute", left: 7, top: 6, bottom: 6, width: 2, background: "var(--line)" }} />
+            {evolutions.map((ev) => (
+              <div key={ev.id} style={{ position: "relative", marginBottom: 14 }}>
+                <div style={{
+                  position: "absolute", left: -21, top: 14, width: 12, height: 12,
+                  borderRadius: 99, background: ev.type === "prescription" ? "var(--amber)" : "var(--petrol)",
+                  border: "2px solid var(--paper)",
+                }} />
+                <div className="card" style={{ padding: "12px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                    <div>
+                      <span className="tabular" style={{ fontWeight: 700, marginRight: 10 }}>{ev.date}</span>
+                      <span className="badge badge-ok">{ev.type_display}</span>
+                      {ev.follow_up_date && (
+                        <span className="badge badge-warn" style={{ marginLeft: 6 }}>
+                          ⏰ Seguimiento: {ev.follow_up_date}
+                        </span>
+                      )}
+                      {ev.visible_to_patient && (
+                        <span title="Visible para el paciente" style={{ marginLeft: 6, fontSize: 12 }}>👁</span>
+                      )}
+                    </div>
+                    <div style={{ whiteSpace: "nowrap" }}>
+                      {ev.type === "prescription" && editing !== ev.id && (
+                        <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
+                                onClick={async () => {
+                                  try {
+                                    const r = await api(`/evolutions/${ev.id}/prescription-pdf/`);
+                                    if (!r.ok) throw new Error(`Error ${r.status}`);
+                                    const blob = await r.blob();
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement("a");
+                                    a.href = url; a.download = `receta-${ev.date}.pdf`; a.click();
+                                    URL.revokeObjectURL(url);
+                                  } catch (err) { setError("No se pudo descargar la receta."); }
+                                }}>
+                          📄 Receta PDF
+                        </button>
+                      )}
+                      {editing !== ev.id && (
+                        <>
+                          <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12, marginLeft: 6 }}
+                                  onClick={() => { setEditing(ev.id); setEditText(ev.notes); }}>Editar</button>
+                          <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12, color: "var(--red)", marginLeft: 6 }}
+                                  onClick={() => removeEvolution(ev)}>Eliminar</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 8 }}>
                     {editing === ev.id ? (
                       <div>
                         <textarea rows={3} value={editText}
@@ -376,23 +431,17 @@ function EvolutionsTab({ patientId }) {
                           El texto anterior queda en el registro de auditoría.
                         </p>
                       </div>
-                    ) : ev.notes}
-                  </td>
-                  <td style={{ color: "var(--ink-soft)" }}>{ev.registered_by || "—"}</td>
-                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    {editing !== ev.id && (
-                      <>
-                        <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
-                                onClick={() => { setEditing(ev.id); setEditText(ev.notes); }}>Editar</button>
-                        <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12, color: "var(--red)", marginLeft: 6 }}
-                                onClick={() => removeEvolution(ev)}>Eliminar</button>
-                      </>
+                    ) : (
+                      <p style={{ fontSize: 14, whiteSpace: "pre-line" }}>{ev.notes}</p>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 6 }}>
+                      Registrado por: {ev.registered_by || "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
