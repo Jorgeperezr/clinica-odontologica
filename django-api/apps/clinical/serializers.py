@@ -106,6 +106,7 @@ class ToothRecordSerializer(serializers.ModelSerializer):
         fields = [
             "id", "tooth_fdi_code", "surface", "surface_display",
             "state", "state_code", "state_label", "state_color",
+            "mobility", "recession",
             "doctor", "treatment_plan_item", "date", "notes", "created_at",
         ]
         read_only_fields = ["id", "created_at", "doctor"]

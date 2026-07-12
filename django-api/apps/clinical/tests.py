@@ -123,13 +123,13 @@ class OdontogramTests(APITestCase):
 
     def test_odontogram_states_seeded(self):
         from apps.clinical.models import OdontogramState
-        self.assertEqual(OdontogramState.objects.filter(tenant=self.tenant).count(), 12)
+        self.assertEqual(OdontogramState.objects.filter(tenant=self.tenant).count(), 22)
 
     def test_list_odontogram_states(self):
         self.client.force_authenticate(user=self.doctor_user)
         resp = self.client.get(reverse("odontogram-state-list"))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 12)
+        self.assertEqual(len(resp.data), 22)
 
     def test_create_tooth_record(self):
         self.client.force_authenticate(user=self.doctor_user)

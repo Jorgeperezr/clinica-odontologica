@@ -234,3 +234,53 @@ class TemplateItemsAPITests(APITestCase):
 
         resp = self.client.delete(f"/api/v1/clinical/plan-template-items/{item_id}/")
         self.assertEqual(resp.status_code, 204)
+
+
+class Form033FrontendContractTests(APITestCase):
+    """Contrato exacto que consume Form033Panel.js (Sprint 23)."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="T 033fe")
+        du = User.objects.create_user(
+            email="d@033.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. MSP",
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=du, license_number="MSP-777")
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Form", last_name="MSP", national_id="5050505050",
+        )
+
+    def test_create_form033_with_msp_literals(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/form033/", {
+            "date": "2026-07-11",
+            "motivo_consulta": "Dolor en molar inferior",
+            "embarazada": False,
+            "enfermedad_actual": "Dolor de 3 días",
+            "antecedentes_personales": {"Diabetes": {"checked": True, "detail": ""}},
+            "antecedentes_familiares": {"Cáncer": {"checked": True, "detail": ""}},
+            "examen_estomatognatico": {"Lengua": "Saburral"},
+            "temperatura": "36.8", "pulso": 72,
+            "frecuencia_respiratoria": 16, "presion_arterial": "120/80",
+        }, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        # Literal O: se arma solo desde la credencial (oculto en la UI)
+        self.assertIn("Dra. MSP", resp.data["registered_by"])
+        self.assertIn("MSP-777", resp.data["registered_by"])
+
+        # El GET lo lista para el panel
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/form033/")
+        data = resp.data if isinstance(resp.data, list) else resp.data.get("results", [])
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["antecedentes_personales"]["Diabetes"]["checked"], True)
+
+    def test_cie10_search_by_code_and_name(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        # Por código
+        resp = self.client.get("/api/v1/cie10/?q=K02")
+        codes = [r["code"] for r in resp.data["results"]]
+        self.assertTrue(any(c.startswith("K02") for c in codes))
+        # Por nombre
+        resp = self.client.get("/api/v1/cie10/?q=caries")
+        self.assertTrue(len(resp.data["results"]) > 0)

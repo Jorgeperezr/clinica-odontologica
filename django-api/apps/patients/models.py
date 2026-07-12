@@ -24,6 +24,11 @@ class Patient(TenantAwareModel, SoftDeleteModel):
     last_name = models.CharField(max_length=100)
     national_id = models.CharField(max_length=20, help_text="Cédula o pasaporte")
     birth_date = models.DateField(null=True, blank=True)
+    sex = models.CharField(
+        max_length=1, blank=True,
+        choices=[("H", "Hombre"), ("M", "Mujer")],
+        help_text="Literal A del formulario MSP 033.",
+    )
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.CharField(max_length=255, blank=True)

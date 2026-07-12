@@ -107,8 +107,14 @@ class Diagnosis(TenantAwareModel):
         max_length=2, blank=True,
         help_text="Código FDI (ej. '26'); vacío si es diagnóstico general.",
     )
-    code = models.CharField(max_length=20, blank=True)
+    code = models.CharField(max_length=20, blank=True, help_text="Código CIE-10.")
     description = models.TextField()
+    diagnosis_kind = models.CharField(
+        max_length=3,
+        choices=[("pre", "Presuntivo"), ("def", "Definitivo")],
+        default="pre",
+        help_text="PRE/DEF según formulario MSP 033.",
+    )
     date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -212,18 +218,30 @@ class OdontogramState(TenantAwareModel):
     # Catálogo base sembrado por bootstrap (SRS 3.4.1). Formato:
     # code: (label, color, order)
     DEFAULTS = {
+        # Simbología HCU-form.033/2021 (literal K):
+        # ROJO = patología actual / indicado; AZUL = tratamiento realizado.
         "SANO": ("Sano", "#ffffff", 1),
-        "CARIES": ("Caries activa", "#dc2626", 2),
-        "OBTURADO": ("Obturado / restauración", "#2563eb", 3),
-        "CORONA": ("Corona protésica", "#eab308", 4),
-        "AUSENTE": ("Ausente", "#111827", 5),
-        "INDICADA_EXTRACCION": ("Indicada para extracción", "#f97316", 6),
-        "ENDODONCIA": ("Endodoncia realizada", "#7c3aed", 7),
-        "IMPLANTE": ("Implante", "#0891b2", 8),
-        "FRACTURA": ("Fractura", "#be123c", 9),
-        "PROTESIS_REMOVIBLE": ("Prótesis removible", "#6b7280", 10),
-        "SELLANTE": ("Sellante", "#16a34a", 11),
-        "EN_TRATAMIENTO": ("En tratamiento (planificado)", "#94a3b8", 12),
+        "CARIES": ("Caries", "#c62828", 2),
+        "OBTURADO": ("Obturado", "#1565c0", 3),
+        "SELLANTE_NECESARIO": ("Sellante necesario", "#c62828", 4),
+        "SELLANTE": ("Sellante realizado", "#1565c0", 5),
+        "INDICADA_EXTRACCION": ("Extracción indicada", "#c62828", 6),
+        "PERDIDA_CARIES": ("Pérdida por caries", "#1565c0", 7),
+        "PERDIDA_OTRA": ("Pérdida (otra causa)", "#111827", 8),
+        "AUSENTE": ("Ausente", "#111827", 9),
+        "ENDODONCIA_INDICADA": ("Endodoncia por realizar", "#c62828", 10),
+        "ENDODONCIA": ("Endodoncia realizada", "#1565c0", 11),
+        "CORONA_INDICADA": ("Corona indicada", "#c62828", 12),
+        "CORONA": ("Corona realizada", "#1565c0", 13),
+        "PROTESIS_FIJA_INDICADA": ("Prótesis fija indicada", "#c62828", 14),
+        "PROTESIS_FIJA": ("Prótesis fija realizada", "#1565c0", 15),
+        "PROTESIS_REMOVIBLE_INDICADA": ("Prótesis removible indicada", "#c62828", 16),
+        "PROTESIS_REMOVIBLE": ("Prótesis removible realizada", "#1565c0", 17),
+        "PROTESIS_TOTAL_INDICADA": ("Prótesis total indicada", "#c62828", 18),
+        "PROTESIS_TOTAL": ("Prótesis total realizada", "#1565c0", 19),
+        "IMPLANTE": ("Implante", "#0891b2", 20),
+        "FRACTURA": ("Fractura", "#7f1d1d", 21),
+        "EN_TRATAMIENTO": ("En tratamiento (planificado)", "#94a3b8", 22),
     }
 
 
@@ -268,6 +286,12 @@ class ToothRecord(TenantAwareModel):
     )
     date = models.DateField()
     notes = models.TextField(blank=True)
+    mobility = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Movilidad 1-4 (formulario MSP 033)."
+    )
+    recession = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Recesión 1-4 (formulario MSP 033)."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -391,3 +415,96 @@ class TreatmentPlanTemplateItem(models.Model):
     class Meta:
         ordering = ["order"]
 
+
+
+class Cie10(models.Model):
+    """Catálogo CIE-10 (global, sin tenant) para el literal N del 033."""
+
+    code = models.CharField(max_length=10, unique=True)
+    description = models.CharField(max_length=255)
+
+    class Meta:
+        verbose_name = "Código CIE-10"
+        verbose_name_plural = "Códigos CIE-10"
+        ordering = ["code"]
+
+    def __str__(self):
+        return f"{self.code} — {self.description}"
+
+
+class Form033Record(TenantAwareModel):
+    """
+    Historia Clínica Odontológica — formulario MSP HCU-form.033/2021.
+    Secciones B-G e I por consulta. La sección A (establecimiento/paciente)
+    vive en Tenant/Patient; H (odontograma) en ToothRecord; N en Diagnosis;
+    O se guarda AUTOMÁTICAMENTE en professional_snapshot; P en TreatmentPlan.
+    """
+
+    patient = models.ForeignKey(
+        "patients.Patient", on_delete=models.CASCADE, related_name="form033_records"
+    )
+    # B / C
+    motivo_consulta = models.TextField(blank=True)
+    embarazada = models.BooleanField(null=True, blank=True)
+    enfermedad_actual = models.TextField(blank=True)
+    # D / E — checkboxes del formulario + detalle libre
+    antecedentes_personales = models.JSONField(default=dict, blank=True)
+    antecedentes_familiares = models.JSONField(default=dict, blank=True)
+    # F
+    temperatura = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    pulso = models.PositiveSmallIntegerField(null=True, blank=True)
+    frecuencia_respiratoria = models.PositiveSmallIntegerField(null=True, blank=True)
+    presion_arterial = models.CharField(max_length=15, blank=True)
+    # G — regiones con patología descrita
+    examen_estomatognatico = models.JSONField(default=dict, blank=True)
+    # I — indicadores de salud bucal
+    indicadores_salud_bucal = models.JSONField(default=dict, blank=True)
+    # O — se llena SOLO desde la credencial del profesional autenticado
+    doctor = models.ForeignKey(
+        "agenda.Doctor", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    professional_snapshot = models.JSONField(default=dict, blank=True)
+    date = models.DateField()
+
+    class Meta:
+        verbose_name = "Historia odontológica (Form 033)"
+        verbose_name_plural = "Historias odontológicas (Form 033)"
+        ordering = ["-date", "-created_at"]
+
+    def __str__(self):
+        return f"Form033 {self.date} — {self.patient}"
+
+
+class ExamRequest(TenantAwareModel):
+    """Literales L (pedido de exámenes) y M (informe) del formulario 033."""
+
+    class Category(models.TextChoices):
+        BIOMETRIA = "biometria", "Biometría"
+        QUIMICA = "quimica_sanguinea", "Química sanguínea"
+        RAYOS_X = "rayos_x", "Rayos X"
+        OTROS = "otros", "Otros"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pedido"
+        REPORTED = "reported", "Con informe"
+
+    patient = models.ForeignKey(
+        "patients.Patient", on_delete=models.CASCADE, related_name="exam_requests"
+    )
+    category = models.CharField(max_length=20, choices=Category.choices)
+    detail = models.CharField(max_length=255, help_text="Examen solicitado.")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    report_notes = models.TextField(blank=True, help_text="M. Informe de exámenes.")
+    report_document = models.ForeignKey(
+        "patients.PatientDocument", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+",
+    )
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reported_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Pedido de examen"
+        verbose_name_plural = "Pedidos de exámenes"
+        ordering = ["-requested_at"]

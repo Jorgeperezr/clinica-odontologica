@@ -54,7 +54,7 @@ class ClinicManagementTests(PlatformBase):
         tenant = Tenant.objects.get(name="Clínica Norte")
         self.assertEqual(tenant.address, "Av. Siempre Viva 123")
         from apps.clinical.models import OdontogramState
-        self.assertEqual(OdontogramState.objects.filter(tenant=tenant).count(), 12)
+        self.assertEqual(OdontogramState.objects.filter(tenant=tenant).count(), 22)
 
     def test_edit_clinic_general_info(self):
         tenant = Tenant.objects.create(name="Clínica Editar")

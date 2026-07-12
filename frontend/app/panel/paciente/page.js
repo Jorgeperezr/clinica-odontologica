@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 import Odontogram from "../../../lib/Odontogram";
+import Form033Panel from "../../../lib/Form033Panel";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
 
@@ -159,6 +160,7 @@ function OdontogramTab({ patientId }) {
   return (
     <div>
       {ConfirmUI}
+      <Form033Panel patientId={patientId} />
       {error && <div className="error-box">{error}</div>}
 
       <div className="card" style={{ marginBottom: 18 }}>

@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 119 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 121 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 22 completado — historia clínica avanzada
+## Estado actual: Sprint 23 completado — formulario MSP 033 (parte 1)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -213,6 +213,14 @@ Las 5 características del paquete:
 4. **Recetas profesionales:** PDF A5 con membrete de la clínica, datos del doctor con registro profesional y **firma manuscrita estampada** (los doctores la dibujan en "Mi firma", con dedo o mouse). firmaEC legal = Fase 2 (requiere el certificado .p12 de cada doctor — DEPLOY.md).
 5. **Consentimientos con firma táctil:** pestaña Consentimientos en la ficha — el paciente firma con el dedo en la pantalla (tablet/teléfono/mouse), se genera el PDF con la firma incrustada, fecha/hora e IP (RF-HCL-07, ahora con UI completa).
 - Fixes: plantillas nacen activas (checkbox semantics); precio base en ítems de plantilla.
+
+### Sprint 23 — Formulario MSP HCU-033/2021, parte 1 (hecho)
+Alineación de la historia clínica con el formulario oficial del Ministerio de Salud Pública del Ecuador.
+- **Odontograma ampliado a 22 estados** según la simbología oficial (literal K): sellante necesario/realizado, endodoncia por realizar/realizada, corona indicada/realizada, prótesis fija/removible/total indicada/realizada, pérdida por caries/otra causa, etc. (residuo de intentos previos, consolidado y con tests actualizados).
+- **Panel Form 033 en la pestaña Odontograma** (`lib/Form033Panel.js`): literales B (motivo de consulta + embarazo), C (enfermedad actual), D (antecedentes personales — 10 opciones oficiales), E (antecedentes familiares — 10 oficiales), F (constantes vitales), G (examen estomatognático — 13 regiones oficiales). Registro por consulta con historial desplegable.
+- **Literal O automático:** los datos del profesional (nombre, registro, fecha/hora) se guardan solos desde la credencial autenticada y no se muestran como formulario.
+- **Catálogo CIE-10 odontológico sembrado** (~90 códigos K00–K14 + S02.5, S03.2, Z01.2, Z29.8) con búsqueda por código o nombre (base del literal N).
+- `sex` añadido al paciente (literal A); campos de movilidad/recesión en el registro de pieza (literal H).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
