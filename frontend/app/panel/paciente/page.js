@@ -11,6 +11,8 @@ import ExamRequestsSection from "../../../lib/ExamRequestsSection";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
 
+const SURFACE_LABELS = { whole: "toda la pieza", vestibular: "vestibular", palatal_lingual: "palatina/lingual", mesial: "mesial", distal: "distal", occlusal: "oclusal/incisal" };
+
 export default function PatientDetailPage() {
   return (
     <Suspense fallback={<div className="empty">Cargando…</div>}>
@@ -76,8 +78,10 @@ function OdontogramTab({ patientId }) {
   const [confirm, ConfirmUI] = useConfirm();
   const [toothNotes, setToothNotes] = useState("");
   const [states, setStates] = useState([]);       // catálogo de estados
-  const [teeth, setTeeth] = useState({});          // { "16": {color,label,...} }
+  const [teeth, setTeeth] = useState({});          // { "16": { vestibular:{color,label}, ... } }
+  const [rm, setRm] = useState({});                // { "16": { recession, mobility } }
   const [selected, setSelected] = useState(null);  // pieza seleccionada
+  const [selectedSurface, setSelectedSurface] = useState("whole"); // superficie activa
   const [history, setHistory] = useState([]);      // historial de la pieza
   const [error, setError] = useState("");
 
@@ -85,14 +89,28 @@ function OdontogramTab({ patientId }) {
     try {
       const resp = await api(`/patients/${patientId}/odontogram/current/`);
       const data = await resp.json();
-      const map = {};
-      // Nos quedamos con el estado de "toda la pieza" o el más reciente por pieza
+      const map = {};       // por pieza y superficie
+      const rmMap = {};     // recesión/movilidad por pieza
       for (const t of data.teeth || []) {
-        if (!map[t.tooth_fdi_code]) {
-          map[t.tooth_fdi_code] = { color: t.state_color, label: t.state_label };
+        const code = t.tooth_fdi_code;
+        if (!map[code]) map[code] = {};
+        // "whole" pinta las 5 superficies; una superficie concreta pinta solo esa
+        if (t.surface === "whole") {
+          for (const s of ["vestibular", "palatal_lingual", "mesial", "distal", "occlusal"]) {
+            if (!map[code][s]) map[code][s] = { color: t.state_color, label: t.state_label };
+          }
+        } else if (!map[code][t.surface]) {
+          map[code][t.surface] = { color: t.state_color, label: t.state_label };
+        }
+        if (t.mobility != null || t.recession != null) {
+          rmMap[code] = {
+            mobility: t.mobility ?? rmMap[code]?.mobility,
+            recession: t.recession ?? rmMap[code]?.recession,
+          };
         }
       }
       setTeeth(map);
+      setRm(rmMap);
     } catch { setError("No se pudo cargar el odontograma."); }
   }, [patientId]);
 
@@ -109,9 +127,37 @@ function OdontogramTab({ patientId }) {
     } catch { /* silencioso */ }
   }, [patientId]);
 
-  function handleToothClick(code) {
+  function handleSurfaceClick(code, surface) {
     setSelected(code);
+    setSelectedSurface(surface);
     loadHistory(code);
+  }
+
+  // Recesión/movilidad: pide el valor (1-4, vacío para limpiar) y lo guarda
+  // como un ToothRecord de la pieza (superficie whole) con el campo numérico.
+  async function handleRMClick(code, kind) {
+    const label = kind === "recession" ? "recesión" : "movilidad";
+    const current = rm[code]?.[kind] ?? "";
+    const val = window.prompt(`Valor de ${label} para la pieza ${code} (1 a 4, vacío para borrar):`, current);
+    if (val === null) return;
+    const num = val.trim() === "" ? null : parseInt(val.trim(), 10);
+    if (num !== null && (isNaN(num) || num < 1 || num > 4)) {
+      setError("El valor debe ser 1, 2, 3 o 4."); return;
+    }
+    setError("");
+    try {
+      const sano = states.find((s) => s.code === "SANO")?.id || states[0]?.id;
+      const resp = await api(`/patients/${patientId}/tooth-records/`, {
+        method: "POST",
+        body: JSON.stringify({
+          tooth_fdi_code: code, surface: "whole", state: sano,
+          [kind]: num, date: new Date().toISOString().slice(0, 10),
+          notes: `Registro de ${label}: ${num ?? "—"}`,
+        }),
+      });
+      if (!resp.ok) throw new Error(`No se pudo guardar la ${label} (error ${resp.status}).`);
+      await loadCurrent();
+    } catch (err) { setError(err.message); }
   }
 
   async function deleteRecord(rec) {
@@ -133,9 +179,10 @@ function OdontogramTab({ patientId }) {
 
   async function registerState(stateId) {
     const stateLabel = states.find((s) => s.id === stateId)?.label || "este estado";
+    const surfLabel = SURFACE_LABELS[selectedSurface] || "toda la pieza";
     const ok = await confirm({
       title: `Registrar estado en la pieza ${selected}`,
-      message: `Se añadirá "${stateLabel}" al historial de la pieza.\nEl historial no se sobrescribe.`,
+      message: `Se añadirá "${stateLabel}" en la superficie ${surfLabel}.\nEl historial no se sobrescribe.`,
       confirmLabel: "Registrar",
     });
     if (!ok) return;
@@ -145,7 +192,7 @@ function OdontogramTab({ patientId }) {
         method: "POST",
         body: JSON.stringify({
           tooth_fdi_code: selected,
-          surface: "whole",
+          surface: selectedSurface,
           state: stateId,
           notes: toothNotes,
           date: new Date().toISOString().slice(0, 10),
@@ -174,7 +221,10 @@ function OdontogramTab({ patientId }) {
       {error && <div className="error-box">{error}</div>}
 
       <div className="card" style={{ marginBottom: 18 }}>
-        <Odontogram teethState={teeth} selectedTooth={selected} onToothClick={handleToothClick} />
+        <Odontogram surfacesByTooth={teeth} rmByTooth={rm}
+                    selectedTooth={selected}
+                    onSurfaceClick={handleSurfaceClick}
+                    onRMClick={handleRMClick} />
 
         {/* Leyenda del catálogo */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 16, fontSize: 12, color: "var(--ink-soft)" }}>
@@ -191,8 +241,19 @@ function OdontogramTab({ patientId }) {
         <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18, alignItems: "start" }}>
           <div className="card">
             <h3 style={{ marginBottom: 4 }}>Pieza {selected}</h3>
+            <div className="field" style={{ marginBottom: 10 }}>
+              <label>Superficie</label>
+              <select value={selectedSurface} onChange={(e) => setSelectedSurface(e.target.value)}>
+                <option value="whole">Toda la pieza</option>
+                <option value="vestibular">Vestibular</option>
+                <option value="palatal_lingual">Palatina / Lingual</option>
+                <option value="mesial">Mesial</option>
+                <option value="distal">Distal</option>
+                <option value="occlusal">Oclusal / Incisal</option>
+              </select>
+            </div>
             <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 10 }}>
-              Registrar nuevo estado (no borra el historial):
+              Registrar nuevo estado en la superficie seleccionada (no borra el historial):
             </p>
             <div className="field" style={{ marginBottom: 10 }}>
               <label>Notas (opcional, se guardan con el estado)</label>

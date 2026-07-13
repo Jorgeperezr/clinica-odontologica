@@ -367,3 +367,50 @@ class CpoCeoAndExportTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         body = b"".join(resp.streaming_content) if hasattr(resp, "streaming_content") else resp.content
         self.assertTrue(body.startswith(b"%PDF"))
+
+
+class OdontogramSurfaceTests(APITestCase):
+    """Sprint 26: registro por superficie + recesión/movilidad por pieza."""
+
+    def setUp(self):
+        from django.core.management import call_command
+        self.tenant = Tenant.objects.create(name="T surf")
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        du = User.objects.create_user(
+            email="d@surf.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. Surf",
+        )
+        Doctor.objects.create(tenant=self.tenant, user=du)
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Sur", last_name="Face", national_id="8080808080",
+        )
+
+    def test_register_state_on_specific_surface(self):
+        from apps.clinical.models import OdontogramState
+        caries = OdontogramState.objects.get(tenant=self.tenant, code="CARIES")
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/tooth-records/", {
+            "tooth_fdi_code": "16", "surface": "occlusal", "state": str(caries.id),
+            "date": "2026-07-13",
+        })
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["surface"], "occlusal")
+
+        # El odontograma actual devuelve la superficie pintada
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/odontogram/current/")
+        teeth = resp.data["teeth"]
+        occ = [t for t in teeth if t["tooth_fdi_code"] == "16" and t["surface"] == "occlusal"]
+        self.assertEqual(len(occ), 1)
+
+    def test_register_mobility_and_recession(self):
+        from apps.clinical.models import OdontogramState
+        sano = OdontogramState.objects.get(tenant=self.tenant, code="SANO")
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/tooth-records/", {
+            "tooth_fdi_code": "21", "surface": "whole", "state": str(sano.id),
+            "mobility": 2, "recession": 3, "date": "2026-07-13",
+        })
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["mobility"], 2)
+        self.assertEqual(resp.data["recession"], 3)

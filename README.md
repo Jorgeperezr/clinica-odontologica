@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 124 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 126 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 25 completado — índices CPO-ceo y export PDF del formulario 033
+## Estado actual: Sprint 26 completado — odontograma oficial MSP con superficies
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -230,6 +230,14 @@ Alineación de la historia clínica con el formulario oficial del Ministerio de 
 ### Sprint 25 — Índices J (CPO-ceo) + export del formulario 033 a PDF (hecho)
 - **Literal J — Índices CPO-ceo** (`lib/CpoCeoCard.js` + endpoint `GET /patients/{id}/cpo-ceo/`): calculados automáticamente desde el odontograma. CPO para dientes permanentes (FDI 11-48) y ceo para temporales (FDI 51-85). C/c = cariados · P/e = perdidos o con extracción indicada · O/o = obturados o con corona. Tarjeta con las dos tablas en la pestaña Odontograma, recalculada al registrar estados.
 - **Export del formulario 033 a PDF oficial** (`form033_pdf.py` + endpoint `GET /patients/{id}/form033/export-pdf/`): reúne los literales A-O del paciente (datos, motivo, enfermedad actual, antecedentes, vitales, examen estomatognático, índices CPO-ceo, diagnósticos CIE-10 y datos del profesional) en un PDF imprimible con las bandas de título del formato oficial. Botón "⬇ Exportar formulario 033 (PDF)" en la tarjeta de índices.
+
+### Sprint 26 — Odontograma oficial MSP con superficies (hecho)
+Reemplazo de la representación gráfica del odontograma por la del formulario HCU-033/2021, conservando toda la lógica de negocio (el backend ya soportaba superficies e movilidad/recesión).
+- **Distribución oficial exacta:** permanente superior (18-11 | 21-28), temporal superior (55-51 | 61-65), temporal inferior (85-81 | 71-75), permanente inferior (48-41 | 31-38).
+- **5 superficies clicables por pieza** (`lib/Odontogram.js` reescrito): cada diente permanente es un cuadrado con rombo interior (vestibular, palatina/lingual, mesial, distal, oclusal central); los temporales son círculos con las mismas 5 caras. Cada superficie se pinta con el color del estado vigente de esa cara y se marca por separado.
+- **Recesión y movilidad por pieza:** casillas sobre y bajo cada arcada (valores 1-4), como en el formulario. Se guardan por pieza en el ToothRecord.
+- **Lógica intacta:** selección de pieza y superficie, registro de estados, historial por pieza, notas, eliminación auditada, actualización automática e índices CPO-ceo siguen funcionando igual. Colores y catálogo de 22 estados sin cambios.
+- Responsive con scroll horizontal en pantallas angostas.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
