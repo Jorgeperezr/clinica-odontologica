@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 130 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 131 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 27 completado — usabilidad (ordenamiento, vistas, layout responsive)
+## Estado actual: Sprint 28 completado — literales I, J y K del formulario MSP 033
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -245,6 +245,12 @@ Mejoras de UX sin tocar la lógica de negocio.
 - **Vista de lista o de tarjetas** en Pacientes: toggle con preferencia recordada; las tarjetas muestran avatar con iniciales, teléfono, nº de atenciones y próxima cita. La lista suma las columnas de atenciones y próxima cita.
 - **Menú lateral contraíble** (`layout.js`): botón «/» que colapsa el sidebar a solo iconos (64px) o lo expande (220px), con la preferencia recordada. Los ítems muestran icono + tooltip cuando está colapsado.
 - **Contenido principal responsive:** el panel blanco ocupa todo el ancho restante, se centra automáticamente (maxWidth 1200) y usa padding fluido (`clamp`), adaptándose al colapso del menú y a cualquier resolución sin espacios vacíos.
+
+### Sprint 28 — Literales I, J y K del formulario MSP 033 (hecho)
+Completa las tres secciones que rodean al odontograma en el formulario oficial, 100% frontend (el backend ya tenía los campos).
+- **I. Indicadores de Salud Bucal** (`lib/OralHealthIndicators.js`): higiene oral simplificada (placa 0-3, cálculo 0-3, gingivitis 0-1 por las 6 piezas índice, con totales), enfermedad periodontal (leve/moderada/severa), tipo de oclusión (Angle I/II/III) y nivel de fluorosis (leve/moderada/severa). Se guarda en el campo `indicadores_salud_bucal` del Form033.
+- **J. Índices CPO-ceo** (`lib/CpoCeoCard.js` rediseñado): mismo formato del formulario oficial — filas D (permanentes: C-P-O-Total) y d (temporales: c-e-o-Total), con las etiquetas en menta y los totales en durazno. Se siguen calculando automáticamente desde el odontograma.
+- **K. Simbología del odontograma** (`lib/OdontogramLegend.js`): reemplaza la leyenda de cuadros de color por los símbolos oficiales del MSP (círculo relleno = caries/obturado, X = extracción/pérdida, triángulo = endodoncia, cuadrado con punto = corona, líneas = prótesis total, A = ausente, rayo = fractura, etc.), mapeados por código de estado. La lógica de los 22 estados no cambia.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

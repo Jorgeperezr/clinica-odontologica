@@ -414,3 +414,47 @@ class OdontogramSurfaceTests(APITestCase):
         self.assertEqual(resp.status_code, 201, resp.content)
         self.assertEqual(resp.data["mobility"], 2)
         self.assertEqual(resp.data["recession"], 3)
+
+
+class OralHealthIndicatorsTests(APITestCase):
+    """Literal I: indicadores de salud bucal guardados en el Form033."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="T ind")
+        du = User.objects.create_user(
+            email="d@ind.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. Ind",
+        )
+        Doctor.objects.create(tenant=self.tenant, user=du)
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Ind", last_name="Bucal", national_id="9090909090",
+        )
+
+    def test_save_and_read_indicators(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        indicadores = {
+            "higiene": {"16": {"placa": 2, "calculo": 1, "gingivitis": 1}},
+            "enfermedad_periodontal": "moderada",
+            "oclusion": "II",
+            "fluorosis": "leve",
+        }
+        # Crear el Form033 con indicadores
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/form033/", {
+            "date": "2026-07-13", "indicadores_salud_bucal": indicadores,
+        }, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        record_id = resp.data["id"]
+
+        # Leerlo de vuelta
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/form033/")
+        data = resp.data if isinstance(resp.data, list) else resp.data.get("results", [])
+        self.assertEqual(data[0]["indicadores_salud_bucal"]["oclusion"], "II")
+
+        # Actualizarlo vía PATCH del detalle
+        indicadores["fluorosis"] = "severa"
+        resp = self.client.patch(f"/api/v1/form033/{record_id}/", {
+            "indicadores_salud_bucal": indicadores,
+        }, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["indicadores_salud_bucal"]["fluorosis"], "severa")

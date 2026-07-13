@@ -37,8 +37,12 @@ export default function CpoCeoCard({ patientId, refreshKey }) {
   if (!data) return null;
   const { cpo, ceo } = data;
 
-  const cell = { padding: "4px 10px", textAlign: "center", fontVariantNumeric: "tabular-nums" };
-  const th = { ...cell, fontSize: 11, color: "var(--ink-soft)", textTransform: "uppercase" };
+  const base = { border: "1px solid var(--line)", padding: "8px 16px", textAlign: "center",
+                 fontVariantNumeric: "tabular-nums" };
+  const hdr = { ...base, fontWeight: 700, fontSize: 13, color: "var(--petrol-deep)" };
+  const rowLabel = { ...base, fontWeight: 700, background: "var(--mint)", minWidth: 40 };
+  const numCell = { ...base, minWidth: 44 };
+  const totalCell = { ...base, fontWeight: 700, background: "#f8d9bf" };
 
   return (
     <div className="card" style={{ marginBottom: 18 }}>
@@ -51,37 +55,34 @@ export default function CpoCeoCard({ patientId, refreshKey }) {
 
       {error && <div className="error-box">{error}</div>}
 
-      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-        <table style={{ width: "auto", border: "1px solid var(--line)", borderRadius: 8 }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr style={{ background: "var(--petrol-soft)" }}>
-              <th style={th}>CPO (permanentes)</th>
-              <th style={th}>C</th><th style={th}>P</th><th style={th}>O</th><th style={th}>Total</th>
+              <th style={hdr}></th>
+              <th style={hdr}>C</th><th style={hdr}>P</th><th style={hdr}>O</th>
+              <th style={{ ...hdr, minWidth: 120 }}>TOTAL</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style={{ ...cell, fontWeight: 600 }}>Dientes definitivos</td>
-              <td style={cell}>{cpo.C}</td><td style={cell}>{cpo.P}</td>
-              <td style={cell}>{cpo.O}</td>
-              <td style={{ ...cell, fontWeight: 700, background: "#fbe9d9" }}>{cpo.total}</td>
+              <td style={rowLabel}>D</td>
+              <td style={numCell}>{cpo.C}</td>
+              <td style={numCell}>{cpo.P}</td>
+              <td style={numCell}>{cpo.O}</td>
+              <td style={totalCell}>{cpo.total}</td>
             </tr>
-          </tbody>
-        </table>
-
-        <table style={{ width: "auto", border: "1px solid var(--line)", borderRadius: 8 }}>
-          <thead>
             <tr style={{ background: "var(--petrol-soft)" }}>
-              <th style={th}>ceo (temporales)</th>
-              <th style={th}>c</th><th style={th}>e</th><th style={th}>o</th><th style={th}>Total</th>
+              <th style={hdr}></th>
+              <th style={hdr}>c</th><th style={hdr}>e</th><th style={hdr}>o</th>
+              <th style={hdr}>TOTAL</th>
             </tr>
-          </thead>
-          <tbody>
             <tr>
-              <td style={{ ...cell, fontWeight: 600 }}>Dientes deciduos</td>
-              <td style={cell}>{ceo.c}</td><td style={cell}>{ceo.e}</td>
-              <td style={cell}>{ceo.o}</td>
-              <td style={{ ...cell, fontWeight: 700, background: "#fbe9d9" }}>{ceo.total}</td>
+              <td style={rowLabel}>d</td>
+              <td style={numCell}>{ceo.c}</td>
+              <td style={numCell}>{ceo.e}</td>
+              <td style={numCell}>{ceo.o}</td>
+              <td style={totalCell}>{ceo.total}</td>
             </tr>
           </tbody>
         </table>

@@ -7,6 +7,8 @@ import Odontogram from "../../../lib/Odontogram";
 import Form033Panel from "../../../lib/Form033Panel";
 import DiagnosisSection from "../../../lib/DiagnosisTab";
 import CpoCeoCard from "../../../lib/CpoCeoCard";
+import OralHealthIndicators from "../../../lib/OralHealthIndicators";
+import OdontogramLegend from "../../../lib/OdontogramLegend";
 import ExamRequestsSection from "../../../lib/ExamRequestsSection";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
@@ -216,6 +218,7 @@ function OdontogramTab({ patientId }) {
     <div>
       {ConfirmUI}
       <Form033Panel patientId={patientId} />
+      <OralHealthIndicators patientId={patientId} />
       <CpoCeoCard patientId={patientId} refreshKey={Object.keys(teeth).length} />
       <DiagnosisSection patientId={patientId} />
       {error && <div className="error-box">{error}</div>}
@@ -226,15 +229,7 @@ function OdontogramTab({ patientId }) {
                     onSurfaceClick={handleSurfaceClick}
                     onRMClick={handleRMClick} />
 
-        {/* Leyenda del catálogo */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 16, fontSize: 12, color: "var(--ink-soft)" }}>
-          {states.map((s) => (
-            <span key={s.id} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: s.color, border: "1px solid var(--line)", display: "inline-block" }} />
-              {s.label}
-            </span>
-          ))}
-        </div>
+        <OdontogramLegend states={states} />
       </div>
 
       {selected ? (
