@@ -310,3 +310,60 @@ class DiagnosisKindTests(APITestCase):
         self.assertEqual(resp.status_code, 201, resp.content)
         self.assertEqual(resp.data["diagnosis_kind"], "def")
         self.assertEqual(resp.data["kind_display"], "Definitivo")
+
+
+class CpoCeoAndExportTests(APITestCase):
+    """Sprint 25: índices CPO-ceo (J) y export del formulario 033 a PDF."""
+
+    def setUp(self):
+        from django.core.management import call_command
+        self.tenant = Tenant.objects.create(name="T cpo")
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        du = User.objects.create_user(
+            email="d@cpo.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. CPO", 
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=du, license_number="MSP-999")
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Cpo", last_name="Test", national_id="7070707070",
+        )
+
+    def _set_tooth(self, fdi, code):
+        from apps.clinical.models import OdontogramState, ToothRecord
+        state = OdontogramState.objects.get(tenant=self.tenant, code=code)
+        ToothRecord.objects.create(
+            tenant=self.tenant, patient=self.patient, tooth_fdi_code=fdi,
+            surface="whole", state=state, date="2026-07-12",
+        )
+
+    def test_cpo_ceo_calculation(self):
+        # Permanentes: caries en 16, obturado en 26, extracción indicada en 36
+        self._set_tooth("16", "CARIES")
+        self._set_tooth("26", "OBTURADO")
+        self._set_tooth("36", "INDICADA_EXTRACCION")
+        # Temporal: caries en 55
+        self._set_tooth("55", "CARIES")
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/cpo-ceo/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["cpo"]["C"], 1)
+        self.assertEqual(resp.data["cpo"]["O"], 1)
+        self.assertEqual(resp.data["cpo"]["P"], 1)
+        self.assertEqual(resp.data["cpo"]["total"], 3)
+        self.assertEqual(resp.data["ceo"]["c"], 1)
+        self.assertEqual(resp.data["ceo"]["total"], 1)
+
+    def test_form033_pdf_export(self):
+        self._set_tooth("16", "CARIES")
+        self.client.force_authenticate(user=self.doctor_user)
+        # Crear una consulta 033 para que el PDF tenga contenido
+        self.client.post(f"/api/v1/patients/{self.patient.id}/form033/", {
+            "date": "2026-07-12", "motivo_consulta": "Control",
+            "antecedentes_personales": {}, "antecedentes_familiares": {},
+            "examen_estomatognatico": {},
+        }, format="json")
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/form033/export-pdf/")
+        self.assertEqual(resp.status_code, 200)
+        body = b"".join(resp.streaming_content) if hasattr(resp, "streaming_content") else resp.content
+        self.assertTrue(body.startswith(b"%PDF"))

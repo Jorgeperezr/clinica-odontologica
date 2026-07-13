@@ -6,6 +6,7 @@ import { api } from "../../../lib/api";
 import Odontogram from "../../../lib/Odontogram";
 import Form033Panel from "../../../lib/Form033Panel";
 import DiagnosisSection from "../../../lib/DiagnosisTab";
+import CpoCeoCard from "../../../lib/CpoCeoCard";
 import ExamRequestsSection from "../../../lib/ExamRequestsSection";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
@@ -168,6 +169,7 @@ function OdontogramTab({ patientId }) {
     <div>
       {ConfirmUI}
       <Form033Panel patientId={patientId} />
+      <CpoCeoCard patientId={patientId} refreshKey={Object.keys(teeth).length} />
       <DiagnosisSection patientId={patientId} />
       {error && <div className="error-box">{error}</div>}
 

@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 122 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 124 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 24 completado — formulario MSP 033 (parte 2)
+## Estado actual: Sprint 25 completado — índices CPO-ceo y export PDF del formulario 033
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -226,6 +226,10 @@ Alineación de la historia clínica con el formulario oficial del Ministerio de 
 - **Literal N — Diagnósticos CIE-10** (`lib/DiagnosisTab.js`): en la pestaña Odontograma, el profesional busca por código o nombre (buscador con debounce contra el catálogo sembrado), elige pieza y marca **PRE (presuntivo)** o **DEF (definitivo)**. El serializer ahora expone `diagnosis_kind`/`kind_display`.
 - **Literales L / M — Exámenes complementarios** (`lib/ExamRequestsSection.js`): en la pestaña Documentos, se piden exámenes (biometría, química, rayos X, otros) y se carga su informe. Estado pendiente → con informe.
 - **Leyenda del odontograma** con los 22 estados oficiales (se arma sola desde el catálogo).
+
+### Sprint 25 — Índices J (CPO-ceo) + export del formulario 033 a PDF (hecho)
+- **Literal J — Índices CPO-ceo** (`lib/CpoCeoCard.js` + endpoint `GET /patients/{id}/cpo-ceo/`): calculados automáticamente desde el odontograma. CPO para dientes permanentes (FDI 11-48) y ceo para temporales (FDI 51-85). C/c = cariados · P/e = perdidos o con extracción indicada · O/o = obturados o con corona. Tarjeta con las dos tablas en la pestaña Odontograma, recalculada al registrar estados.
+- **Export del formulario 033 a PDF oficial** (`form033_pdf.py` + endpoint `GET /patients/{id}/form033/export-pdf/`): reúne los literales A-O del paciente (datos, motivo, enfermedad actual, antecedentes, vitales, examen estomatognático, índices CPO-ceo, diagnósticos CIE-10 y datos del profesional) en un PDF imprimible con las bandas de título del formato oficial. Botón "⬇ Exportar formulario 033 (PDF)" en la tarjeta de índices.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

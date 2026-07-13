@@ -184,3 +184,93 @@ class ExamRequestReportView(APIView):
         exam.reported_at = timezone.now()
         exam.save()
         return Response(ExamRequestSerializer(exam, context={"request": request}).data)
+
+
+class CpoCeoIndexView(APIView):
+    """
+    Literal J del formulario MSP 033 — Índices CPO (dientes permanentes) y
+    ceo (dientes temporales/deciduos), calculados automáticamente desde el
+    estado actual del odontograma.
+
+        CPO-D (permanentes, FDI 11-48):
+          C = cariados (CARIES)
+          P = perdidos por caries (PERDIDA_CARIES) + indicados extracción
+          O = obturados (OBTURADO) + con corona (CORONA)
+        ceo-d (temporales, FDI 51-85):
+          c = cariados, e = con extracción indicada, o = obturados
+    """
+
+    permission_classes = [CAN_VIEW_CLINICAL]
+
+    def get(self, request, pk):
+        from apps.clinical.models import ToothRecord
+
+        patient = _get_patient(request, pk)
+        # Último estado vigente por pieza (whole) — mismo criterio que el
+        # odontograma actual, pero agregado por pieza.
+        records = (
+            ToothRecord.objects.filter(tenant=request.tenant, patient=patient)
+            .select_related("state")
+            .order_by("tooth_fdi_code", "-date", "-created_at")
+        )
+        latest_by_tooth = {}
+        for rec in records:
+            if rec.tooth_fdi_code not in latest_by_tooth:
+                latest_by_tooth[rec.tooth_fdi_code] = rec.state.code
+
+        def is_permanent(fdi):
+            # Permanentes: cuadrantes 1-4 (11-48). Temporales: 5-8 (51-85).
+            return fdi[:1] in {"1", "2", "3", "4"}
+
+        cpo = {"C": 0, "P": 0, "O": 0}
+        ceo = {"c": 0, "e": 0, "o": 0}
+        CARIADO = {"CARIES"}
+        PERDIDO = {"PERDIDA_CARIES", "INDICADA_EXTRACCION"}
+        OBTURADO = {"OBTURADO", "CORONA"}
+
+        for fdi, code in latest_by_tooth.items():
+            perm = is_permanent(fdi)
+            if code in CARIADO:
+                (cpo if perm else ceo)["C" if perm else "c"] += 1
+            elif code in PERDIDO:
+                (cpo if perm else ceo)["P" if perm else "e"] += 1
+            elif code in OBTURADO:
+                (cpo if perm else ceo)["O" if perm else "o"] += 1
+
+        return Response({
+            "cpo": {**cpo, "total": sum(cpo.values())},
+            "ceo": {**ceo, "total": sum(ceo.values())},
+            "teeth_evaluated": len(latest_by_tooth),
+        })
+
+
+class Form033PDFExportView(APIView):
+    """GET /api/v1/patients/{pk}/form033/export-pdf/ — formulario 033 en PDF oficial."""
+
+    permission_classes = [CAN_VIEW_CLINICAL]
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from apps.clinical.form033_pdf import build_form033_pdf
+        from apps.clinical.models import Diagnosis, Form033Record
+
+        patient = _get_patient(request, pk)
+        form_record = (
+            Form033Record.objects.filter(tenant=request.tenant, patient=patient)
+            .order_by("-date").first()
+        )
+        diagnoses = list(
+            Diagnosis.objects.filter(tenant=request.tenant, patient=patient).order_by("-date")
+        )
+        # Reusar el cálculo de índices
+        cpo_ceo = CpoCeoIndexView().get(request, pk).data
+        _, professional = _professional_snapshot(request)
+
+        pdf_bytes = build_form033_pdf(
+            patient, request.tenant, form_record, diagnoses, cpo_ceo, professional
+        )
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        filename = f"form033_{patient.national_id or patient.id}.pdf"
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
