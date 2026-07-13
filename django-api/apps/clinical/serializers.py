@@ -43,12 +43,15 @@ class EvolutionSerializer(serializers.ModelSerializer):
 
 
 class DiagnosisSerializer(serializers.ModelSerializer):
+    kind_display = serializers.CharField(source="get_diagnosis_kind_display", read_only=True)
+
     class Meta:
         model = Diagnosis
         fields = [
-            "id", "doctor", "tooth_fdi_code", "code", "description", "date", "created_at",
+            "id", "doctor", "tooth_fdi_code", "code", "description",
+            "diagnosis_kind", "kind_display", "date", "created_at",
         ]
-        read_only_fields = ["id", "created_at", "doctor"]
+        read_only_fields = ["id", "created_at", "doctor", "kind_display"]
 
 
 class TreatmentPlanItemSerializer(serializers.ModelSerializer):

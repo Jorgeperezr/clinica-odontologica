@@ -284,3 +284,29 @@ class Form033FrontendContractTests(APITestCase):
         # Por nombre
         resp = self.client.get("/api/v1/cie10/?q=caries")
         self.assertTrue(len(resp.data["results"]) > 0)
+
+
+class DiagnosisKindTests(APITestCase):
+    """Literal N: diagnóstico con CIE-10 y tipo PRE/DEF."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="T diagN")
+        du = User.objects.create_user(
+            email="d@diagn.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. Dx",
+        )
+        Doctor.objects.create(tenant=self.tenant, user=du)
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Dx", last_name="Test", national_id="6060606060",
+        )
+
+    def test_create_diagnosis_with_kind(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/diagnoses/", {
+            "code": "K02.1", "description": "Caries de la dentina",
+            "tooth_fdi_code": "16", "diagnosis_kind": "def", "date": "2026-07-12",
+        })
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["diagnosis_kind"], "def")
+        self.assertEqual(resp.data["kind_display"], "Definitivo")

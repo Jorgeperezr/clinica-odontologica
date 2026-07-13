@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 import Odontogram from "../../../lib/Odontogram";
 import Form033Panel from "../../../lib/Form033Panel";
+import DiagnosisSection from "../../../lib/DiagnosisTab";
+import ExamRequestsSection from "../../../lib/ExamRequestsSection";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
 
@@ -56,7 +58,12 @@ function PatientDetail() {
       {tab === "odontograma" && <OdontogramTab patientId={id} />}
       {tab === "evoluciones" && <EvolutionsTab patientId={id} />}
       {tab === "plan" && <PlanTab patientId={id} />}
-      {tab === "documentos" && <DocumentsTab patientId={id} />}
+      {tab === "documentos" && (
+        <>
+          <ExamRequestsSection patientId={id} />
+          <DocumentsTab patientId={id} />
+        </>
+      )}
       {tab === "consentimientos" && <ConsentsTab patientId={id} />}
     </div>
   );
@@ -161,6 +168,7 @@ function OdontogramTab({ patientId }) {
     <div>
       {ConfirmUI}
       <Form033Panel patientId={patientId} />
+      <DiagnosisSection patientId={patientId} />
       {error && <div className="error-box">{error}</div>}
 
       <div className="card" style={{ marginBottom: 18 }}>

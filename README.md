@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 121 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 122 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 23 completado — formulario MSP 033 (parte 1)
+## Estado actual: Sprint 24 completado — formulario MSP 033 (parte 2)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -221,6 +221,11 @@ Alineación de la historia clínica con el formulario oficial del Ministerio de 
 - **Literal O automático:** los datos del profesional (nombre, registro, fecha/hora) se guardan solos desde la credencial autenticada y no se muestran como formulario.
 - **Catálogo CIE-10 odontológico sembrado** (~90 códigos K00–K14 + S02.5, S03.2, Z01.2, Z29.8) con búsqueda por código o nombre (base del literal N).
 - `sex` añadido al paciente (literal A); campos de movilidad/recesión en el registro de pieza (literal H).
+
+### Sprint 24 — Formulario MSP HCU-033/2021, parte 2 (hecho)
+- **Literal N — Diagnósticos CIE-10** (`lib/DiagnosisTab.js`): en la pestaña Odontograma, el profesional busca por código o nombre (buscador con debounce contra el catálogo sembrado), elige pieza y marca **PRE (presuntivo)** o **DEF (definitivo)**. El serializer ahora expone `diagnosis_kind`/`kind_display`.
+- **Literales L / M — Exámenes complementarios** (`lib/ExamRequestsSection.js`): en la pestaña Documentos, se piden exámenes (biometría, química, rayos X, otros) y se carga su informe. Estado pendiente → con informe.
+- **Leyenda del odontograma** con los 22 estados oficiales (se arma sola desde el catálogo).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
