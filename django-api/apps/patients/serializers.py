@@ -44,10 +44,13 @@ class PatientSerializer(serializers.ModelSerializer):
 
 
 class PatientListSerializer(serializers.ModelSerializer):
+    attention_count = serializers.IntegerField(read_only=True, default=0)
+    next_appointment = serializers.DateTimeField(read_only=True, allow_null=True)
     """Versión ligera para listados/búsqueda (RF-PAC-06)."""
 
     full_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = Patient
-        fields = ["id", "full_name", "national_id", "phone", "created_at"]
+        fields = ["id", "full_name", "national_id", "phone", "created_at",
+                  "attention_count", "next_appointment"]

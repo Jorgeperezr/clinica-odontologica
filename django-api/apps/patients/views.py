@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Count, Min, Q
 from rest_framework import generics
 
 from apps.accounts.models import AuditLog
@@ -32,7 +32,21 @@ class PatientListCreateView(generics.ListCreateAPIView):
             return [CAN_EDIT_PATIENT()]
         return [CAN_VIEW()]
 
+    # Ordenamientos permitidos (RF-PAC-01, mejora de usabilidad).
+    # No cambia la lógica de negocio: solo el order_by del listado.
+    ORDERING_MAP = {
+        "created_desc": ["-created_at"],
+        "created_asc": ["created_at"],
+        "name_asc": ["last_name", "first_name"],
+        "name_desc": ["-last_name", "-first_name"],
+        "attention_desc": ["-attention_count", "last_name"],
+        "attention_asc": ["attention_count", "last_name"],
+        "next_appt_asc": ["next_appointment", "last_name"],
+    }
+
     def get_queryset(self):
+        from django.utils import timezone
+
         qs = Patient.objects.filter(tenant=self.request.tenant, is_active=True)
         search = self.request.query_params.get("search")
         if search:
@@ -42,7 +56,23 @@ class PatientListCreateView(generics.ListCreateAPIView):
                 | Q(national_id__icontains=search)
                 | Q(phone__icontains=search)
             )
-        return qs.order_by("last_name", "first_name")
+
+        # Anotaciones para ordenar/mostrar: nº de atenciones y próxima cita.
+        qs = qs.annotate(
+            attention_count=Count("appointments", distinct=True),
+            next_appointment=Min(
+                "appointments__scheduled_start",
+                filter=Q(appointments__scheduled_start__gte=timezone.now()),
+            ),
+        )
+
+        order = self.request.query_params.get("ordering", "name_asc")
+        fields = self.ORDERING_MAP.get(order, self.ORDERING_MAP["name_asc"])
+        # Los NULL de próxima cita van al final (pacientes sin cita futura).
+        if order == "next_appt_asc":
+            from django.db.models import F
+            return qs.order_by(F("next_appointment").asc(nulls_last=True), "last_name")
+        return qs.order_by(*fields)
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)

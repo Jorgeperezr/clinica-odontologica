@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 126 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 130 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -19,7 +19,7 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
-## Estado actual: Sprint 26 completado — odontograma oficial MSP con superficies
+## Estado actual: Sprint 27 completado — usabilidad (ordenamiento, vistas, layout responsive)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -238,6 +238,13 @@ Reemplazo de la representación gráfica del odontograma por la del formulario H
 - **Recesión y movilidad por pieza:** casillas sobre y bajo cada arcada (valores 1-4), como en el formulario. Se guardan por pieza en el ToothRecord.
 - **Lógica intacta:** selección de pieza y superficie, registro de estados, historial por pieza, notas, eliminación auditada, actualización automática e índices CPO-ceo siguen funcionando igual. Colores y catálogo de 22 estados sin cambios.
 - Responsive con scroll horizontal en pantallas angostas.
+
+### Sprint 27 — Usabilidad: ordenamiento, vistas y layout responsive (hecho)
+Mejoras de UX sin tocar la lógica de negocio.
+- **Ordenamiento del listado de pacientes** (`?ordering=`): nombre A-Z / Z-A, fecha de registro (recientes/antiguos), número de atenciones (mayor/menor) y próxima cita según la agenda. El backend anota `attention_count` (Count de citas) y `next_appointment` (Min de citas futuras) sin alterar el flujo existente; un ordering inválido cae a nombre A-Z.
+- **Vista de lista o de tarjetas** en Pacientes: toggle con preferencia recordada; las tarjetas muestran avatar con iniciales, teléfono, nº de atenciones y próxima cita. La lista suma las columnas de atenciones y próxima cita.
+- **Menú lateral contraíble** (`layout.js`): botón «/» que colapsa el sidebar a solo iconos (64px) o lo expande (220px), con la preferencia recordada. Los ítems muestran icono + tooltip cuando está colapsado.
+- **Contenido principal responsive:** el panel blanco ocupa todo el ancho restante, se centra automáticamente (maxWidth 1200) y usa padding fluido (`clamp`), adaptándose al colapso del menú y a cualquier resolución sin espacios vacíos.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
