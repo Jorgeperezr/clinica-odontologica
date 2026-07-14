@@ -69,7 +69,7 @@ export default function OdontogramLegend({ states }) {
     <div style={{ marginTop: 16 }}>
       <div style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: ".04em",
                     color: "var(--petrol)", marginBottom: 10 }}>
-        K. Simbología del odontograma
+        Simbología del odontograma
       </div>
       <div style={{ display: "grid", gap: "6px 14px",
                     gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))" }}>

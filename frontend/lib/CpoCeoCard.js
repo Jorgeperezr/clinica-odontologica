@@ -47,9 +47,9 @@ export default function CpoCeoCard({ patientId, refreshKey }) {
   return (
     <div className="card" style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <h3 style={{ margin: 0 }}>J. Índices CPO-ceo</h3>
+        <h3 style={{ margin: 0 }}>Índices CPO-ceo</h3>
         <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={exportPdf}>
-          ⬇ Exportar formulario 033 (PDF)
+          Exportar formulario 033 (PDF)
         </button>
       </div>
 

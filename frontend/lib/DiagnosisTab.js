@@ -27,7 +27,7 @@ export default function DiagnosisSection({ patientId }) {
   return (
     <div className="card" style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <h3 style={{ margin: 0 }}>N. Diagnósticos (CIE-10)</h3>
+        <h3 style={{ margin: 0 }}>Diagnósticos (CIE-10)</h3>
         {!adding && (
           <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setAdding(true)}>
             + Agregar diagnóstico

@@ -29,7 +29,7 @@ const ANTEC_FAMILIARES = [
   "Enf. infecciosa", "Mal formación", "Otro",
 ];
 
-// G. Examen del sistema estomatognático (13 regiones oficiales)
+// Examen del sistema estomatognático (13 regiones oficiales)
 const REGIONES_ESTOMATO = [
   "Labios", "Mejillas", "Maxilar superior", "Maxilar inferior", "Lengua",
   "Paladar", "Piso de la boca", "Carrillos", "Glándulas salivales",
@@ -59,7 +59,7 @@ export default function Form033Panel({ patientId }) {
       <details style={{ border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--card)" }}>
         <summary style={{ padding: "14px 18px", cursor: "pointer", fontWeight: 700, fontSize: 15,
                           display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>Historia clínica MSP — Form.033/2021 (literales B–G, I)</span>
+          <span>Historia clínica odontológica</span>
           <span style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-soft)" }}>
             {records.length} registro{records.length === 1 ? "" : "s"}
           </span>
@@ -71,7 +71,7 @@ export default function Form033Panel({ patientId }) {
           {!creating && (
             <button className="btn btn-primary" style={{ marginBottom: 14 }}
                     onClick={() => setCreating(true)}>
-              + Registrar consulta (Form 033)
+              + Registrar consulta
             </button>
           )}
 
@@ -126,16 +126,16 @@ function Form033Card({ record }) {
 
       {open && (
         <div style={{ marginTop: 12, fontSize: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-          {record.motivo_consulta && <Field label="B. Motivo de consulta" value={record.motivo_consulta} />}
+          {record.motivo_consulta && <Field label="Motivo de consulta" value={record.motivo_consulta} />}
           {record.embarazada != null && <Field label="Embarazada" value={record.embarazada ? "Sí" : "No"} />}
-          {record.enfermedad_actual && <Field label="C. Enfermedad actual" value={record.enfermedad_actual} />}
-          {personales.length > 0 && <Field label="D. Antec. personales" value={personales.join(", ")} />}
-          {familiares.length > 0 && <Field label="E. Antec. familiares" value={familiares.join(", ")} />}
-          <Field label="F. Constantes vitales" value={
+          {record.enfermedad_actual && <Field label="Enfermedad actual" value={record.enfermedad_actual} />}
+          {personales.length > 0 && <Field label="Antecedentes personales" value={personales.join(", ")} />}
+          {familiares.length > 0 && <Field label="Antecedentes familiares" value={familiares.join(", ")} />}
+          <Field label="Constantes vitales" value={
             [record.temperatura && `T° ${record.temperatura}`, record.pulso && `Pulso ${record.pulso}`,
              record.frecuencia_respiratoria && `FR ${record.frecuencia_respiratoria}`,
              record.presion_arterial && `PA ${record.presion_arterial}`].filter(Boolean).join(" · ") || "—"} />
-          {regiones.length > 0 && <Field label="G. Examen estomatognático" value={regiones.join(" · ")} />}
+          {regiones.length > 0 && <Field label="Examen estomatognático" value={regiones.join(" · ")} />}
           {record.registered_by && (
             <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4,
                           borderTop: "1px solid var(--line)", paddingTop: 6 }}>
@@ -229,8 +229,8 @@ function Form033Editor({ patientId, onSaved, onCancel }) {
         </div>
       </div>
 
-      {/* B. Motivo de consulta */}
-      <div style={sectionTitle}>B. Motivo de consulta</div>
+      {/* Motivo de consulta */}
+      <div style={sectionTitle}>Motivo de consulta</div>
       <textarea rows={2} value={form.motivo_consulta}
                 onChange={(e) => set("motivo_consulta", e.target.value)}
                 style={taStyle} placeholder="Motivo por el que acude el paciente…" />
@@ -245,26 +245,26 @@ function Form033Editor({ patientId, onSaved, onCancel }) {
         </select>
       </label>
 
-      {/* C. Enfermedad actual */}
-      <div style={sectionTitle}>C. Enfermedad actual</div>
+      {/* Enfermedad actual */}
+      <div style={sectionTitle}>Enfermedad actual</div>
       <textarea rows={3} value={form.enfermedad_actual}
                 onChange={(e) => set("enfermedad_actual", e.target.value)}
                 style={taStyle} placeholder="Descripción de la enfermedad actual…" />
 
       {/* D. Antecedentes personales */}
-      <div style={sectionTitle}>D. Antecedentes patológicos personales</div>
+      <div style={sectionTitle}>Antecedentes patológicos personales</div>
       <AntecGrid options={ANTEC_PERSONALES} state={personales}
                  onToggle={(k) => toggleAntec(setPersonales, k)}
                  onDetail={(k, v) => setAntecDetail(setPersonales, k, v)} />
 
       {/* E. Antecedentes familiares */}
-      <div style={sectionTitle}>E. Antecedentes patológicos familiares</div>
+      <div style={sectionTitle}>Antecedentes patológicos familiares</div>
       <AntecGrid options={ANTEC_FAMILIARES} state={familiares}
                  onToggle={(k) => toggleAntec(setFamiliares, k)}
                  onDetail={(k, v) => setAntecDetail(setFamiliares, k, v)} />
 
-      {/* F. Constantes vitales */}
-      <div style={sectionTitle}>F. Constantes vitales</div>
+      {/* Constantes vitales */}
+      <div style={sectionTitle}>Constantes vitales</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
         <VitalInput label="Temperatura °C" value={form.temperatura} onChange={(v) => set("temperatura", v)} />
         <VitalInput label="Pulso /min" value={form.pulso} onChange={(v) => set("pulso", v)} />
@@ -273,9 +273,9 @@ function Form033Editor({ patientId, onSaved, onCancel }) {
       </div>
 
       {/* G. Examen estomatognático */}
-      <div style={sectionTitle}>G. Examen del sistema estomatognático</div>
+      <div style={sectionTitle}>Examen del sistema estomatognático</div>
       <p style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>
-        Describe la patología en las regiones afectadas (deja en blanco las normales).
+        Anota los hallazgos en las regiones afectadas. Deja en blanco las que estén normales.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px 14px" }}>
         {REGIONES_ESTOMATO.map((region) => (
@@ -296,7 +296,7 @@ function Form033Editor({ patientId, onSaved, onCancel }) {
         <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancelar</button>
       </div>
       <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 10 }}>
-        Los datos del profesional (literal O) se guardan automáticamente desde tu credencial.
+        Tus datos como profesional se registran automáticamente.
       </p>
     </form>
   );

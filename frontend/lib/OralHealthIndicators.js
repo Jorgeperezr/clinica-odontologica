@@ -101,7 +101,7 @@ export default function OralHealthIndicators({ patientId }) {
   return (
     <div className="card" style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>I. Indicadores de Salud Bucal</h3>
+        <h3 style={{ margin: 0 }}>Indicadores de salud bucal</h3>
         <button className="btn btn-primary" style={{ fontSize: 13 }}
                 onClick={save} disabled={saving || !dirty}>
           {saving ? "Guardando…" : dirty ? "Guardar indicadores" : "Guardado"}
@@ -139,7 +139,7 @@ export default function OralHealthIndicators({ patientId }) {
             </table>
           </div>
           <p style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 6 }}>
-            Placa y cálculo: 0 a 3 · Gingivitis: 0 o 1. Cada fila son las piezas índice de un sextante.
+            Placa y cálculo: 0 a 3 · Gingivitis: 0 o 1. Cada fila corresponde a un sextante.
           </p>
         </div>
 

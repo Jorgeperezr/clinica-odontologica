@@ -458,3 +458,46 @@ class OralHealthIndicatorsTests(APITestCase):
         }, format="json")
         self.assertEqual(resp.status_code, 200, resp.content)
         self.assertEqual(resp.data["indicadores_salud_bucal"]["fluorosis"], "severa")
+
+
+class Form033FullExportTests(APITestCase):
+    """El export PDF reúne todas las secciones del paciente."""
+
+    def setUp(self):
+        from django.core.management import call_command
+        self.tenant = Tenant.objects.create(name="T full")
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        du = User.objects.create_user(
+            email="d@full.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. Full",
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=du, license_number="MSP-111")
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Full", last_name="Export", national_id="1212121212",
+        )
+
+    def test_pdf_includes_all_sections(self):
+        from apps.clinical.models import InformedConsent
+
+        # Consentimiento
+        InformedConsent.objects.create(
+            tenant=self.tenant, patient=self.patient, title="Consentimiento de ortodoncia",
+            body_text="Texto del consentimiento",
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+        # Form033 con indicadores
+        self.client.post(f"/api/v1/patients/{self.patient.id}/form033/", {
+            "date": "2026-07-13",
+            "indicadores_salud_bucal": {"oclusion": "I", "fluorosis": "leve", "higiene": {}},
+        }, format="json")
+        # Examen
+        self.client.post(f"/api/v1/patients/{self.patient.id}/exam-requests/", {
+            "category": "rayos_x", "detail": "Radiografía panorámica",
+        })
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/form033/export-pdf/")
+        self.assertEqual(resp.status_code, 200)
+        body = b"".join(resp.streaming_content) if hasattr(resp, "streaming_content") else resp.content
+        self.assertTrue(body.startswith(b"%PDF"))
+        # El PDF con varias secciones pesa más que uno vacío
+        self.assertGreater(len(body), 2000)

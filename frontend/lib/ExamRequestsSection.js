@@ -60,7 +60,7 @@ export default function ExamRequestsSection({ patientId }) {
   return (
     <div className="card" style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <h3 style={{ margin: 0 }}>L / M. Exámenes complementarios</h3>
+        <h3 style={{ margin: 0 }}>Exámenes complementarios</h3>
         {!adding && (
           <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setAdding(true)}>
             + Pedir examen
@@ -74,7 +74,7 @@ export default function ExamRequestsSection({ patientId }) {
         <form onSubmit={createExam} style={{ background: "var(--petrol-soft)", borderRadius: 10, padding: 14, marginBottom: 14 }}>
           <div style={{ display: "grid", gridTemplateColumns: "180px 1fr auto", gap: 12, alignItems: "end" }}>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Tipo (L)</label>
+              <label>Tipo</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
@@ -97,7 +97,7 @@ export default function ExamRequestsSection({ patientId }) {
         <p style={{ color: "var(--ink-soft)", fontSize: 14 }}>Sin pedidos de exámenes.</p>
       ) : (
         <table>
-          <thead><tr><th>Tipo</th><th>Solicitado (L)</th><th>Estado</th><th>Informe (M)</th><th></th></tr></thead>
+          <thead><tr><th>Tipo</th><th>Solicitado</th><th>Estado</th><th>Informe</th><th></th></tr></thead>
           <tbody>
             {exams.map((ex) => (
               <tr key={ex.id}>

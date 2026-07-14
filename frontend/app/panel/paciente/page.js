@@ -248,7 +248,7 @@ function OdontogramTab({ patientId }) {
               </select>
             </div>
             <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 10 }}>
-              Registrar nuevo estado en la superficie seleccionada (no borra el historial):
+              Registra un nuevo estado en la superficie seleccionada. El historial se conserva.
             </p>
             <div className="field" style={{ marginBottom: 10 }}>
               <label>Notas (opcional, se guardan con el estado)</label>

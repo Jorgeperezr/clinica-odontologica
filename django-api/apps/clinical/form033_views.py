@@ -253,7 +253,11 @@ class Form033PDFExportView(APIView):
         from django.http import HttpResponse
 
         from apps.clinical.form033_pdf import build_form033_pdf
-        from apps.clinical.models import Diagnosis, Form033Record
+        from apps.clinical.models import (
+            Diagnosis, ExamRequest, Form033Record, InformedConsent,
+            TreatmentPlanItem,
+        )
+        from apps.patients.models import PatientDocument
 
         patient = _get_patient(request, pk)
         form_record = (
@@ -263,12 +267,49 @@ class Form033PDFExportView(APIView):
         diagnoses = list(
             Diagnosis.objects.filter(tenant=request.tenant, patient=patient).order_by("-date")
         )
-        # Reusar el cálculo de índices
         cpo_ceo = CpoCeoIndexView().get(request, pk).data
         _, professional = _professional_snapshot(request)
 
+        # Indicadores de salud bucal del último Form033
+        indicadores = form_record.indicadores_salud_bucal if form_record else None
+
+        # Plan de tratamiento (ítems de todos los planes del paciente)
+        plan_items = [
+            {"name": it.treatment.name, "tooth": it.tooth_fdi_code,
+             "status": it.get_status_display()}
+            for it in TreatmentPlanItem.objects.filter(
+                treatment_plan__tenant=request.tenant, treatment_plan__patient=patient
+            ).select_related("treatment", "treatment_plan").order_by("treatment_plan__created_at", "order")
+        ]
+
+        # Exámenes complementarios
+        exams = [
+            {"category": ex.get_category_display(), "detail": ex.detail,
+             "report": ex.report_notes}
+            for ex in ExamRequest.objects.filter(tenant=request.tenant, patient=patient)
+            .order_by("-requested_at")
+        ]
+
+        # Documentos adjuntos
+        documents = [
+            {"type": doc.get_doc_type_display(), "description": doc.description,
+             "date": doc.uploaded_at.strftime("%Y-%m-%d")}
+            for doc in PatientDocument.objects.filter(patient=patient)
+            .order_by("-uploaded_at")
+        ]
+
+        # Consentimientos informados
+        consents = [
+            {"title": co.title, "date": (co.signed_at or co.created_at).strftime("%Y-%m-%d"),
+             "status": "Firmado" if co.signed_at else "Pendiente"}
+            for co in InformedConsent.objects.filter(tenant=request.tenant, patient=patient)
+            .order_by("-created_at")
+        ]
+
         pdf_bytes = build_form033_pdf(
-            patient, request.tenant, form_record, diagnoses, cpo_ceo, professional
+            patient, request.tenant, form_record, diagnoses, cpo_ceo, professional,
+            indicadores=indicadores, plan_items=plan_items, exams=exams,
+            documents=documents, consents=consents,
         )
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         filename = f"form033_{patient.national_id or patient.id}.pdf"
