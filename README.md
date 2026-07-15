@@ -19,6 +19,21 @@ Monorepo con dos servicios de backend independientes:
 
 Ver la documentación completa de las 7 fases previas (PRD, SRS, Arquitectura, Modelo de datos, APIs, Backlog, Roadmap) en los documentos ya entregados.
 
+## Arranque en Codespaces (tras reiniciar)
+
+Un solo comando deja todo listo (crea el `.env`, escribe las URLs de este
+Codespace, pone los puertos 80 y 3000 en Public, levanta los contenedores
+y aplica migraciones):
+
+```bash
+bash scripts/start-codespace.sh
+```
+
+Es idempotente: se puede correr las veces que haga falta. Si el login da
+"Failed to fetch", casi siempre es que los puertos 80 y 3000 volvieron a
+Private — el script los corrige, o se hacen Public a mano en la pestaña
+PORTS (clic derecho → Port Visibility → Public).
+
 ## Estado actual: Sprint 29 completado — export 033 completo y limpieza de textos
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
