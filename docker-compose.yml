@@ -6,7 +6,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-clinica}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinica}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Bind mount al workspace: /workspaces persiste entre reinicios Y
+      # rebuilds del dev container, a diferencia de los volúmenes de
+      # Docker (que viven dentro del contenedor y se borran al rebuild).
+      - ./data/postgres:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -88,5 +91,3 @@ services:
       - django-api
       - whatsapp-gateway
 
-volumes:
-  postgres_data:

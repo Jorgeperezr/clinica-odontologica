@@ -84,6 +84,7 @@ function OdontogramTab({ patientId }) {
   const [rm, setRm] = useState({});                // { "16": { recession, mobility } }
   const [selected, setSelected] = useState(null);  // pieza seleccionada
   const [selectedSurface, setSelectedSurface] = useState("whole"); // superficie activa
+  const [rmEdit, setRmEdit] = useState(null);      // { code, kind } en edición
   const [history, setHistory] = useState([]);      // historial de la pieza
   const [error, setError] = useState("");
 
@@ -135,18 +136,18 @@ function OdontogramTab({ patientId }) {
     loadHistory(code);
   }
 
-  // Recesión/movilidad: pide el valor (1-4, vacío para limpiar) y lo guarda
-  // como un ToothRecord de la pieza (superficie whole) con el campo numérico.
-  async function handleRMClick(code, kind) {
-    const label = kind === "recession" ? "recesión" : "movilidad";
-    const current = rm[code]?.[kind] ?? "";
-    const val = window.prompt(`Valor de ${label} para la pieza ${code} (1 a 4, vacío para borrar):`, current);
-    if (val === null) return;
-    const num = val.trim() === "" ? null : parseInt(val.trim(), 10);
-    if (num !== null && (isNaN(num) || num < 1 || num > 4)) {
-      setError("El valor debe ser 1, 2, 3 o 4."); return;
-    }
+  // Recesión/movilidad: clic en la casilla abre un editor inline (sin
+  // diálogos del navegador). El valor se guarda como ToothRecord de la
+  // pieza con el campo numérico correspondiente.
+  function handleRMClick(code, kind) {
+    setRmEdit({ code, kind });
     setError("");
+  }
+
+  async function saveRM(num) {
+    if (!rmEdit) return;
+    const { code, kind } = rmEdit;
+    const label = kind === "recession" ? "recesión" : "movilidad";
     try {
       const sano = states.find((s) => s.code === "SANO")?.id || states[0]?.id;
       const resp = await api(`/patients/${patientId}/tooth-records/`, {
@@ -158,6 +159,7 @@ function OdontogramTab({ patientId }) {
         }),
       });
       if (!resp.ok) throw new Error(`No se pudo guardar la ${label} (error ${resp.status}).`);
+      setRmEdit(null);
       await loadCurrent();
     } catch (err) { setError(err.message); }
   }
@@ -225,9 +227,29 @@ function OdontogramTab({ patientId }) {
 
       <div className="card" style={{ marginBottom: 18 }}>
         <Odontogram surfacesByTooth={teeth} rmByTooth={rm}
-                    selectedTooth={selected}
+                    selectedTooth={selected} selectedSurface={selectedSurface}
                     onSurfaceClick={handleSurfaceClick}
                     onRMClick={handleRMClick} />
+        {rmEdit && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                        marginTop: 12, padding: "10px 14px", borderRadius: 10,
+                        background: "var(--petrol-soft)", border: "1px solid var(--petrol)" }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>
+              {rmEdit.kind === "recession" ? "Recesión" : "Movilidad"} · pieza {rmEdit.code}:
+            </span>
+            {[1, 2, 3, 4].map((n) => (
+              <button key={n} className="btn btn-ghost"
+                      style={{ padding: "6px 14px", fontWeight: 700,
+                               ...(rm[rmEdit.code]?.[rmEdit.kind] === n
+                                   ? { background: "var(--petrol)", color: "#fff" } : {}) }}
+                      onClick={() => saveRM(n)}>{n}</button>
+            ))}
+            <button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: 13 }}
+                    onClick={() => saveRM(null)}>Borrar valor</button>
+            <button className="btn btn-ghost" style={{ padding: "6px 10px", fontSize: 13 }}
+                    onClick={() => setRmEdit(null)}>Cancelar</button>
+          </div>
+        )}
 
         <OdontogramLegend states={states} />
       </div>

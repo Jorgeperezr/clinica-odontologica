@@ -70,7 +70,7 @@ function surfacePaths(round) {
   };
 }
 
-function ToothCell({ code, x, y, round, surfaces, onSurfaceClick, selected }) {
+function ToothCell({ code, x, y, round, surfaces, onSurfaceClick, selected, selectedSurface }) {
   const paths = surfacePaths(round);
   const clipId = `clip-${code}`;
   const order = ["vestibular", "distal", "palatal_lingual", "mesial", "occlusal"];
@@ -90,11 +90,12 @@ function ToothCell({ code, x, y, round, surfaces, onSurfaceClick, selected }) {
           const pts = paths[surf].split(" ")
             .map((p) => { const [px, py] = p.split(","); return `${+px + x},${+py + y}`; })
             .join(" ");
+          const isActive = selected && selectedSurface === surf;
           return (
-            <polygon key={surf} points={pts}
+            <polygon key={surf} points={pts} className="odo-surf"
               fill={st?.color || "#ffffff"}
-              stroke="#0a5c61" strokeWidth={0.8}
-              style={{ cursor: "pointer" }}
+              stroke={isActive ? "var(--petrol)" : "#0a5c61"}
+              strokeWidth={isActive ? 2.4 : 0.8}
               onClick={() => onSurfaceClick(code, surf)}>
               <title>{`Pieza ${code} · ${SURFACE_ES[surf]}${st?.label ? `: ${st.label}` : ""}`}</title>
             </polygon>
@@ -144,6 +145,7 @@ export default function Odontogram({
   surfacesByTooth = {},   // { "16": { vestibular:{color,label}, ... }, ... }
   rmByTooth = {},         // { "16": { recession: 2, mobility: 1 }, ... }
   selectedTooth,
+  selectedSurface,
   onSurfaceClick,
   onRMClick,
 }) {
@@ -184,12 +186,12 @@ export default function Odontogram({
       {codesR.map((code, i) => (
         <ToothCell key={code} code={code} x={xInRight(i, 8)} y={yPos} round={false}
                    surfaces={surf(code)} selected={selectedTooth === code}
-                   onSurfaceClick={onSurfaceClick} />
+                   selectedSurface={selectedSurface} onSurfaceClick={onSurfaceClick} />
       ))}
       {codesL.map((code, i) => (
         <ToothCell key={code} code={code} x={xInLeft(i)} y={yPos} round={false}
                    surfaces={surf(code)} selected={selectedTooth === code}
-                   onSurfaceClick={onSurfaceClick} />
+                   selectedSurface={selectedSurface} onSurfaceClick={onSurfaceClick} />
       ))}
     </>
   );
@@ -199,12 +201,12 @@ export default function Odontogram({
       {codesR.map((code, i) => (
         <ToothCell key={code} code={code} x={xInRight(i, 5)} y={yPos} round={true}
                    surfaces={surf(code)} selected={selectedTooth === code}
-                   onSurfaceClick={onSurfaceClick} />
+                   selectedSurface={selectedSurface} onSurfaceClick={onSurfaceClick} />
       ))}
       {codesL.map((code, i) => (
         <ToothCell key={code} code={code} x={xInLeft(i)} y={yPos} round={true}
                    surfaces={surf(code)} selected={selectedTooth === code}
-                   onSurfaceClick={onSurfaceClick} />
+                   selectedSurface={selectedSurface} onSurfaceClick={onSurfaceClick} />
       ))}
     </>
   );
@@ -244,13 +246,14 @@ export default function Odontogram({
 
   return (
     <div style={{ overflowX: "auto" }}>
+      <style>{`
+        .odo-surf { cursor: pointer; transition: opacity .1s ease; }
+        .odo-surf:hover { opacity: .72; stroke: var(--petrol); stroke-width: 1.6; }
+      `}</style>
       <svg viewBox={`-4 -4 ${totalW + 8} ${totalH + 8}`}
            style={{ width: "100%", minWidth: 680 }}
            aria-label="Odontograma MSP 033">
         {/* Recesión / Movilidad superiores (sobre permanente superior) */}
-        <text x={-2} y={rowRecesionTop + RM_H / 2 + 3} fontSize="8"
-              fontWeight="700" fill="var(--ink-soft)" textAnchor="end"
-              transform={`translate(${totalW + 6},0)`} />
         {renderRM("recession", rowRecesionTop)}
         {renderRM("mobility", rowMovilidadTop)}
         {renderLabels(PERM_UPPER_R, PERM_UPPER_L, labelPermUpper + LABEL_H - 3)}

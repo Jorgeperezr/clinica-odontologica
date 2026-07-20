@@ -34,7 +34,22 @@ Es idempotente: se puede correr las veces que haga falta. Si el login da
 Private — el script los corrige, o se hacen Public a mano en la pestaña
 PORTS (clic derecho → Port Visibility → Public).
 
-## Estado actual: Sprint 29 completado — export 033 completo y limpieza de textos
+### Persistencia de los datos en Codespaces
+
+Los datos de Postgres viven en `./data/postgres` (bind mount al workspace),
+no en un volumen de Docker. Motivo: en Codespaces el daemon de Docker corre
+dentro del dev container, así que **"Rebuild Container" borra todos los
+volúmenes de Docker** — y con ellos la base de datos. `/workspaces` en
+cambio persiste entre reinicios y rebuilds.
+
+`data/` y `backups/` están en `.gitignore`: **nunca deben subirse al
+repositorio** (contienen datos de pacientes).
+
+Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
+cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
+usuarios de desarrollo automáticamente.
+
+## Estado actual: Sprint 30 completado — correcciones, reportes e interacción del odontograma
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -271,6 +286,12 @@ Completa las tres secciones que rodean al odontograma en el formulario oficial, 
 - **Export del formulario 033 ampliado** (`form033_pdf.py` + endpoint): el PDF ahora reúne TODA la información del paciente — datos, motivo, enfermedad actual, antecedentes, vitales, examen estomatognático, indicadores de salud bucal, índices CPO-ceo, diagnósticos CIE-10, plan de tratamiento (con estado por ítem), exámenes complementarios con su informe, documentos adjuntos y consentimientos (firmado/pendiente), más los datos del profesional. Con salto de página automático para que nada se corte.
 - **Títulos sin literales:** se quitaron las referencias A-P de todas las pestañas y secciones ("Historia clínica MSP — Form.033/2021 (literales…)" → "Historia clínica odontológica", "J. Índices CPO-ceo" → "Índices CPO-ceo", "N. Diagnósticos" → "Diagnósticos", etc.). Nombres funcionales orientados al usuario.
 - **Textos más naturales:** mensajes e instrucciones reescritos en lenguaje clínico claro y breve, sin jerga técnica ni frases que suenen generadas por máquina.
+
+### Sprint 30 — Correcciones, reportes mejorados e interacción del odontograma (hecho)
+Sin cambios de backend (los 132 tests no varían).
+- **Correcciones:** eliminados los 3 diálogos nativos que quedaban (el `prompt` de recesión/movilidad, el `alert` de la URL del calendario en Agenda y el `prompt` de correo en Plataforma — ahora todo es edición inline consistente con el resto del sistema); import muerto en `CpoCeoCard` y elemento SVG residual en el odontograma eliminados. El script de arranque ya no compite con el `migrate` del contenedor (espera el "Listening at" de gunicorn — corrige el error "relation already exists").
+- **Odontograma más interactivo:** la superficie seleccionada queda resaltada en petrol dentro del diente; hover con atenuación y borde sobre cada superficie; y el registro de **recesión/movilidad** ahora es un editor inline bajo el odontograma con botones 1-4, "Borrar valor" y "Cancelar" (el valor actual aparece marcado).
+- **Reportes con mejor formato:** rangos rápidos (Hoy / Este mes / Mes pasado / Este año), etiqueta del período legible, **barras proporcionales** en ingresos por método y producción por doctor, **total vencido** en morosidad con filas accionables (clic → ficha del paciente) y resaltado rojo para quienes ya bloquean, botón **Imprimir** con hoja de estilos de impresión (oculta menú y controles), y estado de carga.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

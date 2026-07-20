@@ -32,12 +32,21 @@ if [ ! -f .env ]; then
     SECRET=$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')
     sed -i "s|^DJANGO_SECRET_KEY=.*|DJANGO_SECRET_KEY=${SECRET}|" .env
 
-    # Clave de cifrado de backups
-    PASSPHRASE=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
-    sed -i "s|^BACKUP_PASSPHRASE=.*|BACKUP_PASSPHRASE=${PASSPHRASE}|" .env
-    echo "✓ Claves generadas (Django y backups)"
-    echo "  ⚠ Anota tu BACKUP_PASSPHRASE si vas a restaurar backups viejos:"
-    echo "    ${PASSPHRASE}"
+    # Clave de cifrado de backups.
+    # Si existe como secreto del Codespace (Settings → Codespaces → Secrets),
+    # se reutiliza: así los backups viejos se siguen pudiendo restaurar
+    # aunque el .env se borre. Si no, se genera una nueva.
+    if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+        sed -i "s|^BACKUP_PASSPHRASE=.*|BACKUP_PASSPHRASE=${BACKUP_PASSPHRASE}|" .env
+        echo "✓ Claves listas (BACKUP_PASSPHRASE tomada del secreto del Codespace)"
+    else
+        PASSPHRASE=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+        sed -i "s|^BACKUP_PASSPHRASE=.*|BACKUP_PASSPHRASE=${PASSPHRASE}|" .env
+        echo "✓ Claves generadas (Django y backups)"
+        echo "  ⚠ BACKUP_PASSPHRASE NUEVA. Sin ella no se restauran backups viejos."
+        echo "    Guárdala como secreto del Codespace para que persista:"
+        echo "    ${PASSPHRASE}"
+    fi
 else
     echo "✓ .env ya existe (no se toca)"
 fi
@@ -87,8 +96,45 @@ for i in $(seq 1 30); do
 done
 
 echo
-echo "▶ Aplicando migraciones…"
-docker compose exec -T django-api python manage.py migrate
+echo "▶ Esperando a que django-api aplique migraciones y arranque…"
+# El contenedor ya corre 'migrate && bootstrap && collectstatic && gunicorn'
+# en su command. NO lanzamos migrate en paralelo: eso provoca una carrera
+# entre dos procesos creando las mismas tablas ("relation already exists").
+# Esperamos a que gunicorn anuncie que está escuchando.
+READY=0
+for i in $(seq 1 60); do
+    if docker compose logs django-api 2>/dev/null | grep -q "Listening at"; then
+        READY=1
+        echo "✓ django-api listo (migraciones aplicadas)"
+        break
+    fi
+    sleep 2
+done
+if [ "$READY" = "0" ]; then
+    echo "⚠ django-api tardó más de lo normal. Revisa:  docker compose logs django-api"
+fi
+
+# ── 4b. Siembra si la base está vacía ────────────────────────────────
+# El bootstrap del contenedor crea la clínica y los catálogos, pero no los
+# usuarios. Si no hay ninguno, el login daría "No active account found".
+USERS=$(docker compose exec -T django-api python manage.py shell -c \
+    "from apps.accounts.models import User; print(User.objects.count())" 2>/dev/null | tr -d '\r\n ' || echo "0")
+
+if [ "${USERS:-0}" = "0" ]; then
+    echo
+    echo "▶ No hay usuarios: creando los de desarrollo…"
+    docker compose exec -T django-api python manage.py bootstrap \
+        --tenant-name "${DEV_TENANT_NAME:-Clínica Principal}" \
+        --superuser-email "${DEV_ADMIN_EMAIL:-jorge.perez@unl.edu.ec}" \
+        --superuser-password "${DEV_ADMIN_PASSWORD:-Jorge2025}"
+    docker compose exec -T django-api python manage.py createsuperadmin \
+        --email "${DEV_SA_EMAIL:-superadmin@plataforma.ec}" \
+        --password "${DEV_SA_PASSWORD:-CambiarEstaClave26}" \
+        --full-name "Super Administrador" || true
+    echo "✓ Usuarios de desarrollo creados"
+else
+    echo "✓ La base ya tiene ${USERS} usuario(s)"
+fi
 
 # ── 5. Resumen ───────────────────────────────────────────────────────
 echo

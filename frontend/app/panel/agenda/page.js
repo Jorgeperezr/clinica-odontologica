@@ -27,6 +27,7 @@ export default function AgendaPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState("");
+  const [calNotice, setCalNotice] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,6 +85,11 @@ export default function AgendaPage() {
       </div>
 
       {error && <div className="error-box">{error}</div>}
+      {calNotice && (
+        <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>
+          ✓ URL del calendario copiada al portapapeles. {calNotice}
+        </div>
+      )}
 
       {showForm && (
         <AppointmentForm
@@ -123,7 +129,8 @@ export default function AgendaPage() {
                       if (!r.ok) throw new Error(d?.detail || "Sin permiso.");
                       await navigator.clipboard.writeText(d.url);
                       setError("");
-                      alert(`URL del calendario copiada al portapapeles.\n\n${d.instructions}`);
+                      setCalNotice(d.instructions);
+                      setTimeout(() => setCalNotice(""), 9000);
                     } catch (err) { setError(err.message); }
                   }}>
             🗓 Calendario del doctor

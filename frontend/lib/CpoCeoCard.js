@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api, apiBase } from "./api";
+import { api } from "./api";
 
 export default function CpoCeoCard({ patientId, refreshKey }) {
   const [data, setData] = useState(null);

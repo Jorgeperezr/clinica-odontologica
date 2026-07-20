@@ -220,6 +220,8 @@ function AdminsTab() {
   const [confirm, ConfirmUI] = useConfirm();
   const [clinics, setClinics] = useState([]);
   const [creatingFor, setCreatingFor] = useState(null);
+  const [editingEmail, setEditingEmail] = useState(null);   // clinic.id en edición
+  const [emailDraft, setEmailDraft] = useState("");
   const [tempCred, setTempCred] = useState(null);  // {email, temporary_password}
   const [error, setError] = useState("");
 
@@ -267,15 +269,15 @@ function AdminsTab() {
     } catch (err) { setError(err.message); }
   }
 
-  async function updateEmail(clinic) {
-    const nuevo = window.prompt(`Nuevo correo para el administrador de ${clinic.name}:`, clinic.admin.email);
-    if (!nuevo || nuevo === clinic.admin.email) return;
+  async function saveEmail(clinic) {
+    if (!emailDraft || emailDraft === clinic.admin.email) { setEditingEmail(null); return; }
     try {
       const resp = await api(`/platform/clinics/${clinic.id}/admin/`, {
-        method: "PATCH", body: JSON.stringify({ email: nuevo }),
+        method: "PATCH", body: JSON.stringify({ email: emailDraft }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
+      setEditingEmail(null);
       load();
     } catch (err) { setError(err.message); }
   }
@@ -322,7 +324,20 @@ function AdminsTab() {
               <tr key={c.id}>
                 <td style={{ fontWeight: 600 }}>{c.name}</td>
                 <td>{c.admin ? c.admin.full_name : <span style={{ color: "var(--ink-soft)" }}>Sin asignar</span>}</td>
-                <td>{c.admin?.email || "—"}</td>
+                <td>
+                  {editingEmail === c.id ? (
+                    <span style={{ display: "inline-flex", gap: 6 }}>
+                      <input type="email" value={emailDraft} autoFocus
+                             onChange={(e) => setEmailDraft(e.target.value)}
+                             onKeyDown={(e) => e.key === "Enter" && saveEmail(c)}
+                             style={{ padding: "4px 8px", border: "1px solid var(--petrol)", borderRadius: 6, fontSize: 13 }} />
+                      <button className="btn btn-primary" style={{ padding: "3px 10px", fontSize: 12 }}
+                              onClick={() => saveEmail(c)}>Guardar</button>
+                      <button className="btn btn-ghost" style={{ padding: "3px 8px", fontSize: 12 }}
+                              onClick={() => setEditingEmail(null)}>✕</button>
+                    </span>
+                  ) : (c.admin?.email || "—")}
+                </td>
                 <td>{c.admin
                   ? (c.admin.is_active
                       ? <span className="badge badge-ok">Activa</span>
@@ -334,7 +349,7 @@ function AdminsTab() {
                       <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
                               onClick={() => resetPassword(c)}>Restablecer contraseña</button>
                       <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12, marginLeft: 6 }}
-                              onClick={() => updateEmail(c)}>Correo</button>
+                              onClick={() => { setEditingEmail(c.id); setEmailDraft(c.admin.email); }}>Correo</button>
                       <button className="btn btn-ghost"
                               style={{ padding: "4px 10px", fontSize: 12, marginLeft: 6,
                                        color: c.admin.is_active ? "var(--red)" : "var(--petrol)" }}

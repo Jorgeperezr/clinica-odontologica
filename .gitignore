@@ -9,3 +9,9 @@ node_modules/
 .venv/
 venv/
 celerybeat-schedule
+
+# Datos locales: NUNCA al repositorio (contienen datos de pacientes)
+data/
+backups/
+*.sql.gz
+*.enc
