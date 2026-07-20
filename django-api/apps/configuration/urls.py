@@ -9,6 +9,7 @@ urlpatterns = [
     path("config/agreements/<uuid:pk>/", views.AgreementDetailView.as_view(), name="agreement-detail"),
     path("config/tarifarios/", views.TariffListCreateView.as_view(), name="tariff-list"),
     path("config/tarifarios/<uuid:pk>/", views.TariffDetailView.as_view(), name="tariff-detail"),
+    path("config/branding/", views.ClinicBrandingView.as_view(), name="clinic-branding"),
     path("config/parameters/", views.SystemParameterListView.as_view(), name="parameter-list"),
     path("config/parameters/<uuid:pk>/", views.SystemParameterDetailView.as_view(), name="parameter-detail"),
 ]

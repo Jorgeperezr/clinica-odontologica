@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { currentUser, logout } from "../../lib/api";
+import { api, currentUser, logout } from "../../lib/api";
+import { applyTheme } from "../../lib/theme";
 
 // Navegación por rol (matriz de permisos del SRS)
 const NAV = [
@@ -25,12 +26,24 @@ export default function PanelLayout({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(null);
 
   useEffect(() => {
     const u = currentUser();
     if (!u) { window.location.href = "/login/"; return; }
     setUser(u);
     setReady(true);
+    // Identidad visual de la clínica (tema + logotipo), por tenant
+    (async () => {
+      try {
+        const resp = await api("/config/branding/");
+        if (resp.ok) {
+          const b = await resp.json();
+          applyTheme(b.theme);
+          if (b.logo_url) setLogoUrl(b.logo_url);
+        }
+      } catch { /* sin branding: tema del sistema */ }
+    })();
     // Recordar la preferencia de menú colapsado
     try {
       const saved = localStorage.getItem("sidebarCollapsed");
@@ -56,8 +69,14 @@ export default function PanelLayout({ children }) {
     <div style={styles.shell}>
       <aside style={{ ...styles.sidebar, flexBasis: W, width: W }}>
         <div style={{ ...styles.logo, justifyContent: collapsed ? "center" : "flex-start" }}>
-          <span style={{ fontSize: 26, color: "var(--mint)" }} aria-hidden="true">◠</span>
-          {!collapsed && <span style={styles.logoText}>Clínica</span>}
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logotipo de la clínica"
+                 style={{ height: collapsed ? 30 : 36, maxWidth: collapsed ? 40 : 150,
+                          objectFit: "contain", borderRadius: 6, background: "#fff", padding: 2 }} />
+          ) : (
+            <span style={{ fontSize: 26, color: "var(--mint)" }} aria-hidden="true">◠</span>
+          )}
+          {!collapsed && !logoUrl && <span style={styles.logoText}>Clínica</span>}
         </div>
 
         <button onClick={toggleCollapsed} style={styles.collapseBtn}

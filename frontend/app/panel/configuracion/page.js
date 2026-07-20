@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, apiBase } from "../../../lib/api";
+import { PRESETS, applyTheme, resetTheme } from "../../../lib/theme";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -20,7 +21,7 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"]].map(([k, label]) => (
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["personalizacion", "Personalización"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -38,6 +39,7 @@ export default function ConfiguracionPage() {
       {tab === "plantillas" && <TemplatesTab />}
       {tab === "usuarios" && <UsersTab />}
       {tab === "parametros" && <ParametersTab />}
+      {tab === "personalizacion" && <BrandingTab />}
     </div>
   );
 }
@@ -469,6 +471,188 @@ function TemplatesTab() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+
+/* ── Personalización (Sprint 33) ── */
+function BrandingTab() {
+  const [branding, setBranding] = useState(null);
+  const [autoPalette, setAutoPalette] = useState(null);
+  const [primary, setPrimary] = useState("#0e5c63");
+  const [secondary, setSecondary] = useState("#9fe1cb");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [okMsg, setOkMsg] = useState("");
+
+  async function load() {
+    try {
+      const resp = await api("/config/branding/");
+      const data = await resp.json();
+      setBranding(data);
+      if (data.theme?.primary) setPrimary(data.theme.primary);
+      if (data.theme?.secondary) setSecondary(data.theme.secondary);
+    } catch { setError("No se pudo cargar la personalización."); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function saveTheme(theme) {
+    setSaving(true); setError(""); setOkMsg("");
+    try {
+      const resp = await api("/config/branding/", {
+        method: "PATCH", body: JSON.stringify({ theme }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
+      setBranding(data);
+      applyTheme(data.theme);
+      setOkMsg("Tema aplicado y guardado.");
+    } catch (err) { setError(err.message); }
+    finally { setSaving(false); }
+  }
+
+  async function uploadLogo(file) {
+    if (!file) return;
+    setSaving(true); setError(""); setOkMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("logo", file);
+      // FormData: sin Content-Type manual (el navegador pone el boundary)
+      const token = localStorage.getItem("access");
+      const resp = await fetch(`${apiBase()}/api/v1/config/branding/`, {
+        method: "PATCH",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
+      setBranding(data);
+      setAutoPalette(data.auto_palette || null);
+      setOkMsg(data.auto_palette?.primary
+        ? "Logotipo guardado. Puedes aplicar sus colores como tema."
+        : "Logotipo guardado.");
+    } catch (err) { setError(err.message); }
+    finally { setSaving(false); }
+  }
+
+  async function removeLogo() {
+    setSaving(true); setError(""); setOkMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("logo_clear", "true");
+      const token = localStorage.getItem("access");
+      const resp = await fetch(`${apiBase()}/api/v1/config/branding/`, {
+        method: "PATCH",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
+      setBranding(data);
+      setAutoPalette(null);
+      setOkMsg("Logotipo eliminado.");
+    } catch (err) { setError(err.message); }
+    finally { setSaving(false); }
+  }
+
+  const currentPreset = branding?.theme?.preset || "default";
+
+  return (
+    <div style={{ display: "grid", gap: 18, maxWidth: 860 }}>
+      {error && <div className="error-box">{error}</div>}
+      {okMsg && <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>✓ {okMsg}</div>}
+
+      {/* Logotipo */}
+      <div className="card">
+        <h3 style={{ marginBottom: 6 }}>Logotipo de la clínica</h3>
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+          Se muestra en la barra lateral y sirve de base para el tema automático de colores.
+        </p>
+        <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ width: 140, height: 90, border: "1px dashed var(--line)", borderRadius: 10,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "#fff", overflow: "hidden" }}>
+            {branding?.logo_url
+              ? <img src={branding.logo_url} alt="Vista previa del logotipo"
+                     style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+              : <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Sin logotipo</span>}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label className="btn btn-primary" style={{ cursor: "pointer", textAlign: "center" }}>
+              {branding?.logo_url ? "Cambiar logotipo" : "Subir logotipo"}
+              <input type="file" accept="image/*" style={{ display: "none" }}
+                     onChange={(e) => uploadLogo(e.target.files?.[0])} />
+            </label>
+            {branding?.logo_url && (
+              <button className="btn btn-ghost" onClick={removeLogo} disabled={saving}>
+                Eliminar logotipo
+              </button>
+            )}
+          </div>
+          {autoPalette?.primary && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+                          borderRadius: 10, background: "var(--petrol-soft)" }}>
+              <span style={{ fontSize: 13 }}>Colores del logotipo:</span>
+              <span style={{ width: 22, height: 22, borderRadius: 6, background: autoPalette.primary, border: "1px solid var(--line)" }} />
+              {autoPalette.secondary && (
+                <span style={{ width: 22, height: 22, borderRadius: 6, background: autoPalette.secondary, border: "1px solid var(--line)" }} />
+              )}
+              <button className="btn btn-primary" style={{ fontSize: 13 }} disabled={saving}
+                      onClick={() => saveTheme({ preset: "auto",
+                                                 primary: autoPalette.primary,
+                                                 secondary: autoPalette.secondary || "" })}>
+                Usar como tema
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Temas predefinidos */}
+      <div className="card">
+        <h3 style={{ marginBottom: 6 }}>Tema de colores</h3>
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+          El color elegido se ajusta automáticamente para garantizar buen contraste y legibilidad.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          {PRESETS.map((p) => (
+            <button key={p.key} disabled={saving}
+                    onClick={() => saveTheme({ preset: p.key, primary: "", secondary: "" })}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
+                             borderRadius: 10, cursor: "pointer", fontSize: 13, background: "#fff",
+                             border: currentPreset === p.key
+                               ? "2px solid var(--petrol)" : "1px solid var(--line)",
+                             fontWeight: currentPreset === p.key ? 700 : 400 }}>
+              <span style={{ width: 18, height: 18, borderRadius: "50%", background: p.primary }} />
+              <span style={{ width: 18, height: 18, borderRadius: "50%", background: p.secondary }} />
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Personalización manual */}
+        <div style={{ display: "flex", gap: 16, alignItems: "end", flexWrap: "wrap" }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Color principal</label>
+            <input type="color" value={primary} onChange={(e) => setPrimary(e.target.value)}
+                   style={{ width: 64, height: 38, padding: 2, border: "1px solid var(--line)", borderRadius: 8 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Color secundario</label>
+            <input type="color" value={secondary} onChange={(e) => setSecondary(e.target.value)}
+                   style={{ width: 64, height: 38, padding: 2, border: "1px solid var(--line)", borderRadius: 8 }} />
+          </div>
+          <button className="btn btn-primary" disabled={saving}
+                  onClick={() => saveTheme({ preset: "custom", primary, secondary })}>
+            Aplicar colores
+          </button>
+          <button className="btn btn-ghost" disabled={saving}
+                  onClick={() => { resetTheme(); saveTheme({ preset: "default", primary: "", secondary: "" }); }}>
+            Restablecer tema del sistema
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

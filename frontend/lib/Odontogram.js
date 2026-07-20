@@ -119,10 +119,15 @@ const SURFACE_ES = {
   mesial: "Mesial", distal: "Distal", occlusal: "Oclusal/Incisal",
 };
 
-function ToothLabel({ code, x, y }) {
+function ToothLabel({ code, x, y, onClick, selected }) {
   return (
     <text x={x + CELL / 2} y={y} textAnchor="middle" fontSize="11"
-          fontWeight="700" fill="var(--ink)">{code}</text>
+          fontWeight="700" fill={selected ? "var(--petrol)" : "var(--ink)"}
+          onClick={onClick ? () => onClick(code, "whole") : undefined}
+          style={onClick ? { cursor: "pointer" } : undefined}>
+      {onClick && <title>{`Seleccionar toda la pieza ${code}`}</title>}
+      {code}
+    </text>
   );
 }
 
@@ -213,8 +218,14 @@ export default function Odontogram({
 
   const renderLabels = (codesR, codesL, yPos, count = 8) => (
     <>
-      {codesR.map((code, i) => <ToothLabel key={code} code={code} x={xInRight(i, count)} y={yPos} />)}
-      {codesL.map((code, i) => <ToothLabel key={code} code={code} x={xInLeft(i)} y={yPos} />)}
+      {codesR.map((code, i) => (
+        <ToothLabel key={code} code={code} x={xInRight(i, count)} y={yPos}
+                    onClick={onSurfaceClick} selected={selectedTooth === code} />
+      ))}
+      {codesL.map((code, i) => (
+        <ToothLabel key={code} code={code} x={xInLeft(i)} y={yPos}
+                    onClick={onSurfaceClick} selected={selectedTooth === code} />
+      ))}
     </>
   );
 

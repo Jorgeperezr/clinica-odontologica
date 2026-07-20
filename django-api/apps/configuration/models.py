@@ -141,3 +141,31 @@ class TreatmentInventoryItem(models.Model):
 
     def __str__(self):
         return f"{self.treatment.name} usa {self.quantity_used} de {self.product.name}"
+
+
+def _default_theme():
+    return {"preset": "default", "primary": "", "secondary": ""}
+
+
+class ClinicBranding(TenantAwareModel):
+    """
+    Identidad visual de la clínica (Sprint 33): logotipo y tema de colores.
+    Un registro por tenant; cada clínica personaliza sin afectar a las demás.
+
+    theme = {
+      "preset":  "default" | nombre de tema predefinido | "auto" | "custom",
+      "primary": "#rrggbb" (vacío = color del sistema),
+      "secondary": "#rrggbb",
+    }
+    """
+
+    logo = models.ImageField(upload_to="branding/logos/", null=True, blank=True)
+    theme = models.JSONField(default=_default_theme, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["tenant"], name="uniq_branding_per_tenant"),
+        ]
+
+    def __str__(self):
+        return f"Identidad visual de {self.tenant.name}"

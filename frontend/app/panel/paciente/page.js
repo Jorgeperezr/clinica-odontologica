@@ -14,6 +14,11 @@ import { useConfirm } from "../../../lib/ConfirmDialog";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
 
 
+const SURFACE_NAMES = {
+  whole: "Toda la pieza", vestibular: "Vestibular", palatal_lingual: "Palatina/Lingual",
+  mesial: "Mesial", distal: "Distal", occlusal: "Oclusal/Incisal",
+};
+
 export default function PatientDetailPage() {
   return (
     <Suspense fallback={<div className="empty">Cargando…</div>}>
@@ -234,6 +239,24 @@ function OdontogramTab({ patientId }) {
                     selectedTooth={selected} selectedSurface={selectedSurface}
                     onSurfaceClick={handleSurfaceClick}
                     onRMClick={handleRMClick} />
+        {selected && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10,
+                        flexWrap: "wrap", fontSize: 13.5 }}>
+            <span style={{ fontWeight: 700, color: "var(--petrol)" }}>
+              Pieza {selected} · {SURFACE_NAMES[selectedSurface] || selectedSurface}
+            </span>
+            {selectedSurface !== "whole" && (
+              <button className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 12.5 }}
+                      onClick={() => setSelectedSurface("whole")}
+                      title="Aplicar el próximo estado a la pieza completa">
+                Toda la pieza
+              </button>
+            )}
+            <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+              (clic en el número de una pieza también la selecciona completa)
+            </span>
+          </div>
+        )}
         {rmEdit && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
                         marginTop: 12, padding: "10px 14px", borderRadius: 10,

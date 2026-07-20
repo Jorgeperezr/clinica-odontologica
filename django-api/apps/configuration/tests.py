@@ -92,3 +92,82 @@ class BootstrapTests(APITestCase):
         tenant = Tenant.objects.get(name="Clínica Seed")
         # No debe duplicar especialidades al correr dos veces
         self.assertEqual(Specialty.objects.filter(tenant=tenant).count(), 5)
+
+
+class ClinicBrandingTests(APITestCase):
+    """Sprint 33: identidad visual por clínica (logo + tema)."""
+
+    def setUp(self):
+        from apps.common.models import Tenant
+        self.tenant = Tenant.objects.create(name="T brand")
+        self.admin = User.objects.create_user(
+            email="a@brand.ec", password="superseguro123", role="admin", tenant=self.tenant,
+        )
+        self.reception = User.objects.create_user(
+            email="r@brand.ec", password="superseguro123", role="reception", tenant=self.tenant,
+        )
+
+    def _png(self, color):
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 64), color).save(buf, format="PNG")
+        buf.seek(0)
+        buf.name = "logo.png"
+        return buf
+
+    def test_theme_saved_per_tenant_and_readable_by_all_roles(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch("/api/v1/config/branding/", {
+            "theme": {"preset": "custom", "primary": "#7b1e3c", "secondary": "#f2c14e"},
+        }, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["theme"]["primary"], "#7b1e3c")
+
+        # Recepción puede LEER el tema (se aplica a toda la interfaz)
+        self.client.force_authenticate(user=self.reception)
+        resp = self.client.get("/api/v1/config/branding/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["theme"]["primary"], "#7b1e3c")
+
+        # ...pero no modificarlo
+        resp = self.client.patch("/api/v1/config/branding/", {
+            "theme": {"preset": "default"},
+        }, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_logo_upload_extracts_palette_and_clear_removes(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch(
+            "/api/v1/config/branding/",
+            {"logo": self._png((123, 30, 60))},  # vino
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertIsNotNone(resp.data["logo_url"])
+        # La paleta extraída refleja el color dominante del logo
+        self.assertIn("auto_palette", resp.data)
+        primary = resp.data["auto_palette"]["primary"]
+        self.assertTrue(primary.startswith("#") and len(primary) == 7)
+        r = int(primary[1:3], 16)
+        self.assertGreater(r, 80)  # componente rojo dominante
+
+        # Eliminar el logotipo
+        resp = self.client.patch("/api/v1/config/branding/", {"logo_clear": "true"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["logo_url"])
+
+    def test_branding_isolated_between_tenants(self):
+        from apps.common.models import Tenant
+        other = Tenant.objects.create(name="T brand 2")
+        other_admin = User.objects.create_user(
+            email="a2@brand.ec", password="superseguro123", role="admin", tenant=other,
+        )
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch("/api/v1/config/branding/", {
+            "theme": {"preset": "custom", "primary": "#111111", "secondary": ""},
+        }, format="json")
+
+        self.client.force_authenticate(user=other_admin)
+        resp = self.client.get("/api/v1/config/branding/")
+        self.assertEqual(resp.data["theme"].get("preset", "default"), "default")

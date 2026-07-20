@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 32 completado — registro por simbología en el odontograma
+## Estado actual: Sprint 33 completado — atajo de pieza completa y personalización visual
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -302,6 +302,14 @@ Sin cambios de backend (los 132 tests no varían).
 - **La Simbología del Odontograma es ahora el mecanismo de registro:** se selecciona la pieza o superficie en el odontograma (la superficie se detecta automáticamente al hacer clic) y luego se hace clic en el símbolo del estado en la leyenda. Los símbolos son botones con hover; una guía sobre la leyenda indica el paso siguiente ("Pieza 16 seleccionada — haz clic en un símbolo…").
 - **Mini-formulario emergente** al elegir el símbolo: muestra el estado y la pieza, la superficie autocompletada (editable en un desplegable) y notas opcionales; Guardar (o Enter) registra de inmediato. Sin diálogo de confirmación adicional: pieza → símbolo → guardar, tres clics.
 - **Panel lateral eliminado:** ya no aparece el listado de botones de estados; el historial por pieza pasa a ancho completo y conserva su funcionamiento exacto (fecha, estado, superficie, notas, eliminación auditada).
+
+### Sprint 33 — Atajo "Toda la pieza" + personalización visual por clínica (hecho)
+- **Atajo "Toda la pieza":** clic en el número de cualquier pieza del odontograma la selecciona completa; además, al seleccionar una superficie aparece un chip "Pieza 16 · Oclusal" con el botón "Toda la pieza" para cambiar de modo al instante. Ambos modos de trabajo (superficie o pieza completa) conviven y el mini-formulario sigue permitiendo ajustar la superficie antes de guardar.
+- **Configuración → Personalización (nuevo):** subir/cambiar/eliminar el logotipo de la clínica con vista previa; el logo aparece en la barra lateral. Modelo `ClinicBranding` (uno por tenant, migración `configuration/0005`), endpoint `config/branding/` (lectura para todos los roles del tenant, escritura solo admin).
+- **Tema automático desde el logotipo:** al subirlo, el backend extrae los colores predominantes con Pillow (cuantización + filtro de fondos y grises) y ofrece "Usar como tema" con la paleta detectada.
+- **Temas y personalización manual:** 6 temas predefinidos (Petróleo, Océano, Bosque, Vino, Grafito, Arena), selectores de color principal y secundario, y "Restablecer tema del sistema".
+- **Accesibilidad garantizada:** el color primario se oscurece automáticamente hasta contrastar ≥ 4.5:1 (WCAG AA) con el texto blanco; el tono suave se genera claro para fondos. Como toda la interfaz pinta con variables CSS (`--petrol`, `--petrol-deep`, `--petrol-soft`, `--mint`), la barra lateral, botones, enlaces, pestañas activas, indicadores y tarjetas se re-tiñen solos (`lib/theme.js`).
+- **Persistencia por clínica:** cada tenant guarda su logo y tema sin afectar a los demás (test de aislamiento incluido).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

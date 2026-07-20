@@ -42,3 +42,20 @@ class SystemParameterSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "key", "description"]
         # key y description son de solo lectura: los parámetros son un
         # catálogo fijo sembrado por bootstrap; el admin solo edita 'value'.
+
+
+class ClinicBrandingSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import ClinicBranding
+        model = ClinicBranding
+        fields = ["id", "logo", "logo_url", "theme", "updated_at"]
+        extra_kwargs = {"logo": {"write_only": True, "required": False}}
+
+    def get_logo_url(self, obj):
+        if not obj.logo:
+            return None
+        request = self.context.get("request")
+        url = obj.logo.url
+        return request.build_absolute_uri(url) if request else url
