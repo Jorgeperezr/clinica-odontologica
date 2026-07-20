@@ -13,7 +13,6 @@ import ExamRequestsSection from "../../../lib/ExamRequestsSection";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
 
-const SURFACE_LABELS = { whole: "toda la pieza", vestibular: "vestibular", palatal_lingual: "palatina/lingual", mesial: "mesial", distal: "distal", occlusal: "oclusal/incisal" };
 
 export default function PatientDetailPage() {
   return (
@@ -85,6 +84,7 @@ function OdontogramTab({ patientId }) {
   const [selected, setSelected] = useState(null);  // pieza seleccionada
   const [selectedSurface, setSelectedSurface] = useState("whole"); // superficie activa
   const [rmEdit, setRmEdit] = useState(null);      // { code, kind } en edición
+  const [pendingReg, setPendingReg] = useState(null); // { stateId, label } desde la simbología
   const [history, setHistory] = useState([]);      // historial de la pieza
   const [error, setError] = useState("");
 
@@ -181,15 +181,18 @@ function OdontogramTab({ patientId }) {
     } catch (err) { setError(err.message); }
   }
 
+  // Nuevo flujo (Sprint 32): el símbolo de la leyenda abre un mini-formulario
+  // con la superficie autodetectada; guardar registra de inmediato.
+  function handleLegendSelect(state) {
+    if (!selected) {
+      setError("Selecciona primero una pieza o superficie en el odontograma.");
+      return;
+    }
+    setError("");
+    setPendingReg({ stateId: state.id, label: state.label, color: state.color });
+  }
+
   async function registerState(stateId) {
-    const stateLabel = states.find((s) => s.id === stateId)?.label || "este estado";
-    const surfLabel = SURFACE_LABELS[selectedSurface] || "toda la pieza";
-    const ok = await confirm({
-      title: `Registrar estado en la pieza ${selected}`,
-      message: `Se añadirá "${stateLabel}" en la superficie ${surfLabel}.\nEl historial no se sobrescribe.`,
-      confirmLabel: "Registrar",
-    });
-    if (!ok) return;
     setError("");
     try {
       const resp = await api(`/patients/${patientId}/tooth-records/`, {
@@ -213,6 +216,7 @@ function OdontogramTab({ patientId }) {
       await loadCurrent();
       await loadHistory(selected);
       setToothNotes("");
+      setPendingReg(null);
     } catch (err) { setError(err.message); }
   }
 
@@ -251,14 +255,14 @@ function OdontogramTab({ patientId }) {
           </div>
         )}
 
-        <OdontogramLegend states={states} />
-      </div>
-
-      {selected ? (
-        <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 18, alignItems: "start" }}>
-          <div className="card">
-            <h3 style={{ marginBottom: 4 }}>Pieza {selected}</h3>
-            <div className="field" style={{ marginBottom: 10 }}>
+        {pendingReg && (
+          <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 10,
+                        background: "var(--petrol-soft)", border: "1px solid var(--petrol)",
+                        display: "flex", alignItems: "end", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, paddingBottom: 8 }}>
+              Registrar «{pendingReg.label}» · pieza {selected}
+            </div>
+            <div className="field" style={{ marginBottom: 0, minWidth: 170 }}>
               <label>Superficie</label>
               <select value={selectedSurface} onChange={(e) => setSelectedSurface(e.target.value)}>
                 <option value="whole">Toda la pieza</option>
@@ -269,27 +273,28 @@ function OdontogramTab({ patientId }) {
                 <option value="occlusal">Oclusal / Incisal</option>
               </select>
             </div>
-            <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 10 }}>
-              Registra un nuevo estado en la superficie seleccionada. El historial se conserva.
-            </p>
-            <div className="field" style={{ marginBottom: 10 }}>
-              <label>Notas (opcional, se guardan con el estado)</label>
-              <textarea rows={2} value={toothNotes}
-                        onChange={(e) => setToothNotes(e.target.value)}
-                        placeholder="Ej: caries oclusal profunda…" />
+            <div className="field" style={{ marginBottom: 0, flex: "1 1 220px" }}>
+              <label>Notas (opcional)</label>
+              <input value={toothNotes} onChange={(e) => setToothNotes(e.target.value)}
+                     onKeyDown={(e) => e.key === "Enter" && registerState(pendingReg.stateId)}
+                     placeholder="Ej: caries oclusal profunda…" />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {states.map((s) => (
-                <button key={s.id} className="btn btn-ghost"
-                        style={{ justifyContent: "flex-start", gap: 10 }}
-                        onClick={() => registerState(s.id)}>
-                  <span style={{ width: 14, height: 14, borderRadius: 4, background: s.color, border: "1px solid var(--line)" }} />
-                  {s.label}
-                </button>
-              ))}
+            <div style={{ display: "flex", gap: 8, paddingBottom: 2 }}>
+              <button className="btn btn-primary" onClick={() => registerState(pendingReg.stateId)}>
+                Guardar
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setPendingReg(null); setToothNotes(""); }}>
+                Cancelar
+              </button>
             </div>
           </div>
+        )}
 
+        <OdontogramLegend states={states} onSelect={handleLegendSelect} selectedTooth={selected} />
+      </div>
+
+      {selected ? (
+        <div>
           <div className="card" style={{ padding: 0 }}>
             <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", fontWeight: 600 }}>
               Historial de la pieza {selected}

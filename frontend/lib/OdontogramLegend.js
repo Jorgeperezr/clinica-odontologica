@@ -64,16 +64,39 @@ function Symbol({ code, color }) {
   }
 }
 
-export default function OdontogramLegend({ states }) {
+export default function OdontogramLegend({ states, onSelect, selectedTooth }) {
+  const clickable = typeof onSelect === "function";
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: ".04em",
                     color: "var(--petrol)", marginBottom: 10 }}>
         Simbología del odontograma
       </div>
+      {clickable && (
+        <p style={{ fontSize: 12.5, color: selectedTooth ? "var(--petrol)" : "var(--ink-soft)",
+                    marginBottom: 10, fontWeight: selectedTooth ? 600 : 400 }}>
+          {selectedTooth
+            ? `Pieza ${selectedTooth} seleccionada — haz clic en un símbolo para registrar el estado.`
+            : "Selecciona una pieza o superficie en el odontograma y luego el símbolo del estado."}
+        </p>
+      )}
       <div style={{ display: "grid", gap: "6px 14px",
                     gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))" }}>
-        {states.map((s) => (
+        {states.map((s) => clickable ? (
+          <button key={s.id} type="button" onClick={() => onSelect(s)}
+                  title={selectedTooth ? `Registrar "${s.label}" en la pieza ${selectedTooth}` : "Selecciona primero una pieza"}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5,
+                           background: "transparent", border: "1px solid transparent",
+                           borderRadius: 8, padding: "4px 6px", cursor: "pointer",
+                           textAlign: "left", color: "var(--ink)",
+                           opacity: selectedTooth ? 1 : 0.55,
+                           transition: "background .1s ease" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--petrol-soft)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+            <Symbol code={s.code} color={s.color} />
+            <span>{s.label}</span>
+          </button>
+        ) : (
           <span key={s.id} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
             <Symbol code={s.code} color={s.color} />
             <span>{s.label}</span>

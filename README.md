@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 31 completado — formulario oficial autocompletado e indicador de citas
+## Estado actual: Sprint 32 completado — registro por simbología en el odontograma
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -296,6 +296,12 @@ Sin cambios de backend (los 132 tests no varían).
 ### Sprint 31 — Formulario oficial autocompletado + indicador de citas (hecho)
 - **Autocompletado del formulario OFICIAL del MSP (Excel):** además del PDF, ahora se puede descargar la plantilla oficial del Ministerio (`apps/clinical/resources/hcu_form033.xlsx`) rellenada con los datos del sistema — datos del paciente, motivo, embarazo, enfermedad actual, constantes vitales, índices CPO-ceo, diagnósticos CIE-10 (PRE/DEF) y datos del profesional. Nuevo endpoint `patients/<pk>/form033/export-xlsx/` y `apps/clinical/form033_xlsx.py`. El generador respeta las celdas combinadas de la plantilla y anexa cada valor bajo su etiqueta sin destruir el formato; los totales CPO-ceo se dejan como fórmulas de la plantilla. En la ficha, botón "Formulario oficial MSP (Excel)" junto al de PDF.
 - **Nuevo indicador de reportes — Actividad de citas:** endpoint `reports/appointments-summary/` con total de citas del período, desglose por estado (completadas, confirmadas, pendientes, canceladas, no asistió), tasa de asistencia (completadas / [completadas + no asistió]) y tasa de cancelación. Tarjeta en Reportes con la tasa de asistencia coloreada (verde ≥ 80 %).
+
+### Sprint 32 — Registro por simbología (flujo profesional) (hecho)
+100% frontend; la lógica de negocio y la estructura de datos no cambian.
+- **La Simbología del Odontograma es ahora el mecanismo de registro:** se selecciona la pieza o superficie en el odontograma (la superficie se detecta automáticamente al hacer clic) y luego se hace clic en el símbolo del estado en la leyenda. Los símbolos son botones con hover; una guía sobre la leyenda indica el paso siguiente ("Pieza 16 seleccionada — haz clic en un símbolo…").
+- **Mini-formulario emergente** al elegir el símbolo: muestra el estado y la pieza, la superficie autocompletada (editable en un desplegable) y notas opcionales; Guardar (o Enter) registra de inmediato. Sin diálogo de confirmación adicional: pieza → símbolo → guardar, tres clics.
+- **Panel lateral eliminado:** ya no aparece el listado de botones de estados; el historial por pieza pasa a ancho completo y conserva su funcionamiento exacto (fecha, estado, superficie, notas, eliminación auditada).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
