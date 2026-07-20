@@ -315,3 +315,41 @@ class Form033PDFExportView(APIView):
         filename = f"form033_{patient.national_id or patient.id}.pdf"
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response
+
+
+class Form033XlsxExportView(APIView):
+    """
+    GET /api/v1/patients/{pk}/form033/export-xlsx/ — el formulario OFICIAL
+    del MSP (plantilla xlsx tal cual la publica el Ministerio) autocompletado
+    con los datos del sistema. Para imprimir o archivar sin retipear.
+    """
+
+    permission_classes = [CAN_VIEW_CLINICAL]
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from apps.clinical.form033_xlsx import build_form033_xlsx
+        from apps.clinical.models import Diagnosis, Form033Record
+
+        patient = _get_patient(request, pk)
+        form_record = (
+            Form033Record.objects.filter(tenant=request.tenant, patient=patient)
+            .order_by("-date").first()
+        )
+        diagnoses = list(
+            Diagnosis.objects.filter(tenant=request.tenant, patient=patient).order_by("-date")
+        )
+        cpo_ceo = CpoCeoIndexView().get(request, pk).data
+        _, professional = _professional_snapshot(request)
+
+        xlsx_bytes = build_form033_xlsx(
+            patient, request.tenant, form_record, diagnoses, cpo_ceo, professional
+        )
+        response = HttpResponse(
+            xlsx_bytes,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        filename = f"form033_{patient.national_id or patient.id}.xlsx"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response

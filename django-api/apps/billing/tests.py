@@ -164,3 +164,53 @@ class BillingTests(APITestCase):
             reverse("account-statement", kwargs={"pk": self.patient.id})
         )
         self.assertEqual(resp.data["overdue_count"], 1)
+
+
+class AppointmentsSummaryReportTests(APITestCase):
+    """Sprint 31: indicador de actividad de citas."""
+
+    def test_summary_counts_and_rates(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.agenda.models import Appointment, Doctor
+        from apps.common.models import Tenant
+
+        tenant = Tenant.objects.create(name="T citas-rep")
+        admin = User.objects.create_user(
+            email="a@citasrep.ec", password="superseguro123", role="admin", tenant=tenant,
+        )
+        du = User.objects.create_user(
+            email="d@citasrep.ec", password="superseguro123", role="doctor", tenant=tenant,
+        )
+        doctor = Doctor.objects.create(tenant=tenant, user=du)
+        patient = Patient.objects.create(
+            tenant=tenant, first_name="Rep", last_name="Citas", national_id="1414141414",
+        )
+        base = timezone.now() - timedelta(days=1)
+        for i, st in enumerate(["completed", "completed", "completed", "no_show", "cancelled"]):
+            Appointment.objects.create(
+                tenant=tenant, patient=patient, doctor=doctor,
+                scheduled_start=base + timedelta(hours=i),
+                scheduled_end=base + timedelta(hours=i, minutes=30),
+                status=st,
+            )
+
+        self.client.force_authenticate(user=admin)
+        resp = self.client.get("/api/v1/reports/appointments-summary/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["total"], 5)
+        self.assertEqual(resp.data["by_status"]["completed"], 3)
+        self.assertEqual(resp.data["attendance_rate"], 75.0)   # 3 de (3+1)
+        self.assertEqual(resp.data["cancellation_rate"], 20.0)  # 1 de 5
+
+    def test_summary_requires_admin(self):
+        from apps.common.models import Tenant
+        tenant = Tenant.objects.create(name="T citas-perm")
+        reception = User.objects.create_user(
+            email="r@citasperm.ec", password="superseguro123", role="reception", tenant=tenant,
+        )
+        self.client.force_authenticate(user=reception)
+        resp = self.client.get("/api/v1/reports/appointments-summary/")
+        self.assertEqual(resp.status_code, 403)

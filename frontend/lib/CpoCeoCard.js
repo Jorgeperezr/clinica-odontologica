@@ -34,6 +34,20 @@ export default function CpoCeoCard({ patientId, refreshKey }) {
     } catch (err) { setError(err.message); }
   }
 
+  // Formulario OFICIAL del MSP (plantilla xlsx del Ministerio) autocompletado
+  async function exportXlsx() {
+    setError("");
+    try {
+      const resp = await api(`/patients/${patientId}/form033/export-xlsx/`);
+      if (!resp.ok) throw new Error(`No se pudo generar el formulario (error ${resp.status}).`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "formulario_033.xlsx"; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) { setError(err.message); }
+  }
+
   if (!data) return null;
   const { cpo, ceo } = data;
 
@@ -48,9 +62,15 @@ export default function CpoCeoCard({ patientId, refreshKey }) {
     <div className="card" style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <h3 style={{ margin: 0 }}>Índices CPO-ceo</h3>
-        <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={exportPdf}>
-          Exportar formulario 033 (PDF)
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={exportPdf}>
+            Formulario 033 (PDF)
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={exportXlsx}
+                  title="Plantilla oficial del MSP autocompletada con los datos del paciente">
+            Formulario oficial MSP (Excel)
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-box">{error}</div>}

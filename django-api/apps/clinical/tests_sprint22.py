@@ -501,3 +501,65 @@ class Form033FullExportTests(APITestCase):
         self.assertTrue(body.startswith(b"%PDF"))
         # El PDF con varias secciones pesa más que uno vacío
         self.assertGreater(len(body), 2000)
+
+
+class Form033XlsxExportTests(APITestCase):
+    """El formulario oficial del MSP se autocompleta con los datos del sistema."""
+
+    def setUp(self):
+        from django.core.management import call_command
+        self.tenant = Tenant.objects.create(name="Clínica XLSX")
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        du = User.objects.create_user(
+            email="d@xlsx.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Maria Perez Lopez",
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=du, license_number="MSP-333")
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Carlos Andres", last_name="Vaca Ruiz",
+            national_id="1313131313", sex="H",
+        )
+
+    def test_official_template_is_autofilled(self):
+        import io
+        import openpyxl
+        from apps.clinical.models import OdontogramState, ToothRecord
+
+        self.client.force_authenticate(user=self.doctor_user)
+        # Datos: consulta 033 + caries en la 16 + diagnóstico
+        self.client.post(f"/api/v1/patients/{self.patient.id}/form033/", {
+            "date": "2026-07-20", "motivo_consulta": "Dolor molar",
+            "embarazada": False, "enfermedad_actual": "Dolor de 2 días",
+            "temperatura": "36.9", "presion_arterial": "120/80",
+        }, format="json")
+        caries = OdontogramState.objects.get(tenant=self.tenant, code="CARIES")
+        ToothRecord.objects.create(
+            tenant=self.tenant, patient=self.patient, tooth_fdi_code="16",
+            surface="whole", state=caries, date="2026-07-20",
+        )
+        self.client.post(f"/api/v1/patients/{self.patient.id}/diagnoses/", {
+            "code": "K02.1", "description": "Caries de la dentina",
+            "diagnosis_kind": "def", "date": "2026-07-20",
+        })
+
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/form033/export-xlsx/")
+        self.assertEqual(resp.status_code, 200, resp.content[:200])
+        body = resp.content
+        self.assertTrue(body.startswith(b"PK"))  # firma zip de xlsx
+
+        # Reabrir y verificar las celdas clave del mapeo
+        wb = openpyxl.load_workbook(io.BytesIO(body))
+        ws1, ws2 = wb["1"], wb["2"]
+        self.assertEqual(ws1["T3"].value, "Clínica XLSX")
+        # Celdas que combinan etiqueta+campo: el valor se anexa bajo la etiqueta
+        self.assertIn("Vaca", ws1["A4"].value)             # primer apellido
+        self.assertIn("Carlos", ws1["Y4"].value)           # primer nombre
+        self.assertIn("H", ws1["AW4"].value)               # sexo
+        self.assertIn("Dolor molar", ws1["A9"].value)
+        self.assertIn("EMBARAZADA: NO", ws1["A9"].value)
+        self.assertEqual(str(ws1["A34"].value), "36.9")
+        self.assertEqual(ws1["AZ68"].value, 1)             # CPO: C=1 (caries en 16)
+        self.assertEqual(ws2["Y16"].value, "K02.1")        # diagnóstico CIE
+        self.assertEqual(ws2["AE16"].value, "X")           # marcado DEF
+        self.assertEqual(ws2["A24"].value, "MSP-333")      # registro del profesional

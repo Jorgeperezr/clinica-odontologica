@@ -15,6 +15,7 @@ urlpatterns = [
     path("cie10/", form033_views.Cie10SearchView.as_view(), name="cie10-search"),
     path("patients/<uuid:pk>/cpo-ceo/", form033_views.CpoCeoIndexView.as_view(), name="cpo-ceo-index"),
     path("patients/<uuid:pk>/form033/export-pdf/", form033_views.Form033PDFExportView.as_view(), name="form033-export-pdf"),
+    path("patients/<uuid:pk>/form033/export-xlsx/", form033_views.Form033XlsxExportView.as_view(), name="form033-export-xlsx"),
     path("patients/<uuid:pk>/exam-requests/", form033_views.ExamRequestListCreateView.as_view(), name="exam-request-list"),
     path("exam-requests/<uuid:pk>/report/", form033_views.ExamRequestReportView.as_view(), name="exam-request-report"),
     path("clinical/plan-templates/", sprint22_views.TemplateListCreateView.as_view(), name="plan-templates"),

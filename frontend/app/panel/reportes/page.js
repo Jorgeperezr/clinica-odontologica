@@ -36,6 +36,7 @@ export default function ReportesPage() {
   const [delinquency, setDelinquency] = useState(null);
   const [production, setProduction] = useState(null);
   const [newPatients, setNewPatients] = useState(null);
+  const [apptSummary, setApptSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -43,16 +44,18 @@ export default function ReportesPage() {
     setError(""); setLoading(true);
     try {
       const range = `?date_from=${from}&date_to=${to}`;
-      const [f, d, p, n] = await Promise.all([
+      const [f, d, p, n, s] = await Promise.all([
         api(`/reports/financial/${range}`),
         api("/reports/delinquency/"),
         api("/reports/production-by-doctor/"),
         api(`/reports/new-patients/${range}`),
+        api(`/reports/appointments-summary/${range}`),
       ]);
       setFinancial(await f.json());
       setDelinquency(await d.json());
       setProduction(await p.json());
       setNewPatients(await n.json());
+      setApptSummary(await s.json());
     } catch { setError("No se pudieron cargar los reportes."); }
     finally { setLoading(false); }
   }
@@ -177,6 +180,51 @@ export default function ReportesPage() {
               </div>
             </div>
           )) : <div style={{ color: "var(--ink-soft)", fontSize: 14 }}>Sin atenciones completadas en el período.</div>}
+        </div>
+
+
+        {/* Actividad de citas del período */}
+        <div className="card" style={{ gridColumn: "1 / -1" }}>
+          <h3 style={{ marginBottom: 12 }}>Actividad de citas</h3>
+          {apptSummary && (
+            <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center" }}>
+              <div>
+                <div className="tabular" style={{ fontSize: 26, fontWeight: 700 }}>{apptSummary.total}</div>
+                <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>citas en el período</div>
+              </div>
+              {[["completed", "Completadas", "var(--petrol)"],
+                ["confirmed", "Confirmadas", "var(--ink-soft)"],
+                ["pending", "Pendientes", "var(--ink-soft)"],
+                ["cancelled", "Canceladas", "var(--red)"],
+                ["no_show", "No asistió", "var(--red)"]].map(([k, label, color]) => (
+                <div key={k}>
+                  <div className="tabular" style={{ fontSize: 20, fontWeight: 700, color }}>
+                    {apptSummary.by_status?.[k] || 0}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{label}</div>
+                </div>
+              ))}
+              <div style={{ marginLeft: "auto", display: "flex", gap: 22 }}>
+                {apptSummary.attendance_rate != null && (
+                  <div style={{ textAlign: "center" }}>
+                    <div className="tabular" style={{ fontSize: 22, fontWeight: 700,
+                          color: apptSummary.attendance_rate >= 80 ? "var(--petrol)" : "var(--red)" }}>
+                      {apptSummary.attendance_rate}%
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>tasa de asistencia</div>
+                  </div>
+                )}
+                {apptSummary.cancellation_rate != null && (
+                  <div style={{ textAlign: "center" }}>
+                    <div className="tabular" style={{ fontSize: 22, fontWeight: 700 }}>
+                      {apptSummary.cancellation_rate}%
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>cancelación</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Morosidad con total y filas accionables */}

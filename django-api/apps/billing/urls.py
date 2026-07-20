@@ -18,6 +18,7 @@ urlpatterns = [
     path("doctors/<uuid:pk>/fees/", views.DoctorFeeListCreateView.as_view(), name="doctor-fees"),
     # Reportes (Sprint 9)
     path("reports/financial/", views.FinancialReportView.as_view(), name="report-financial"),
+    path("reports/appointments-summary/", views.AppointmentsSummaryReportView.as_view(), name="report-appointments-summary"),
     path("reports/delinquency/", views.DelinquencyReportView.as_view(), name="report-delinquency"),
     path("reports/production-by-doctor/", views.ProductionByDoctorReportView.as_view(), name="report-production"),
     path("reports/new-patients/", views.NewPatientsReportView.as_view(), name="report-new-patients"),

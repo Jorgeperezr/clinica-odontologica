@@ -446,3 +446,43 @@ class InventoryReportView(APIView):
                 for p in products
             ],
         })
+
+
+class AppointmentsSummaryReportView(APIView):
+    """
+    GET /api/v1/reports/appointments-summary/?date_from=&date_to= — Sprint 31.
+    Actividad de citas del período: totales por estado, tasa de asistencia
+    (completadas frente a completadas + no asistió) y tasa de cancelación.
+    """
+
+    permission_classes = [HasRole.for_roles("admin")]
+
+    def get(self, request):
+        from django.utils.dateparse import parse_date
+
+        from apps.agenda.models import Appointment
+
+        appts = Appointment.objects.filter(tenant=request.tenant)
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        if date_from:
+            appts = appts.filter(scheduled_start__date__gte=parse_date(date_from))
+        if date_to:
+            appts = appts.filter(scheduled_start__date__lte=parse_date(date_to))
+
+        by_status = {}
+        for a in appts.values_list("status", flat=True):
+            by_status[a] = by_status.get(a, 0) + 1
+
+        completed = by_status.get("completed", 0)
+        no_show = by_status.get("no_show", 0)
+        cancelled = by_status.get("cancelled", 0)
+        total = sum(by_status.values())
+        attended_universe = completed + no_show
+
+        return Response({
+            "total": total,
+            "by_status": by_status,
+            "attendance_rate": round(completed / attended_universe * 100, 1) if attended_universe else None,
+            "cancellation_rate": round(cancelled / total * 100, 1) if total else None,
+        })
