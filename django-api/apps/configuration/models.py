@@ -161,6 +161,12 @@ class ClinicBranding(TenantAwareModel):
 
     logo = models.ImageField(upload_to="branding/logos/", null=True, blank=True)
     theme = models.JSONField(default=_default_theme, blank=True)
+    display_name = models.CharField(
+        max_length=120, blank=True, help_text="Nombre comercial de la clínica."
+    )
+    short_name = models.CharField(
+        max_length=40, blank=True, help_text="Nombre corto (opcional, para espacios reducidos)."
+    )
 
     class Meta:
         constraints = [

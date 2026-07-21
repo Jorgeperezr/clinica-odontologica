@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, currentUser, logout } from "../../lib/api";
-import { applyTheme } from "../../lib/theme";
+import { applyBrandingChrome, applyTheme, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 
 // Navegación por rol (matriz de permisos del SRS)
 const NAV = [
@@ -26,24 +26,39 @@ export default function PanelLayout({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [logoUrl, setLogoUrl] = useState(null);
+  const [branding, setBranding] = useState(null);
 
   useEffect(() => {
     const u = currentUser();
     if (!u) { window.location.href = "/login/"; return; }
     setUser(u);
     setReady(true);
-    // Identidad visual de la clínica (tema + logotipo), por tenant
+    // Identidad visual por clínica: pintado instantáneo desde caché,
+    // refresco desde la API y actualización en vivo al guardar cambios.
+    const cached = readBrandingCache();
+    if (cached) {
+      setBranding(cached);
+      applyTheme(cached.theme);
+      applyBrandingChrome(cached);
+    }
     (async () => {
       try {
         const resp = await api("/config/branding/");
         if (resp.ok) {
           const b = await resp.json();
+          setBranding(b);
           applyTheme(b.theme);
-          if (b.logo_url) setLogoUrl(b.logo_url);
+          applyBrandingChrome(b);
+          saveBrandingCache(b);
         }
-      } catch { /* sin branding: tema del sistema */ }
+      } catch { /* sin identidad: tema del sistema */ }
     })();
+    const unsubscribe = onBrandingUpdated((b) => {
+      setBranding(b);
+      applyTheme(b.theme);
+      applyBrandingChrome(b);
+    });
+    return unsubscribe;
     // Recordar la preferencia de menú colapsado
     try {
       const saved = localStorage.getItem("sidebarCollapsed");
@@ -69,14 +84,20 @@ export default function PanelLayout({ children }) {
     <div style={styles.shell}>
       <aside style={{ ...styles.sidebar, flexBasis: W, width: W }}>
         <div style={{ ...styles.logo, justifyContent: collapsed ? "center" : "flex-start" }}>
-          {logoUrl ? (
-            <img src={logoUrl} alt="Logotipo de la clínica"
-                 style={{ height: collapsed ? 30 : 36, maxWidth: collapsed ? 40 : 150,
+          {branding?.logo_url ? (
+            <img src={branding.logo_url} alt="Logotipo de la clínica"
+                 style={{ height: collapsed ? 30 : 36, maxWidth: collapsed ? 44 : 64,
                           objectFit: "contain", borderRadius: 6, background: "#fff", padding: 2 }} />
           ) : (
             <span style={{ fontSize: 26, color: "var(--mint)" }} aria-hidden="true">◠</span>
           )}
-          {!collapsed && !logoUrl && <span style={styles.logoText}>Clínica</span>}
+          {!collapsed && (
+            <span style={{ ...styles.logoText, fontSize: 15, lineHeight: 1.15,
+                           overflow: "hidden", display: "-webkit-box",
+                           WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+              {branding?.short_name || branding?.display_name || "Clínica"}
+            </span>
+          )}
         </div>
 
         <button onClick={toggleCollapsed} style={styles.collapseBtn}

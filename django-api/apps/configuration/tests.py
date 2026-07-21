@@ -171,3 +171,28 @@ class ClinicBrandingTests(APITestCase):
         self.client.force_authenticate(user=other_admin)
         resp = self.client.get("/api/v1/config/branding/")
         self.assertEqual(resp.data["theme"].get("preset", "default"), "default")
+
+
+class ClinicBrandingNamesTests(APITestCase):
+    """Sprint 34: nombre comercial y corto por clínica."""
+
+    def test_names_saved_and_readable_by_all_roles(self):
+        from apps.common.models import Tenant
+        tenant = Tenant.objects.create(name="T names")
+        admin = User.objects.create_user(
+            email="a@names.ec", password="superseguro123", role="admin", tenant=tenant,
+        )
+        doctor = User.objects.create_user(
+            email="d@names.ec", password="superseguro123", role="doctor", tenant=tenant,
+        )
+        self.client.force_authenticate(user=admin)
+        resp = self.client.patch("/api/v1/config/branding/", {
+            "display_name": "Clínica Dental Sonrisa Sana",
+            "short_name": "Sonrisa Sana",
+        }, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["display_name"], "Clínica Dental Sonrisa Sana")
+
+        self.client.force_authenticate(user=doctor)
+        resp = self.client.get("/api/v1/config/branding/")
+        self.assertEqual(resp.data["short_name"], "Sonrisa Sana")

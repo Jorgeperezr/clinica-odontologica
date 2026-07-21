@@ -124,3 +124,41 @@ export function applyTheme(theme) {
 export function resetTheme() {
   applyTheme({ preset: "default" });
 }
+
+// ── identidad de la clínica: caché + notificación en vivo (Sprint 34) ──
+const BRANDING_KEY = "clinicBranding";
+const BRANDING_EVENT = "branding:updated";
+
+export function readBrandingCache() {
+  try { return JSON.parse(localStorage.getItem(BRANDING_KEY) || "null"); } catch { return null; }
+}
+
+export function saveBrandingCache(branding) {
+  try { localStorage.setItem(BRANDING_KEY, JSON.stringify(branding)); } catch {}
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(BRANDING_EVENT, { detail: branding }));
+  }
+}
+
+export function onBrandingUpdated(handler) {
+  if (typeof window === "undefined") return () => {};
+  const fn = (e) => handler(e.detail);
+  window.addEventListener(BRANDING_EVENT, fn);
+  return () => window.removeEventListener(BRANDING_EVENT, fn);
+}
+
+/** Aplica favicon y título del documento según la identidad de la clínica. */
+export function applyBrandingChrome(branding) {
+  if (typeof document === "undefined" || !branding) return;
+  const name = branding.display_name || "Clínica";
+  document.title = name;
+  if (branding.logo_url) {
+    let link = document.querySelector("link[rel='icon']");
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = branding.logo_url;
+  }
+}

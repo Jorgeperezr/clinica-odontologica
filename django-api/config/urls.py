@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
@@ -24,3 +26,8 @@ urlpatterns = [
         name="swagger-ui",
     ),
 ]
+
+# Archivos subidos (logos, documentos, firmas) servidos por Django en
+# desarrollo; en producción los sirve el proxy o el bucket.
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

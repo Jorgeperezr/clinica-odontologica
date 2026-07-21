@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 33 completado — atajo de pieza completa y personalización visual
+## Estado actual: Sprint 34 completado — identidad visual corregida e integrada
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -310,6 +310,12 @@ Sin cambios de backend (los 132 tests no varían).
 - **Temas y personalización manual:** 6 temas predefinidos (Petróleo, Océano, Bosque, Vino, Grafito, Arena), selectores de color principal y secundario, y "Restablecer tema del sistema".
 - **Accesibilidad garantizada:** el color primario se oscurece automáticamente hasta contrastar ≥ 4.5:1 (WCAG AA) con el texto blanco; el tono suave se genera claro para fondos. Como toda la interfaz pinta con variables CSS (`--petrol`, `--petrol-deep`, `--petrol-soft`, `--mint`), la barra lateral, botones, enlaces, pestañas activas, indicadores y tarjetas se re-tiñen solos (`lib/theme.js`).
 - **Persistencia por clínica:** cada tenant guarda su logo y tema sin afectar a los demás (test de aislamiento incluido).
+
+### Sprint 34 — Correcciones de Personalización: logo visible, recorte y nombre de la clínica (hecho)
+- **Causa raíz del logo invisible corregida:** ni nginx proxyaba `/media/` ni Django lo servía, así que la URL del logotipo devolvía 404. Ahora `nginx.conf` proxya `/media/` y `/static/` hacia Django, y `config/urls.py` sirve media en desarrollo. El logo configurado por fin se ve; el icono predeterminado solo aparece si no hay logotipo.
+- **Vista previa y recorte antes de guardar** (`lib/LogoCropper.js`): al elegir un archivo se muestra al instante, completo y con su relación de aspecto; un área de recorte se mueve arrastrando y se redimensiona por la esquina (eventos pointer: mouse y táctil), con "Usar imagen completa" o "Recortar y guardar" (genera un PNG solo con la zona elegida). La vista previa guardada muestra exactamente el archivo que usa la plataforma.
+- **Nombre comercial y nombre corto** por clínica (migración `configuration/0006`): reemplazan el texto "Clínica" en la barra lateral (el corto tiene prioridad por espacio), el título de la ventana y el favicon usa el logotipo.
+- **Identidad en vivo y por tenant:** al iniciar sesión cada clínica carga su logo, nombre, paleta y favicon (con caché local para pintado instantáneo); al guardar cambios en Personalización, la barra lateral y el favicon se actualizan al momento sin recargar (evento `branding:updated`).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, apiBase } from "../../../lib/api";
-import { PRESETS, applyTheme, resetTheme } from "../../../lib/theme";
+import { PRESETS, applyTheme, resetTheme, saveBrandingCache } from "../../../lib/theme";
+import LogoCropper from "../../../lib/LogoCropper";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -485,6 +486,9 @@ function BrandingTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  const [cropFile, setCropFile] = useState(null);      // archivo elegido, en recorte
+  const [displayName, setDisplayName] = useState("");
+  const [shortName, setShortName] = useState("");
 
   async function load() {
     try {
@@ -493,6 +497,8 @@ function BrandingTab() {
       setBranding(data);
       if (data.theme?.primary) setPrimary(data.theme.primary);
       if (data.theme?.secondary) setSecondary(data.theme.secondary);
+      setDisplayName(data.display_name || "");
+      setShortName(data.short_name || "");
     } catch { setError("No se pudo cargar la personalización."); }
   }
   useEffect(() => { load(); }, []);
@@ -507,6 +513,7 @@ function BrandingTab() {
       if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
       setBranding(data);
       applyTheme(data.theme);
+      saveBrandingCache(data);
       setOkMsg("Tema aplicado y guardado.");
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
@@ -528,6 +535,7 @@ function BrandingTab() {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
       setBranding(data);
+      saveBrandingCache(data);
       setAutoPalette(data.auto_palette || null);
       setOkMsg(data.auto_palette?.primary
         ? "Logotipo guardado. Puedes aplicar sus colores como tema."
@@ -550,8 +558,25 @@ function BrandingTab() {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
       setBranding(data);
+      saveBrandingCache(data);
       setAutoPalette(null);
       setOkMsg("Logotipo eliminado.");
+    } catch (err) { setError(err.message); }
+    finally { setSaving(false); }
+  }
+
+  async function saveNames() {
+    setSaving(true); setError(""); setOkMsg("");
+    try {
+      const resp = await api("/config/branding/", {
+        method: "PATCH",
+        body: JSON.stringify({ display_name: displayName, short_name: shortName }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
+      setBranding(data);
+      saveBrandingCache(data);
+      setOkMsg("Nombre de la clínica guardado.");
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
   }
@@ -582,7 +607,7 @@ function BrandingTab() {
             <label className="btn btn-primary" style={{ cursor: "pointer", textAlign: "center" }}>
               {branding?.logo_url ? "Cambiar logotipo" : "Subir logotipo"}
               <input type="file" accept="image/*" style={{ display: "none" }}
-                     onChange={(e) => uploadLogo(e.target.files?.[0])} />
+                     onChange={(e) => { setCropFile(e.target.files?.[0] || null); e.target.value = ""; }} />
             </label>
             {branding?.logo_url && (
               <button className="btn btn-ghost" onClick={removeLogo} disabled={saving}>
@@ -606,6 +631,29 @@ function BrandingTab() {
               </button>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Nombre de la clínica */}
+      <div className="card">
+        <h3 style={{ marginBottom: 6 }}>Nombre de la clínica</h3>
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+          Reemplaza el texto "Clínica" en la barra lateral, el título de la ventana y los encabezados.
+        </p>
+        <div style={{ display: "flex", gap: 14, alignItems: "end", flexWrap: "wrap" }}>
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 240px" }}>
+            <label>Nombre comercial</label>
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)}
+                   placeholder="Ej: Clínica Dental Sonrisa Sana" maxLength={120} />
+          </div>
+          <div className="field" style={{ marginBottom: 0, flex: "0 1 200px" }}>
+            <label>Nombre corto (opcional)</label>
+            <input value={shortName} onChange={(e) => setShortName(e.target.value)}
+                   placeholder="Ej: Sonrisa Sana" maxLength={40} />
+          </div>
+          <button className="btn btn-primary" disabled={saving} onClick={saveNames}>
+            Guardar nombre
+          </button>
         </div>
       </div>
 
@@ -653,6 +701,11 @@ function BrandingTab() {
           </button>
         </div>
       </div>
+      {cropFile && (
+        <LogoCropper file={cropFile}
+                     onCancel={() => setCropFile(null)}
+                     onConfirm={(finalFile) => { setCropFile(null); uploadLogo(finalFile); }} />
+      )}
     </div>
   );
 }

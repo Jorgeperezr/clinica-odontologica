@@ -50,7 +50,7 @@ class ClinicBrandingSerializer(serializers.ModelSerializer):
     class Meta:
         from .models import ClinicBranding
         model = ClinicBranding
-        fields = ["id", "logo", "logo_url", "theme", "updated_at"]
+        fields = ["id", "logo", "logo_url", "theme", "display_name", "short_name", "updated_at"]
         extra_kwargs = {"logo": {"write_only": True, "required": False}}
 
     def get_logo_url(self, obj):
