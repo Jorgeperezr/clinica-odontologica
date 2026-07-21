@@ -3,18 +3,19 @@
 import { useEffect, useState } from "react";
 import { api, currentUser, logout } from "../../lib/api";
 import { applyBrandingChrome, applyTheme, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
+import NavIcon from "../../lib/NavIcons";
 
 // Navegación por rol (matriz de permisos del SRS)
 const NAV = [
-  { href: "/panel/plataforma/", label: "Plataforma", icon: "◫", roles: ["superadmin"] },
-  { href: "/panel/", label: "Inicio", icon: "⌂", roles: ["admin", "reception", "doctor", "auxiliary"] },
-  { href: "/panel/pacientes/", label: "Pacientes", icon: "☺", roles: ["admin", "reception", "doctor", "auxiliary"] },
-  { href: "/panel/agenda/", label: "Agenda", icon: "▤", roles: ["admin", "reception", "doctor"] },
-  { href: "/panel/firma/", label: "Mi firma", icon: "✎", roles: ["doctor"] },
-  { href: "/panel/pagos/", label: "Pagos", icon: "$", roles: ["admin", "reception"] },
-  { href: "/panel/inventario/", label: "Inventario", icon: "▦", roles: ["admin", "auxiliary"] },
-  { href: "/panel/reportes/", label: "Reportes", icon: "▨", roles: ["admin"] },
-  { href: "/panel/configuracion/", label: "Configuración", icon: "⚙", roles: ["admin"] },
+  { href: "/panel/plataforma/", label: "Plataforma", iconName: "plataforma", roles: ["superadmin"] },
+  { href: "/panel/", label: "Inicio", iconName: "inicio", roles: ["admin", "reception", "doctor", "auxiliary"] },
+  { href: "/panel/pacientes/", label: "Pacientes", iconName: "pacientes", roles: ["admin", "reception", "doctor", "auxiliary"] },
+  { href: "/panel/agenda/", label: "Agenda", iconName: "agenda", roles: ["admin", "reception", "doctor"] },
+  { href: "/panel/firma/", label: "Mi firma", iconName: "firma", roles: ["doctor"] },
+  { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception"] },
+  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "auxiliary"] },
+  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin"] },
+  { href: "/panel/configuracion/", label: "Configuración", iconName: "configuracion", roles: ["admin"] },
 ];
 
 const ROLE_LABELS = {
@@ -86,8 +87,8 @@ export default function PanelLayout({ children }) {
         <div style={{ ...styles.logo, justifyContent: collapsed ? "center" : "flex-start" }}>
           {branding?.logo_url ? (
             <img src={logoSrc(branding.logo_url)} alt="Logotipo de la clínica"
-                 style={{ height: collapsed ? 30 : 36, maxWidth: collapsed ? 44 : 64,
-                          objectFit: "contain", borderRadius: 6, background: "#fff", padding: 2 }} />
+                 style={{ height: collapsed ? 32 : 40, maxWidth: collapsed ? 46 : 70,
+                          objectFit: "contain" }} />
           ) : (
             <span style={{ fontSize: 26, color: "var(--mint)" }} aria-hidden="true">◠</span>
           )}
@@ -115,8 +116,10 @@ export default function PanelLayout({ children }) {
                           justifyContent: collapsed ? "center" : "flex-start",
                           padding: collapsed ? "10px 0" : "10px 12px",
                           ...(active ? styles.navActive : {}) }}>
-                <span style={{ fontSize: 16, width: collapsed ? "auto" : 20, textAlign: "center" }}
-                      aria-hidden="true">{item.icon}</span>
+                <span style={{ display: "inline-flex", width: collapsed ? "auto" : 20,
+                             justifyContent: "center", flexShrink: 0 }} aria-hidden="true">
+                  <NavIcon name={item.iconName} />
+                </span>
                 {!collapsed && <span>{item.label}</span>}
               </a>
             );

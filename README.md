@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 34 completado — identidad visual corregida e integrada
+## Estado actual: Sprint 35 completado — logo transparente e iconos de línea
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -316,6 +316,11 @@ Sin cambios de backend (los 132 tests no varían).
 - **Vista previa y recorte antes de guardar** (`lib/LogoCropper.js`): al elegir un archivo se muestra al instante, completo y con su relación de aspecto; un área de recorte se mueve arrastrando y se redimensiona por la esquina (eventos pointer: mouse y táctil), con "Usar imagen completa" o "Recortar y guardar" (genera un PNG solo con la zona elegida). La vista previa guardada muestra exactamente el archivo que usa la plataforma.
 - **Nombre comercial y nombre corto** por clínica (migración `configuration/0006`): reemplazan el texto "Clínica" en la barra lateral (el corto tiene prioridad por espacio), el título de la ventana y el favicon usa el logotipo.
 - **Identidad en vivo y por tenant:** al iniciar sesión cada clínica carga su logo, nombre, paleta y favicon (con caché local para pintado instantáneo); al guardar cambios en Personalización, la barra lateral y el favicon se actualizan al momento sin recargar (evento `branding:updated`).
+
+### Sprint 35 — Logo transparente e iconos de línea (hecho)
+100% frontend, sin cambios de backend (la suite no varía).
+- **Logo con fondo transparente:** se quitó el recuadro blanco detrás del logotipo en la barra lateral, así los PNG con transparencia se integran con el color del sidebar. En la vista previa de Personalización el fondo es a cuadros (checkerboard) para que se note la transparencia real del archivo.
+- **Iconos de línea profesionales** (`lib/NavIcons.js`): los glifos de texto del menú (⌂ ☺ ▤ $ ▦ ▨ ⚙ ◫) se reemplazaron por iconos SVG stroke de 24×24 con trazo redondeado (Inicio, Pacientes, Agenda, Mi firma, Pagos, Inventario, Reportes, Configuración, Plataforma). Usan `currentColor`, así que se re-tiñen solos con el tema de la clínica y el estado activo.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

@@ -597,7 +597,11 @@ function BrandingTab() {
         <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ width: 140, height: 90, border: "1px dashed var(--line)", borderRadius: 10,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        background: "#fff", overflow: "hidden" }}>
+                        overflow: "hidden",
+                        backgroundColor: "#fff",
+                        backgroundImage: "linear-gradient(45deg, #e5e9ee 25%, transparent 25%), linear-gradient(-45deg, #e5e9ee 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e9ee 75%), linear-gradient(-45deg, transparent 75%, #e5e9ee 75%)",
+                        backgroundSize: "16px 16px",
+                        backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px" }}>
             {branding?.logo_url
               ? <img src={logoSrc(branding.logo_url)} alt="Vista previa del logotipo"
                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
