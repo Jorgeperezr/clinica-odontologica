@@ -1,5 +1,7 @@
 "use client";
 
+import { apiBase } from "./api";
+
 /**
  * Motor de temas por clínica (Sprint 33).
  *
@@ -159,6 +161,20 @@ export function applyBrandingChrome(branding) {
       link.rel = "icon";
       document.head.appendChild(link);
     }
-    link.href = branding.logo_url;
+    link.href = logoSrc(branding.logo_url);
   }
+}
+
+
+/**
+ * Resuelve la URL del logotipo al host correcto.
+ * El backend devuelve una ruta relativa ("/media/..."); la servimos desde
+ * el mismo host que la API (apiBase), en https, evitando el bloqueo de
+ * contenido mixto. Si ya fuera absoluta, se respeta tal cual.
+ */
+
+export function logoSrc(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${apiBase()}${url.startsWith("/") ? "" : "/"}${url}`;
 }

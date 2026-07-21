@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, apiBase } from "../../../lib/api";
-import { PRESETS, applyTheme, resetTheme, saveBrandingCache } from "../../../lib/theme";
+import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../../../lib/theme";
 import LogoCropper from "../../../lib/LogoCropper";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
@@ -599,7 +599,7 @@ function BrandingTab() {
                         display: "flex", alignItems: "center", justifyContent: "center",
                         background: "#fff", overflow: "hidden" }}>
             {branding?.logo_url
-              ? <img src={branding.logo_url} alt="Vista previa del logotipo"
+              ? <img src={logoSrc(branding.logo_url)} alt="Vista previa del logotipo"
                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
               : <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Sin logotipo</span>}
           </div>

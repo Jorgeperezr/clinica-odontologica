@@ -54,8 +54,10 @@ class ClinicBrandingSerializer(serializers.ModelSerializer):
         extra_kwargs = {"logo": {"write_only": True, "required": False}}
 
     def get_logo_url(self, obj):
+        # Ruta relativa (p. ej. "/media/branding/logos/x.png"): el frontend
+        # la resuelve contra el host correcto. Evita construir URLs con el
+        # host interno del proxy (http://localhost) que el navegador bloquea
+        # por Mixed Content al estar la página en https.
         if not obj.logo:
             return None
-        request = self.context.get("request")
-        url = obj.logo.url
-        return request.build_absolute_uri(url) if request else url
+        return obj.logo.url

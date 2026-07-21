@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, currentUser, logout } from "../../lib/api";
-import { applyBrandingChrome, applyTheme, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
+import { applyBrandingChrome, applyTheme, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 
 // Navegación por rol (matriz de permisos del SRS)
 const NAV = [
@@ -85,7 +85,7 @@ export default function PanelLayout({ children }) {
       <aside style={{ ...styles.sidebar, flexBasis: W, width: W }}>
         <div style={{ ...styles.logo, justifyContent: collapsed ? "center" : "flex-start" }}>
           {branding?.logo_url ? (
-            <img src={branding.logo_url} alt="Logotipo de la clínica"
+            <img src={logoSrc(branding.logo_url)} alt="Logotipo de la clínica"
                  style={{ height: collapsed ? 30 : 36, maxWidth: collapsed ? 44 : 64,
                           objectFit: "contain", borderRadius: 6, background: "#fff", padding: 2 }} />
           ) : (
