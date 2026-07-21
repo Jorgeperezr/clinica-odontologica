@@ -14,9 +14,10 @@
       ]
     }
   },
-  "forwardPorts": [80, 8000, 8001],
+  "forwardPorts": [80, 3000, 8000, 8001],
   "portsAttributes": {
-    "80": { "label": "Nginx (app)" },
+    "80": { "label": "Nginx (API)", "visibility": "public" },
+    "3000": { "label": "Panel (frontend)", "visibility": "public" },
     "8000": { "label": "Django API" },
     "8001": { "label": "WhatsApp Gateway" }
   }
