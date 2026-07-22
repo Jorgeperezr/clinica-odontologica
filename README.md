@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 35 completado — logo transparente e iconos de línea
+## Estado actual: Sprint 37 completado — consentimientos informados mejorados
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -321,6 +321,17 @@ Sin cambios de backend (los 132 tests no varían).
 100% frontend, sin cambios de backend (la suite no varía).
 - **Logo con fondo transparente:** se quitó el recuadro blanco detrás del logotipo en la barra lateral, así los PNG con transparencia se integran con el color del sidebar. En la vista previa de Personalización el fondo es a cuadros (checkerboard) para que se note la transparencia real del archivo.
 - **Iconos de línea profesionales** (`lib/NavIcons.js`): los glifos de texto del menú (⌂ ☺ ▤ $ ▦ ▨ ⚙ ◫) se reemplazaron por iconos SVG stroke de 24×24 con trazo redondeado (Inicio, Pacientes, Agenda, Mi firma, Pagos, Inventario, Reportes, Configuración, Plataforma). Usan `currentColor`, así que se re-tiñen solos con el tema de la clínica y el estado activo.
+
+### Sprint 36 — Solicitud de examen complementario en PDF (hecho)
+- **Formulario "Pedir examen" ampliado:** además de tipo y examen, ahora registra motivo/justificación clínica, observaciones (opcional) y prioridad (Normal/Urgente). El pedido se guarda con estado inicial "Pendiente" y aparece en la tabla con su prioridad (badge rojo si es urgente). Campos nuevos en `ExamRequest` (migración `clinical/0009`).
+- **Acción "Generar PDF" por solicitud:** documento formal listo para imprimir o entregar, regenerable en cualquier momento (`apps/clinical/exam_request_pdf.py`, endpoint `patients/<pk>/exam-requests/<id>/pdf/`). Diseño profesional: encabezado con logotipo y datos de la clínica, datos del profesional (nombre, especialidad, registro y firma manuscrita si existe — todo desde la sesión autenticada), datos del paciente (nombre, identificación, edad calculada, sexo, historia clínica), detalle de la solicitud (fecha/hora, tipo, motivo, observaciones, prioridad), espacio para firma y sello, y pie institucional.
+- **Datos de contacto de la clínica** (dirección, teléfono, correo) configurables en Personalización y usados en el encabezado y pie del PDF. Campos nuevos en `ClinicBranding` (migración `configuration/0007`).
+
+### Sprint 37 — Consentimientos informados mejorados (hecho)
+- **Bug de descarga corregido:** el botón "PDF firmado" abría `href={pdf_file}` (URL con localhost → ERR_CONNECTION_REFUSED, mismo problema que el logo). Ahora usa el mismo mecanismo que la solicitud de examen: `api()` + `blob()` + `window.open`. El PDF se genera, visualiza, descarga e imprime correctamente.
+- **PDF profesional** (`apps/clinical/consent_pdf.py`, endpoint `consents/<id>/pdf/`, regenerable): encabezado con logo y datos de la clínica; datos del paciente (nombre, identificación, nacimiento, edad, sexo, HC); datos del profesional desde la sesión (nombre, especialidad, registro, firma); secciones (procedimiento, beneficios, riesgos, alternativas, declaración, observaciones); firmas de paciente y profesional con lugar/fecha y espacio para huella; pie institucional.
+- **Plantillas reutilizables** (`ConsentTemplate`, migración `clinical/0010`): clasificadas por procedimiento (extracción, endodoncia, restauración, profilaxis, cirugía, implante, prótesis, ortodoncia). CRUD completo en Configuración → Consentimientos; al crear un consentimiento se puede partir de una plantilla y editarla antes de guardar.
+- **Flujo de estados:** borrador → pendiente de firma → firmado → anulado. Un consentimiento firmado es inmutable (sólo puede anularse); historial de auditoría por consentimiento (`ConsentAuditLog`); el PDF definitivo se genera al firmar. Migración de datos `clinical/0011` preserva el estado de los consentimientos ya firmados.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

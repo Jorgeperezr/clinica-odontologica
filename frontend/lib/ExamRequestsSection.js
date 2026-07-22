@@ -18,7 +18,7 @@ export default function ExamRequestsSection({ patientId }) {
   const [adding, setAdding] = useState(false);
   const [reportingId, setReportingId] = useState(null);
   const [reportText, setReportText] = useState("");
-  const [form, setForm] = useState({ category: "biometria", detail: "" });
+  const [form, setForm] = useState({ category: "biometria", detail: "", justification: "", observations: "", priority: "normal" });
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -39,9 +39,21 @@ export default function ExamRequestsSection({ patientId }) {
         method: "POST", body: JSON.stringify(form),
       });
       if (!resp.ok) throw new Error(`No se pudo crear el pedido (error ${resp.status}).`);
-      setForm({ category: "biometria", detail: "" });
+      setForm({ category: "biometria", detail: "", justification: "", observations: "", priority: "normal" });
       setAdding(false);
       load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function openExamPdf(exam) {
+    setError("");
+    try {
+      const resp = await api(`/patients/${patientId}/exam-requests/${exam.id}/pdf/`);
+      if (!resp.ok) throw new Error(`No se pudo generar el PDF (error ${resp.status}).`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
     } catch (err) { setError(err.message); }
   }
 
@@ -72,9 +84,9 @@ export default function ExamRequestsSection({ patientId }) {
 
       {adding && (
         <form onSubmit={createExam} style={{ background: "var(--petrol-soft)", borderRadius: 10, padding: 14, marginBottom: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "180px 1fr auto", gap: 12, alignItems: "end" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 160px", gap: 12, marginBottom: 12 }}>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Tipo</label>
+              <label>Tipo de examen</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
@@ -85,10 +97,29 @@ export default function ExamRequestsSection({ patientId }) {
                      onChange={(e) => setForm({ ...form, detail: e.target.value })}
                      placeholder="Ej: Biometría hemática completa" />
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-primary">Pedir</button>
-              <button type="button" className="btn btn-ghost" onClick={() => setAdding(false)}>✕</button>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Prioridad</label>
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                <option value="normal">Normal</option>
+                <option value="urgent">Urgente</option>
+              </select>
             </div>
+          </div>
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label>Motivo o justificación clínica</label>
+            <textarea rows={2} value={form.justification}
+                      onChange={(e) => setForm({ ...form, justification: e.target.value })}
+                      placeholder="Motivo clínico de la solicitud…" />
+          </div>
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label>Observaciones (opcional)</label>
+            <textarea rows={2} value={form.observations}
+                      onChange={(e) => setForm({ ...form, observations: e.target.value })}
+                      placeholder="Indicaciones adicionales…" />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary">Guardar solicitud</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setAdding(false)}>Cancelar</button>
           </div>
         </form>
       )}
@@ -97,12 +128,17 @@ export default function ExamRequestsSection({ patientId }) {
         <p style={{ color: "var(--ink-soft)", fontSize: 14 }}>Sin pedidos de exámenes.</p>
       ) : (
         <table>
-          <thead><tr><th>Tipo</th><th>Solicitado</th><th>Estado</th><th>Informe</th><th></th></tr></thead>
+          <thead><tr><th>Tipo</th><th>Solicitado</th><th>Prioridad</th><th>Estado</th><th>Informe</th><th></th></tr></thead>
           <tbody>
             {exams.map((ex) => (
               <tr key={ex.id}>
                 <td>{ex.category_display}</td>
                 <td>{ex.detail}</td>
+                <td>
+                  {ex.priority === "urgent"
+                    ? <span className="badge badge-danger">Urgente</span>
+                    : <span style={{ color: "var(--ink-soft)", fontSize: 13 }}>Normal</span>}
+                </td>
                 <td>
                   <span className={`badge ${ex.status === "reported" ? "badge-ok" : "badge-warn"}`}>
                     {ex.status_display}
@@ -124,10 +160,17 @@ export default function ExamRequestsSection({ patientId }) {
                 </td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {reportingId !== ex.id && (
-                    <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
-                            onClick={() => { setReportingId(ex.id); setReportText(ex.report_notes || ""); }}>
-                      {ex.report_notes ? "Editar informe" : "Cargar informe"}
-                    </button>
+                    <span style={{ display: "inline-flex", gap: 6 }}>
+                      <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
+                              onClick={() => openExamPdf(ex)}
+                              title="Solicitud formal para imprimir o entregar">
+                        Generar PDF
+                      </button>
+                      <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
+                              onClick={() => { setReportingId(ex.id); setReportText(ex.report_notes || ""); }}>
+                        {ex.report_notes ? "Editar informe" : "Cargar informe"}
+                      </button>
+                    </span>
                   )}
                 </td>
               </tr>

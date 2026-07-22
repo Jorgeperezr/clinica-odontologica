@@ -563,3 +563,152 @@ class Form033XlsxExportTests(APITestCase):
         self.assertEqual(ws2["Y16"].value, "K02.1")        # diagnóstico CIE
         self.assertEqual(ws2["AE16"].value, "X")           # marcado DEF
         self.assertEqual(ws2["A24"].value, "MSP-333")      # registro del profesional
+
+
+class ExamRequestPDFTests(APITestCase):
+    """Sprint 36: solicitud de examen con campos clínicos y PDF."""
+
+    def setUp(self):
+        from django.core.management import call_command
+        self.tenant = Tenant.objects.create(name="Clínica Examen")
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        du = User.objects.create_user(
+            email="d@examen.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dr. Examen Solicitante",
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=du, license_number="MSP-555")
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Pac", last_name="Examen",
+            national_id="1515151515", sex="H", birth_date="1990-05-10",
+        )
+
+    def test_create_exam_with_clinical_fields(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/exam-requests/", {
+            "category": "rayos_x", "detail": "Radiografía panorámica",
+            "justification": "Evaluación de terceros molares",
+            "observations": "Paciente con dolor mandibular",
+            "priority": "urgent",
+        })
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["priority"], "urgent")
+        self.assertEqual(resp.data["priority_display"], "Urgente")
+        self.assertEqual(resp.data["justification"], "Evaluación de terceros molares")
+        # Estado inicial pendiente
+        self.assertEqual(resp.data["status"], "pending")
+
+    def test_generate_exam_pdf(self):
+        from apps.configuration.models import ClinicBranding
+        from apps.clinical.models import ExamRequest
+
+        # Datos de contacto de la clínica
+        ClinicBranding.objects.create(
+            tenant=self.tenant, display_name="Clínica Dental Norte",
+            address="Av. Principal 123", phone="0999999999", email="info@dentalnorte.ec",
+        )
+        exam = ExamRequest.objects.create(
+            tenant=self.tenant, patient=self.patient, category="biometria",
+            detail="Biometría hemática", justification="Control prequirúrgico",
+            priority="normal", requested_by=self.doctor_user,
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.get(
+            f"/api/v1/patients/{self.patient.id}/exam-requests/{exam.id}/pdf/"
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = b"".join(resp.streaming_content) if hasattr(resp, "streaming_content") else resp.content
+        self.assertTrue(body.startswith(b"%PDF"))
+        self.assertGreater(len(body), 1500)
+
+    def test_pdf_404_for_missing_exam(self):
+        import uuid
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.get(
+            f"/api/v1/patients/{self.patient.id}/exam-requests/{uuid.uuid4()}/pdf/"
+        )
+        self.assertEqual(resp.status_code, 404)
+
+
+class ConsentImprovementsTests(APITestCase):
+    """Sprint 37: PDF, plantillas, estados e inmutabilidad de consentimientos."""
+
+    def setUp(self):
+        from django.core.management import call_command
+        self.tenant = Tenant.objects.create(name="Clínica Consent")
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        du = User.objects.create_user(
+            email="d@consent.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. Consent",
+        )
+        self.doctor = Doctor.objects.create(tenant=self.tenant, user=du, license_number="MSP-777")
+        self.doctor_user = du
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Con", last_name="Sentimiento",
+            national_id="1616161616", sex="M", birth_date="1985-03-15",
+        )
+
+    def test_consent_pdf_generates(self):
+        from apps.clinical.models import InformedConsent
+        consent = InformedConsent.objects.create(
+            tenant=self.tenant, patient=self.patient, title="Consentimiento de extracción",
+            body_text="Declaro aceptar el procedimiento.", procedure="Extracción de pieza 18",
+            risks="Sangrado, inflamación", created_by=self.doctor_user,
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.get(f"/api/v1/consents/{consent.id}/pdf/")
+        self.assertEqual(resp.status_code, 200)
+        body = b"".join(resp.streaming_content) if hasattr(resp, "streaming_content") else resp.content
+        self.assertTrue(body.startswith(b"%PDF"))
+
+    def test_template_crud(self):
+        self.client.force_authenticate(user=self.doctor_user)
+        # Crear
+        resp = self.client.post("/api/v1/consent-templates/", {
+            "procedure": "endodoncia", "title": "Consentimiento de endodoncia",
+            "risks": "Fractura radicular, reinfección",
+            "body_text": "Acepto el tratamiento de conducto.",
+        })
+        self.assertEqual(resp.status_code, 201, resp.content)
+        tid = resp.data["id"]
+        self.assertEqual(resp.data["procedure_display"], "Endodoncia")
+        # Filtrar por procedimiento
+        resp = self.client.get("/api/v1/consent-templates/?procedure=endodoncia")
+        results = resp.data.get("results", resp.data) if isinstance(resp.data, dict) else resp.data
+        self.assertEqual(len(results), 1)
+        # Editar
+        resp = self.client.patch(f"/api/v1/consent-templates/{tid}/",
+                                 {"title": "Endodoncia (actualizada)"}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        # Eliminar
+        resp = self.client.delete(f"/api/v1/consent-templates/{tid}/")
+        self.assertEqual(resp.status_code, 204)
+
+    def test_signed_consent_is_immutable(self):
+        from django.utils import timezone
+        from apps.clinical.models import InformedConsent
+        consent = InformedConsent.objects.create(
+            tenant=self.tenant, patient=self.patient, title="Firmado",
+            body_text="x", status="signed", signed_at=timezone.now(),
+            created_by=self.doctor_user,
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+        # Intentar editar el cuerpo → rechazado
+        resp = self.client.patch(f"/api/v1/consents/{consent.id}/detail/",
+                                 {"body_text": "modificado"}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        # Pero sí se puede anular
+        resp = self.client.patch(f"/api/v1/consents/{consent.id}/detail/",
+                                 {"status": "void"}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["status"], "void")
+
+    def test_audit_log_on_create(self):
+        from apps.clinical.models import ConsentAuditLog, InformedConsent
+        self.client.force_authenticate(user=self.doctor_user)
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/consents/", {
+            "title": "Nuevo", "body_text": "acepto",
+        }, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        consent = InformedConsent.objects.get(id=resp.data["id"])
+        self.assertTrue(ConsentAuditLog.objects.filter(consent=consent, action="Creado").exists())

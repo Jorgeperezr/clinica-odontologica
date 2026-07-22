@@ -22,7 +22,7 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["personalizacion", "Personalización"]].map(([k, label]) => (
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -40,6 +40,7 @@ export default function ConfiguracionPage() {
       {tab === "plantillas" && <TemplatesTab />}
       {tab === "usuarios" && <UsersTab />}
       {tab === "parametros" && <ParametersTab />}
+      {tab === "consentimientos" && <ConsentTemplatesTab />}
       {tab === "personalizacion" && <BrandingTab />}
     </div>
   );
@@ -489,6 +490,9 @@ function BrandingTab() {
   const [cropFile, setCropFile] = useState(null);      // archivo elegido, en recorte
   const [displayName, setDisplayName] = useState("");
   const [shortName, setShortName] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
 
   async function load() {
     try {
@@ -499,6 +503,9 @@ function BrandingTab() {
       if (data.theme?.secondary) setSecondary(data.theme.secondary);
       setDisplayName(data.display_name || "");
       setShortName(data.short_name || "");
+      setAddress(data.address || "");
+      setPhone(data.phone || "");
+      setContactEmail(data.email || "");
     } catch { setError("No se pudo cargar la personalización."); }
   }
   useEffect(() => { load(); }, []);
@@ -570,13 +577,14 @@ function BrandingTab() {
     try {
       const resp = await api("/config/branding/", {
         method: "PATCH",
-        body: JSON.stringify({ display_name: displayName, short_name: shortName }),
+        body: JSON.stringify({ display_name: displayName, short_name: shortName,
+                               address, phone, email: contactEmail }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
       setBranding(data);
       saveBrandingCache(data);
-      setOkMsg("Nombre de la clínica guardado.");
+      setOkMsg("Datos de la clínica guardados.");
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
   }
@@ -656,9 +664,29 @@ function BrandingTab() {
                    placeholder="Ej: Sonrisa Sana" maxLength={40} />
           </div>
           <button className="btn btn-primary" disabled={saving} onClick={saveNames}>
-            Guardar nombre
+            Guardar datos
           </button>
         </div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr", gap: 14, marginTop: 14 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Dirección</label>
+            <input value={address} onChange={(e) => setAddress(e.target.value)}
+                   placeholder="Av. Principal 123 y Secundaria" maxLength={200} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Teléfono</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)}
+                   placeholder="0999999999" maxLength={40} />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Correo electrónico</label>
+            <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)}
+                   placeholder="info@clinica.ec" />
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 10 }}>
+          Estos datos aparecen en el encabezado y pie de los documentos (solicitudes de examen, etc.).
+        </p>
       </div>
 
       {/* Temas predefinidos */}
@@ -709,6 +737,127 @@ function BrandingTab() {
         <LogoCropper file={cropFile}
                      onCancel={() => setCropFile(null)}
                      onConfirm={(finalFile) => { setCropFile(null); uploadLogo(finalFile); }} />
+      )}
+    </div>
+  );
+}
+
+
+/* ── Plantillas de consentimiento (Sprint 37) ── */
+const PROCEDURES = [
+  ["extraccion", "Extracción dental"], ["endodoncia", "Endodoncia"],
+  ["restauracion", "Restauración"], ["profilaxis", "Profilaxis"],
+  ["cirugia", "Cirugía oral"], ["implante", "Implante"],
+  ["protesis", "Prótesis"], ["ortodoncia", "Ortodoncia"], ["otro", "Otro"],
+];
+
+function ConsentTemplatesTab() {
+  const [templates, setTemplates] = useState([]);
+  const [editing, setEditing] = useState(null);   // objeto en edición o null
+  const [error, setError] = useState("");
+
+  async function load() {
+    try {
+      const resp = await api("/consent-templates/");
+      const data = await resp.json();
+      setTemplates(data.results || data);
+    } catch { setError("No se pudieron cargar las plantillas."); }
+  }
+  useEffect(() => { load(); }, []);
+
+  function blank() {
+    return { procedure: "extraccion", title: "", procedure_text: "",
+             benefits: "", risks: "", alternatives: "", body_text: "" };
+  }
+
+  async function save() {
+    setError("");
+    try {
+      const isNew = !editing.id;
+      const resp = await api(
+        isNew ? "/consent-templates/" : `/consent-templates/${editing.id}/`,
+        { method: isNew ? "POST" : "PATCH", body: JSON.stringify(editing) }
+      );
+      if (!resp.ok) throw new Error(`No se pudo guardar (error ${resp.status}).`);
+      setEditing(null);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function remove(t) {
+    if (!window.confirm(`¿Eliminar la plantilla "${t.title}"?`)) return;
+    try {
+      const resp = await api(`/consent-templates/${t.id}/`, { method: "DELETE" });
+      if (!resp.ok && resp.status !== 204) throw new Error(`Error ${resp.status}`);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  return (
+    <div style={{ maxWidth: 860 }}>
+      {error && <div className="error-box">{error}</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: 0 }}>
+          Plantillas reutilizables de consentimiento, clasificadas por procedimiento.
+        </p>
+        {!editing && (
+          <button className="btn btn-primary" onClick={() => setEditing(blank())}>+ Nueva plantilla</button>
+        )}
+      </div>
+
+      {editing && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Procedimiento</label>
+              <select value={editing.procedure} onChange={(e) => setEditing({ ...editing, procedure: e.target.value })}>
+                {PROCEDURES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Título</label>
+              <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                     placeholder="Ej: Consentimiento para extracción simple" />
+            </div>
+          </div>
+          {[["procedure_text", "Descripción del procedimiento"], ["benefits", "Beneficios"],
+            ["risks", "Riesgos y complicaciones"], ["alternatives", "Alternativas"],
+            ["body_text", "Declaración de aceptación"]].map(([k, label]) => (
+            <div className="field" key={k}>
+              <label>{label}</label>
+              <textarea rows={2} value={editing[k] || ""}
+                        onChange={(e) => setEditing({ ...editing, [k]: e.target.value })} />
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary" onClick={save}>Guardar plantilla</button>
+            <button className="btn btn-ghost" onClick={() => setEditing(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {templates.length === 0 ? (
+        <div className="card"><div className="empty">Sin plantillas. Crea la primera.</div></div>
+      ) : (
+        <div className="card" style={{ padding: 0 }}>
+          <table>
+            <thead><tr><th>Procedimiento</th><th>Título</th><th></th></tr></thead>
+            <tbody>
+              {templates.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.procedure_display}</td>
+                  <td style={{ fontWeight: 600 }}>{t.title}</td>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
+                            onClick={() => setEditing(t)}>Editar</button>
+                    <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12, marginLeft: 6 }}
+                            onClick={() => remove(t)}>Eliminar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

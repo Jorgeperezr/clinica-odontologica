@@ -119,12 +119,15 @@ class Cie10SearchView(APIView):
 class ExamRequestSerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(source="get_category_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    priority_display = serializers.CharField(source="get_priority_display", read_only=True)
     report_document_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ExamRequest
         fields = [
-            "id", "category", "category_display", "detail", "status", "status_display",
+            "id", "category", "category_display", "detail",
+            "justification", "observations", "priority", "priority_display",
+            "status", "status_display",
             "report_notes", "report_document", "report_document_url",
             "requested_at", "reported_at",
         ]
@@ -352,4 +355,176 @@ class Form033XlsxExportView(APIView):
         )
         filename = f"form033_{patient.national_id or patient.id}.xlsx"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ExamRequestPDFView(APIView):
+    """
+    GET /api/v1/patients/{pk}/exam-requests/{exam_id}/pdf/ — solicitud de
+    examen complementario en PDF, lista para imprimir o entregar. Reúne los
+    datos de la clínica (branding), del profesional autenticado y del
+    paciente; puede regenerarse en cualquier momento.
+    """
+
+    permission_classes = [CAN_VIEW_CLINICAL]
+
+    def get(self, request, pk, exam_id):
+        from django.http import HttpResponse
+
+        from apps.clinical.exam_request_pdf import build_exam_request_pdf, _age_from_birth
+        from apps.clinical.models import ExamRequest
+        from apps.configuration.models import ClinicBranding
+
+        patient = _get_patient(request, pk)
+        exam = ExamRequest.objects.filter(
+            tenant=request.tenant, patient=patient, id=exam_id
+        ).first()
+        if exam is None:
+            return Response({"detail": "Solicitud no encontrada."}, status=404)
+
+        doctor, prof = _professional_snapshot(request)
+        branding = ClinicBranding.objects.filter(tenant=request.tenant).first()
+
+        # Logo (si existe) como ImageReader
+        logo_reader = None
+        if branding and branding.logo:
+            try:
+                from reportlab.lib.utils import ImageReader
+                logo_reader = ImageReader(branding.logo.path)
+            except Exception:
+                logo_reader = None
+
+        specialty = ""
+        signature_b64 = None
+        if doctor:
+            specialty = ", ".join(s.name for s in doctor.specialties.all()) or ""
+            signature_b64 = doctor.signature_image or None
+
+        sex_map = {"H": "Masculino", "M": "Femenino", "hombre": "Masculino", "mujer": "Femenino"}
+        clinic_name = (branding.display_name if branding and branding.display_name
+                       else request.tenant.name)
+
+        pdf_bytes = build_exam_request_pdf(
+            clinic={
+                "name": clinic_name,
+                "logo_reader": logo_reader,
+                "address": branding.address if branding else "",
+                "phone": branding.phone if branding else "",
+                "email": branding.email if branding else "",
+            },
+            professional={
+                "full_name": prof.get("full_name"),
+                "specialty": specialty,
+                "license_number": prof.get("license_number"),
+                "signature_b64": signature_b64,
+            },
+            patient={
+                "full_name": f"{patient.first_name} {patient.last_name}",
+                "national_id": patient.national_id,
+                "age": _age_from_birth(patient.birth_date),
+                "sex": sex_map.get(getattr(patient, "sex", ""), getattr(patient, "sex", "") or "—"),
+                "history_number": patient.national_id,
+            },
+            exam={
+                "datetime": exam.requested_at.strftime("%Y-%m-%d %H:%M"),
+                "category": exam.get_category_display(),
+                "detail": exam.detail,
+                "justification": exam.justification,
+                "observations": exam.observations,
+                "priority": exam.get_priority_display(),
+                "urgent": exam.priority == ExamRequest.Priority.URGENT,
+            },
+        )
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'inline; filename="solicitud_examen_{patient.national_id or patient.id}.pdf"'
+        )
+        return response
+
+
+class ConsentPDFView(APIView):
+    """
+    GET /api/v1/consents/{pk}/pdf/ — consentimiento informado en PDF
+    profesional, regenerable en cualquier momento. Reúne clínica (branding),
+    profesional (sesión) y paciente. Mismo mecanismo que la solicitud de
+    examen: se devuelve el binario y el frontend lo descarga con api()+blob().
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor", "reception", "auxiliary")]
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+
+        from apps.clinical.consent_pdf import build_consent_pdf
+        from apps.clinical.exam_request_pdf import _age_from_birth
+        from apps.clinical.models import InformedConsent
+        from apps.configuration.models import ClinicBranding
+
+        consent = InformedConsent.objects.filter(tenant=request.tenant, pk=pk).first()
+        if consent is None:
+            return Response({"detail": "Consentimiento no encontrado."}, status=404)
+        patient = consent.patient
+
+        doctor, prof = _professional_snapshot(request)
+        branding = ClinicBranding.objects.filter(tenant=request.tenant).first()
+
+        logo_reader = None
+        if branding and branding.logo:
+            try:
+                from reportlab.lib.utils import ImageReader
+                logo_reader = ImageReader(branding.logo.path)
+            except Exception:
+                logo_reader = None
+
+        specialty = ""
+        signature_b64 = None
+        if doctor:
+            specialty = ", ".join(s.name for s in doctor.specialties.all()) or ""
+            signature_b64 = doctor.signature_image or None
+
+        # Firma del paciente (ImageField): a base64 para el builder
+        patient_sig_b64 = None
+        if consent.signature_image:
+            try:
+                import base64
+                with consent.signature_image.open("rb") as fh:
+                    patient_sig_b64 = base64.b64encode(fh.read()).decode()
+            except Exception:
+                patient_sig_b64 = None
+
+        sex_map = {"H": "Masculino", "M": "Femenino"}
+        clinic_name = (branding.display_name if branding and branding.display_name
+                       else request.tenant.name)
+
+        pdf_bytes = build_consent_pdf(
+            clinic={
+                "name": clinic_name, "logo_reader": logo_reader,
+                "address": branding.address if branding else "",
+                "phone": branding.phone if branding else "",
+                "email": branding.email if branding else "",
+            },
+            professional={
+                "full_name": prof.get("full_name"), "specialty": specialty,
+                "license_number": prof.get("license_number"), "signature_b64": signature_b64,
+            },
+            patient={
+                "full_name": f"{patient.first_name} {patient.last_name}",
+                "national_id": patient.national_id,
+                "birth_date": patient.birth_date.isoformat() if patient.birth_date else "",
+                "age": _age_from_birth(patient.birth_date),
+                "sex": sex_map.get(getattr(patient, "sex", ""), getattr(patient, "sex", "") or "—"),
+                "history_number": patient.national_id,
+            },
+            consent={
+                "title": consent.title, "procedure": consent.procedure,
+                "benefits": consent.benefits, "risks": consent.risks,
+                "alternatives": consent.alternatives, "body_text": consent.body_text,
+                "observations": consent.observations,
+                "patient_signature_b64": patient_sig_b64,
+                "signed_place": "",
+                "signed_date": consent.signed_at.strftime("%Y-%m-%d") if consent.signed_at else "",
+            },
+        )
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="consentimiento_{consent.id}.pdf"'
         return response

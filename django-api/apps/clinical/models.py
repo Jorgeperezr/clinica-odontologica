@@ -352,10 +352,26 @@ class InformedConsent(TenantAwareModel):
         blank=True,
         related_name="consents",
     )
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Borrador"
+        PENDING = "pending", "Pendiente de firma"
+        SIGNED = "signed", "Firmado"
+        VOID = "void", "Anulado"
+
     title = models.CharField(max_length=200, default="Consentimiento informado")
     body_text = models.TextField(
         help_text="Texto del consentimiento que el paciente acepta."
     )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.DRAFT
+    )
+    # Secciones estructuradas del documento (opcionales; body_text sigue
+    # sirviendo como descripción/base para consentimientos antiguos).
+    procedure = models.TextField(blank=True, help_text="Descripción del procedimiento.")
+    benefits = models.TextField(blank=True, help_text="Beneficios.")
+    risks = models.TextField(blank=True, help_text="Riesgos y posibles complicaciones.")
+    alternatives = models.TextField(blank=True, help_text="Alternativas terapéuticas.")
+    observations = models.TextField(blank=True, help_text="Observaciones (opcional).")
     pdf_file = models.FileField(upload_to="clinical/consents/", null=True, blank=True)
     signature_image = models.ImageField(
         upload_to="clinical/signatures/", null=True, blank=True
@@ -489,11 +505,20 @@ class ExamRequest(TenantAwareModel):
         PENDING = "pending", "Pedido"
         REPORTED = "reported", "Con informe"
 
+    class Priority(models.TextChoices):
+        NORMAL = "normal", "Normal"
+        URGENT = "urgent", "Urgente"
+
     patient = models.ForeignKey(
         "patients.Patient", on_delete=models.CASCADE, related_name="exam_requests"
     )
     category = models.CharField(max_length=20, choices=Category.choices)
     detail = models.CharField(max_length=255, help_text="Examen solicitado.")
+    justification = models.TextField(blank=True, help_text="Motivo o justificación clínica.")
+    observations = models.TextField(blank=True, help_text="Observaciones adicionales (opcional).")
+    priority = models.CharField(
+        max_length=10, choices=Priority.choices, default=Priority.NORMAL
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     report_notes = models.TextField(blank=True, help_text="M. Informe de exámenes.")
     report_document = models.ForeignKey(
@@ -508,3 +533,57 @@ class ExamRequest(TenantAwareModel):
         verbose_name = "Pedido de examen"
         verbose_name_plural = "Pedidos de exámenes"
         ordering = ["-requested_at"]
+
+
+class ConsentTemplate(TenantAwareModel):
+    """
+    Plantilla reutilizable de consentimiento, clasificada por procedimiento
+    (Sprint 37). El profesional selecciona una, la edita y guarda el
+    consentimiento; puede crear, modificar y eliminar plantillas propias.
+    """
+
+    class Procedure(models.TextChoices):
+        EXTRACCION = "extraccion", "Extracción dental"
+        ENDODONCIA = "endodoncia", "Endodoncia"
+        RESTAURACION = "restauracion", "Restauración"
+        PROFILAXIS = "profilaxis", "Profilaxis"
+        CIRUGIA = "cirugia", "Cirugía oral"
+        IMPLANTE = "implante", "Implante"
+        PROTESIS = "protesis", "Prótesis"
+        ORTODONCIA = "ortodoncia", "Ortodoncia"
+        OTRO = "otro", "Otro"
+
+    procedure = models.CharField(max_length=20, choices=Procedure.choices)
+    title = models.CharField(max_length=200)
+    procedure_text = models.TextField(blank=True, help_text="Descripción del procedimiento.")
+    benefits = models.TextField(blank=True)
+    risks = models.TextField(blank=True)
+    alternatives = models.TextField(blank=True)
+    body_text = models.TextField(blank=True, help_text="Declaración de aceptación / cuerpo.")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+
+    class Meta:
+        verbose_name = "Plantilla de consentimiento"
+        verbose_name_plural = "Plantillas de consentimiento"
+        ordering = ["procedure", "title"]
+
+    def __str__(self):
+        return f"{self.get_procedure_display()} · {self.title}"
+
+
+class ConsentAuditLog(TenantAwareModel):
+    """Historial de auditoría de un consentimiento (Sprint 37)."""
+
+    consent = models.ForeignKey(
+        "InformedConsent", on_delete=models.CASCADE, related_name="audit_logs"
+    )
+    action = models.CharField(max_length=40)
+    detail = models.CharField(max_length=255, blank=True)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-at"]
+
+    def __str__(self):
+        return f"{self.action} · {self.at:%Y-%m-%d %H:%M}"

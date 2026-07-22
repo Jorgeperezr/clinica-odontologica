@@ -286,7 +286,19 @@ export function DocumentsTab({ patientId }) {
 /* ═══════════ Consentimientos con firma táctil ═══════════ */
 
 export function ConsentsTab({ patientId }) {
+
+  async function openConsentPdf(consent) {
+    try {
+      const resp = await api(`/consents/${consent.id}/pdf/`);
+      if (!resp.ok) throw new Error(`No se pudo generar el PDF (error ${resp.status}).`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+    } catch (err) { console.error(err); }
+  }
   const [consents, setConsents] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [form, setForm] = useState({ title: "", body_text: "" });
   const [signing, setSigning] = useState(null);   // consentimiento a firmar
   const [error, setError] = useState("");
@@ -299,7 +311,28 @@ export function ConsentsTab({ patientId }) {
     } catch { setError("No se pudieron cargar los consentimientos."); }
   }, [patientId]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadTemplates = useCallback(async () => {
+    try {
+      const resp = await api("/consent-templates/");
+      const data = await resp.json();
+      setTemplates(data.results || data);
+    } catch { /* opcional */ }
+  }, []);
+
+  useEffect(() => { load(); loadTemplates(); }, [load, loadTemplates]);
+
+  function applyTemplate(id) {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    // Compone el cuerpo desde las secciones de la plantilla (editable después)
+    const parts = [];
+    if (t.procedure_text) parts.push(`PROCEDIMIENTO:\n${t.procedure_text}`);
+    if (t.benefits) parts.push(`BENEFICIOS:\n${t.benefits}`);
+    if (t.risks) parts.push(`RIESGOS Y COMPLICACIONES:\n${t.risks}`);
+    if (t.alternatives) parts.push(`ALTERNATIVAS:\n${t.alternatives}`);
+    if (t.body_text) parts.push(t.body_text);
+    setForm({ title: t.title, body_text: parts.join("\n\n") });
+  }
 
   async function create(e) {
     e.preventDefault();
@@ -335,6 +368,20 @@ export function ConsentsTab({ patientId }) {
 
       <form onSubmit={create} className="card" style={{ marginBottom: 18 }}>
         <h3 style={{ marginBottom: 12 }}>Nuevo consentimiento informado</h3>
+        {templates.length > 0 && (
+          <div className="field">
+            <label>Partir de una plantilla (opcional)</label>
+            <select defaultValue="" onChange={(e) => { applyTemplate(e.target.value); e.target.value = ""; }}>
+              <option value="">— Seleccionar plantilla —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.procedure_display} · {t.title}</option>
+              ))}
+            </select>
+            <p style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}>
+              La plantilla rellena el texto; puedes editarlo antes de guardar. Las plantillas se administran en Configuración.
+            </p>
+          </div>
+        )}
         <div className="field">
           <label>Título *</label>
           <input required placeholder="Ej: Consentimiento para extracción de pieza 16"
@@ -360,17 +407,27 @@ export function ConsentsTab({ patientId }) {
                 <tr key={c.id}>
                   <td style={{ fontWeight: 600 }}>{c.title}</td>
                   <td className="tabular">{(c.created_at || "").slice(0, 10)}</td>
-                  <td>{c.is_signed
-                    ? <span className="badge badge-ok">Firmado {(c.signed_at || "").slice(0, 10)}</span>
-                    : <span className="badge badge-warn">Pendiente de firma</span>}</td>
+                  <td>{
+                    c.status === "signed" || c.is_signed
+                      ? <span className="badge badge-ok">Firmado {(c.signed_at || "").slice(0, 10)}</span>
+                      : c.status === "void"
+                        ? <span className="badge badge-danger">Anulado</span>
+                        : c.status === "draft"
+                          ? <span className="badge" style={{ background: "var(--line)", color: "var(--ink-soft)" }}>Borrador</span>
+                          : <span className="badge badge-warn">Pendiente de firma</span>
+                  }</td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    {c.is_signed ? (
-                      c.pdf_file && <a className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 12 }}
-                                       href={c.pdf_file} target="_blank" rel="noreferrer">📄 PDF firmado</a>
-                    ) : (
-                      <button className="btn btn-primary" style={{ padding: "4px 12px", fontSize: 12 }}
-                              onClick={() => setSigning(c)}>✍ Firmar ahora</button>
-                    )}
+                    <span style={{ display: "inline-flex", gap: 6 }}>
+                      <button className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 12 }}
+                              onClick={() => openConsentPdf(c)}
+                              title="Ver, descargar o imprimir el consentimiento">
+                        Generar PDF
+                      </button>
+                      {!c.is_signed && (
+                        <button className="btn btn-primary" style={{ padding: "4px 12px", fontSize: 12 }}
+                                onClick={() => setSigning(c)}>Firmar ahora</button>
+                      )}
+                    </span>
                   </td>
                 </tr>
               ))}

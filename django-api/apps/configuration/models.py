@@ -167,6 +167,9 @@ class ClinicBranding(TenantAwareModel):
     short_name = models.CharField(
         max_length=40, blank=True, help_text="Nombre corto (opcional, para espacios reducidos)."
     )
+    address = models.CharField(max_length=200, blank=True, help_text="Dirección de la clínica.")
+    phone = models.CharField(max_length=40, blank=True, help_text="Teléfono de contacto.")
+    email = models.EmailField(blank=True, help_text="Correo electrónico institucional.")
 
     class Meta:
         constraints = [

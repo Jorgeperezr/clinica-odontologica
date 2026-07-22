@@ -291,8 +291,14 @@ class InformedConsentListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         patient = _get_patient(self.request, self.kwargs["pk"])
-        serializer.save(
+        consent = serializer.save(
             tenant=self.request.tenant, patient=patient, created_by=self.request.user
+        )
+        from apps.clinical.models import ConsentAuditLog
+        ConsentAuditLog.objects.create(
+            tenant=self.request.tenant, consent=consent, action="Creado",
+            detail=f"Estado inicial: {consent.get_status_display()}.",
+            actor=self.request.user,
         )
 
 
@@ -351,7 +357,16 @@ class ConsentSignView(generics.GenericAPIView):
         consent.signature_image.save(sig_name, ContentFile(image_bytes), save=False)
         consent.signed_at = timezone.now()
         consent.ip_address = self._get_ip(request)
+        consent.status = InformedConsent.Status.SIGNED
         consent.save()
+
+        # Historial de auditoría del consentimiento
+        from apps.clinical.models import ConsentAuditLog
+        ConsentAuditLog.objects.create(
+            tenant=request.tenant, consent=consent, action="Firmado",
+            detail=f"Firmado por el paciente. IP {consent.ip_address or '—'}.",
+            actor=request.user,
+        )
 
         # Generar el PDF con la firma incrustada
         pdf_bytes = generate_consent_pdf(consent, consent.signature_image.path)
@@ -484,3 +499,73 @@ class EvolutionDetailView(generics.RetrieveUpdateDestroyAPIView):
             },
         )
         instance.delete()
+
+
+class ConsentTemplateListCreateView(generics.ListCreateAPIView):
+    """GET/POST /api/v1/consent-templates/ — plantillas reutilizables (Sprint 37)."""
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import ConsentTemplateSerializer
+        return ConsentTemplateSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import ConsentTemplate
+        qs = ConsentTemplate.objects.filter(tenant=self.request.tenant)
+        procedure = self.request.query_params.get("procedure")
+        if procedure:
+            qs = qs.filter(procedure=procedure)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant, created_by=self.request.user)
+
+
+class ConsentTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """GET/PATCH/DELETE /api/v1/consent-templates/{id}/ (Sprint 37)."""
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import ConsentTemplateSerializer
+        return ConsentTemplateSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import ConsentTemplate
+        return ConsentTemplate.objects.filter(tenant=self.request.tenant)
+
+
+class ConsentDetailView(generics.RetrieveUpdateAPIView):
+    """
+    GET/PATCH /api/v1/consents/{id}/detail/ — editar un consentimiento en
+    borrador o pendiente. Un consentimiento FIRMADO no puede modificarse
+    (Sprint 37). Permite cambiar el estado (p. ej. a "anulado").
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import InformedConsentSerializer
+        return InformedConsentSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import InformedConsent
+        return InformedConsent.objects.filter(tenant=self.request.tenant)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import ValidationError
+
+        from apps.clinical.models import ConsentAuditLog, InformedConsent
+        consent = self.get_object()
+        new_status = self.request.data.get("status")
+        # Un consentimiento firmado es inmutable (salvo anulación explícita)
+        if consent.status == InformedConsent.Status.SIGNED and new_status != InformedConsent.Status.VOID:
+            raise ValidationError("Un consentimiento firmado no puede modificarse.")
+        updated = serializer.save()
+        if new_status and new_status != consent.status:
+            ConsentAuditLog.objects.create(
+                tenant=self.request.tenant, consent=updated,
+                action=f"Estado → {updated.get_status_display()}",
+                actor=self.request.user,
+            )

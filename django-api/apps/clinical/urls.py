@@ -14,6 +14,7 @@ urlpatterns = [
     path("form033/<uuid:pk>/", form033_views.Form033DetailView.as_view(), name="form033-detail"),
     path("cie10/", form033_views.Cie10SearchView.as_view(), name="cie10-search"),
     path("patients/<uuid:pk>/cpo-ceo/", form033_views.CpoCeoIndexView.as_view(), name="cpo-ceo-index"),
+    path("patients/<uuid:pk>/exam-requests/<uuid:exam_id>/pdf/", form033_views.ExamRequestPDFView.as_view(), name="exam-request-pdf"),
     path("patients/<uuid:pk>/form033/export-pdf/", form033_views.Form033PDFExportView.as_view(), name="form033-export-pdf"),
     path("patients/<uuid:pk>/form033/export-xlsx/", form033_views.Form033XlsxExportView.as_view(), name="form033-export-xlsx"),
     path("patients/<uuid:pk>/exam-requests/", form033_views.ExamRequestListCreateView.as_view(), name="exam-request-list"),
@@ -40,4 +41,8 @@ urlpatterns = [
     path("patients/<uuid:pk>/radiographs/", views.RadiographPhotoListCreateView.as_view(), name="radiograph-list"),
     path("patients/<uuid:pk>/consents/", views.InformedConsentListCreateView.as_view(), name="consent-list"),
     path("consents/<uuid:pk>/sign/", views.ConsentSignView.as_view(), name="consent-sign"),
+    path("consents/<uuid:pk>/detail/", views.ConsentDetailView.as_view(), name="consent-detail"),
+    path("consents/<uuid:pk>/pdf/", form033_views.ConsentPDFView.as_view(), name="consent-pdf"),
+    path("consent-templates/", views.ConsentTemplateListCreateView.as_view(), name="consent-template-list"),
+    path("consent-templates/<uuid:pk>/", views.ConsentTemplateDetailView.as_view(), name="consent-template-detail"),
 ]

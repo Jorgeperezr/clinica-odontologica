@@ -136,7 +136,7 @@ class InformedConsentSerializer(serializers.ModelSerializer):
             "id", "patient", "treatment_plan", "title", "body_text",
             "pdf_file", "signature_image", "signed_at", "ip_address",
             "is_signed", "created_at",
-        ]
+            "status", "procedure", "benefits", "risks", "alternatives", "observations",]
         read_only_fields = [
             "id", "patient", "pdf_file", "signature_image",
             "signed_at", "ip_address", "is_signed", "created_at",
@@ -175,3 +175,26 @@ class TreatmentPlanTemplateSerializer(serializers.ModelSerializer):
 
     def get_total_estimated(self, obj):
         return str(sum((i.treatment.base_price for i in obj.items.all()), start=0))
+
+
+class ConsentTemplateSerializer(serializers.ModelSerializer):
+    procedure_display = serializers.CharField(source="get_procedure_display", read_only=True)
+
+    class Meta:
+        from apps.clinical.models import ConsentTemplate
+        model = ConsentTemplate
+        fields = ["id", "procedure", "procedure_display", "title", "procedure_text",
+                  "benefits", "risks", "alternatives", "body_text", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class ConsentAuditLogSerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.clinical.models import ConsentAuditLog
+        model = ConsentAuditLog
+        fields = ["id", "action", "detail", "actor_name", "at"]
+
+    def get_actor_name(self, obj):
+        return obj.actor.full_name or obj.actor.email if obj.actor else "—"

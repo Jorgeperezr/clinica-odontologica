@@ -150,9 +150,9 @@ class ClinicBrandingView(APIView):
             except Exception:
                 auto_palette = None
 
-        for field in ("display_name", "short_name"):
+        for field in ("display_name", "short_name", "address", "phone", "email"):
             if field in request.data:
-                setattr(obj, field, str(request.data.get(field) or "").strip()[:120])
+                setattr(obj, field, str(request.data.get(field) or "").strip()[:200])
 
         theme = request.data.get("theme")
         if theme is not None:
