@@ -123,3 +123,79 @@ class PatientOrderingTests(APITestCase):
         # Un ordering inválido no rompe: cae a name_asc
         resp = self.client.get("/api/v1/patients/?ordering=xxx")
         self.assertEqual(resp.status_code, 200)
+
+
+class PatientDocumentFlowTests(APITestCase):
+    """Sprint 38: flujo completo de documentos (URL relativa, metadatos, seguridad)."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Clínica Docs", ruc="1111111111001")
+        self.other_tenant = Tenant.objects.create(name="Otra Clínica", ruc="2222222222001")
+        self.doctor = User.objects.create_user(
+            email="d@docs.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dr. Documentos",
+        )
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Doc", last_name="Paciente", national_id="1717171717",
+        )
+
+    def _upload(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_authenticate(user=self.doctor)
+        pdf = SimpleUploadedFile("informe.pdf", b"%PDF-1.4 fake", content_type="application/pdf")
+        return self.client.post(
+            f"/api/v1/patients/{self.patient.id}/documents/",
+            {"doc_type": "report", "description": "Informe de laboratorio", "file": pdf},
+            format="multipart",
+        )
+
+    def test_upload_returns_relative_url_and_metadata(self):
+        resp = self._upload()
+        self.assertEqual(resp.status_code, 201, resp.content)
+        # URL relativa, NO absoluta con localhost
+        self.assertTrue(resp.data["file_url"].startswith("/media/"))
+        self.assertNotIn("http", resp.data["file_url"])
+        self.assertEqual(resp.data["file_name"][-4:], ".pdf")
+        self.assertGreater(resp.data["file_size"], 0)
+        self.assertEqual(resp.data["uploaded_by_name"], "Dr. Documentos")
+        self.assertEqual(resp.data["doc_type_display"], "Informe")
+
+    def test_authenticated_file_download(self):
+        self._upload()
+        from apps.patients.models import PatientDocument
+        doc = PatientDocument.objects.get(patient=self.patient)
+        resp = self.client.get(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/file/"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Disposition"][:6], "inline")
+        # download=1 fuerza attachment
+        resp2 = self.client.get(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/file/?download=1"
+        )
+        self.assertEqual(resp2["Content-Disposition"][:10], "attachment")
+
+    def test_file_requires_authentication(self):
+        self._upload()
+        from apps.patients.models import PatientDocument
+        doc = PatientDocument.objects.get(patient=self.patient)
+        self.client.force_authenticate(user=None)
+        resp = self.client.get(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/file/"
+        )
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_tenant_isolation_on_file(self):
+        self._upload()
+        from apps.patients.models import PatientDocument
+        doc = PatientDocument.objects.get(patient=self.patient)
+        # Un usuario de OTRA clínica no puede acceder al archivo
+        intruder = User.objects.create_user(
+            email="x@otra.ec", password="superseguro123", role="doctor",
+            tenant=self.other_tenant,
+        )
+        self.client.force_authenticate(user=intruder)
+        resp = self.client.get(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/file/"
+        )
+        self.assertEqual(resp.status_code, 404)

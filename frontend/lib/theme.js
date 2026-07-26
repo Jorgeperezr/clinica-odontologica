@@ -173,6 +173,12 @@ export function applyBrandingChrome(branding) {
  * contenido mixto. Si ya fuera absoluta, se respeta tal cual.
  */
 
+export function fileSrc(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${apiBase()}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 export function logoSrc(url) {
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;

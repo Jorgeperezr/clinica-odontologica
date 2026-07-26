@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 37 completado — consentimientos informados mejorados
+## Estado actual: Sprint 38 completado — módulo de documentos robustecido
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -332,6 +332,14 @@ Sin cambios de backend (los 132 tests no varían).
 - **PDF profesional** (`apps/clinical/consent_pdf.py`, endpoint `consents/<id>/pdf/`, regenerable): encabezado con logo y datos de la clínica; datos del paciente (nombre, identificación, nacimiento, edad, sexo, HC); datos del profesional desde la sesión (nombre, especialidad, registro, firma); secciones (procedimiento, beneficios, riesgos, alternativas, declaración, observaciones); firmas de paciente y profesional con lugar/fecha y espacio para huella; pie institucional.
 - **Plantillas reutilizables** (`ConsentTemplate`, migración `clinical/0010`): clasificadas por procedimiento (extracción, endodoncia, restauración, profilaxis, cirugía, implante, prótesis, ortodoncia). CRUD completo en Configuración → Consentimientos; al crear un consentimiento se puede partir de una plantilla y editarla antes de guardar.
 - **Flujo de estados:** borrador → pendiente de firma → firmado → anulado. Un consentimiento firmado es inmutable (sólo puede anularse); historial de auditoría por consentimiento (`ConsentAuditLog`); el PDF definitivo se genera al firmar. Migración de datos `clinical/0011` preserva el estado de los consentimientos ya firmados.
+
+### Sprint 38 — Módulo de documentos: visualización, vista previa, escaneo y gestión (hecho)
+- **Bug de visualización corregido (causa raíz):** el serializer exponía `file` crudo → DRF lo devolvía como URL absoluta con host interno (localhost) → Mixed Content/ERR_CONNECTION_REFUSED; el frontend agravaba con `href={d.file}` y `src={d.file}`. Ahora el serializer devuelve `file_url` RELATIVA y el frontend la resuelve con `fileSrc()` (igual que logos y consentimientos). Los documentos ya almacenados siguen funcionando.
+- **Endpoint de archivo autenticado** `patients/<pk>/documents/<id>/file/` (Sprint 38): valida tenant + paciente + permisos antes de entregar el binario, con Content-Type correcto e inline/attachment según `?download=1`. Cierra el acceso no autenticado que existía al servir `/media/` directo.
+- **Vista previa en modal** (`lib/DocumentPreview.js`) para PDF, JPG, JPEG, PNG (y otras imágenes): ampliar, reducir, rotar, descargar e imprimir, sin abandonar la página. Carga el archivo autenticado vía blob.
+- **Escaneo por cámara** (`lib/DocumentScanner.js`): captura de una o varias páginas con `getUserMedia`, realce de brillo/contraste, y combinación en un único PDF que se guarda en la historia clínica. (TWAIN/WIA no es accesible desde el navegador por seguridad; se documenta como limitación y se ofrece la captura por cámara, que cubre el caso habitual. Recorte de bordes y corrección de perspectiva quedan como mejora futura con OpenCV.js.)
+- **Gestión documental:** vista en cuadrícula y en lista, búsqueda por nombre/descripción, filtro por categoría y por fecha, orden por fecha o nombre, y metadatos visibles (tamaño del archivo, fecha, quién lo cargó). El serializer añade `file_name`, `file_size`, `doc_type_display` y `uploaded_by_name`.
+- **Seguridad verificada con tests:** aislamiento por clínica (un usuario de otra clínica recibe 404 al pedir el archivo), pertenencia al paciente correcto, autenticación obligatoria en la descarga.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

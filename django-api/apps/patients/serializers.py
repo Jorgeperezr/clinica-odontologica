@@ -14,10 +14,42 @@ class MedicalBackgroundSerializer(serializers.ModelSerializer):
 
 
 class PatientDocumentSerializer(serializers.ModelSerializer):
+    # URL RELATIVA (p. ej. "/media/patients/documents/x.pdf"): el frontend la
+    # resuelve contra apiBase(), evitando el host interno (localhost) que el
+    # navegador bloquea por Mixed Content en https. Reemplaza al antiguo
+    # campo "file" absoluto que impedía visualizar los documentos.
+    file_url = serializers.SerializerMethodField()
+    file_name = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
+    doc_type_display = serializers.CharField(source="get_doc_type_display", read_only=True)
+    uploaded_by_name = serializers.SerializerMethodField()
+
     class Meta:
         model = PatientDocument
-        fields = ["id", "doc_type", "file", "description", "uploaded_at"]
+        fields = [
+            "id", "doc_type", "doc_type_display", "file", "file_url", "file_name",
+            "file_size", "description", "uploaded_at", "uploaded_by_name",
+        ]
         read_only_fields = ["id", "uploaded_at"]
+        extra_kwargs = {"file": {"write_only": True}}
+
+    def get_file_url(self, obj):
+        return obj.file.url if obj.file else None
+
+    def get_file_name(self, obj):
+        import os
+        return os.path.basename(obj.file.name) if obj.file else ""
+
+    def get_file_size(self, obj):
+        try:
+            return obj.file.size if obj.file else 0
+        except (OSError, ValueError):
+            return 0
+
+    def get_uploaded_by_name(self, obj):
+        if obj.uploaded_by:
+            return obj.uploaded_by.full_name or obj.uploaded_by.email
+        return "—"
 
 
 class PatientSerializer(serializers.ModelSerializer):

@@ -10,6 +10,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, apiBase } from "./api";
 import SignaturePad from "./SignaturePad";
+import DocumentPreview from "./DocumentPreview";
+import DocumentScanner from "./DocumentScanner";
+import { fileSrc } from "./theme";
 import { useConfirm } from "./ConfirmDialog";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
@@ -177,6 +180,12 @@ const DOC_CATEGORIES = {
 export function DocumentsTab({ patientId }) {
   const [docs, setDocs] = useState([]);
   const [filter, setFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [sortBy, setSortBy] = useState("date_desc");
+  const [view, setView] = useState("grid");     // grid | list
+  const [preview, setPreview] = useState(null);  // documento en vista previa
+  const [scanning, setScanning] = useState(false);
   const [form, setForm] = useState({ doc_type: "photo", description: "" });
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -218,15 +227,49 @@ export function DocumentsTab({ patientId }) {
     finally { setUploading(false); }
   }
 
-  const visible = filter ? docs.filter((d) => d.doc_type === filter) : docs;
-  const isImage = (d) => /\.(png|jpe?g|gif|webp)$/i.test(d.file || "");
+  function fmtSize(bytes) {
+    if (!bytes) return "—";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  const isImage = (d) => /\.(png|jpe?g|gif|webp)$/i.test(d.file_name || d.file_url || "");
+
+  // Filtrado + búsqueda + orden (en el cliente)
+  let visible = docs.slice();
+  if (filter) visible = visible.filter((d) => d.doc_type === filter);
+  if (search.trim()) {
+    const q = search.trim().toLowerCase();
+    visible = visible.filter((d) =>
+      (d.description || "").toLowerCase().includes(q) ||
+      (d.file_name || "").toLowerCase().includes(q));
+  }
+  if (dateFrom) visible = visible.filter((d) => (d.uploaded_at || "") >= dateFrom);
+  visible.sort((a, b) => {
+    if (sortBy === "date_asc") return (a.uploaded_at || "").localeCompare(b.uploaded_at || "");
+    if (sortBy === "date_desc") return (b.uploaded_at || "").localeCompare(a.uploaded_at || "");
+    if (sortBy === "name_asc") return (a.description || a.file_name || "").localeCompare(b.description || b.file_name || "");
+    return 0;
+  });
 
   return (
     <div>
       {error && <div className="error-box">{error}</div>}
+      {preview && (
+        <DocumentPreview doc={preview} patientId={patientId} onClose={() => setPreview(null)} />
+      )}
+      {scanning && (
+        <DocumentScanner patientId={patientId} docType={form.doc_type}
+                         onClose={() => setScanning(false)}
+                         onDone={() => { setScanning(false); load(); }} />
+      )}
 
       <form onSubmit={upload} className="card" style={{ marginBottom: 18 }}>
-        <h3 style={{ marginBottom: 12 }}>Subir documento o foto</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h3 style={{ margin: 0 }}>Subir documento o foto</h3>
+          <button type="button" className="btn btn-ghost" style={{ fontSize: 13 }}
+                  onClick={() => setScanning(true)}>📷 Escanear documento</button>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 2fr auto", gap: "0 12px", alignItems: "end" }}>
           <div className="field" style={{ marginBottom: 0 }}><label>Categoría</label>
             <select value={form.doc_type} onChange={(e) => setForm({ ...form, doc_type: e.target.value })}>
@@ -244,6 +287,32 @@ export function DocumentsTab({ patientId }) {
         </div>
       </form>
 
+      {/* Barra de herramientas: búsqueda, filtros, orden, vista */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "end" }}>
+        <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
+          <label>Buscar por nombre</label>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nombre o descripción…" />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Desde fecha</label>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Ordenar</label>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="date_desc">Fecha (recientes primero)</option>
+            <option value="date_asc">Fecha (antiguos primero)</option>
+            <option value="name_asc">Nombre (A-Z)</option>
+          </select>
+        </div>
+        <div style={{ display: "flex", gap: 4, paddingBottom: 2 }}>
+          <button className={`btn ${view === "grid" ? "btn-primary" : "btn-ghost"}`}
+                  style={{ fontSize: 12, padding: "7px 12px" }} onClick={() => setView("grid")}>▦ Cuadrícula</button>
+          <button className={`btn ${view === "list" ? "btn-primary" : "btn-ghost"}`}
+                  style={{ fontSize: 12, padding: "7px 12px" }} onClick={() => setView("list")}>☰ Lista</button>
+        </div>
+      </div>
+
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <button className={`btn ${filter === "" ? "btn-primary" : "btn-ghost"}`}
                 style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => setFilter("")}>Todos</button>
@@ -256,27 +325,51 @@ export function DocumentsTab({ patientId }) {
       </div>
 
       {visible.length === 0 ? (
-        <div className="card"><div className="empty">Sin documentos en esta categoría.</div></div>
-      ) : (
+        <div className="card"><div className="empty">Sin documentos que coincidan.</div></div>
+      ) : view === "grid" ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 14 }}>
           {visible.map((d) => (
-            <a key={d.id} href={d.file} target="_blank" rel="noreferrer"
-               className="card" style={{ padding: 12, textDecoration: "none", color: "inherit" }}>
+            <button key={d.id} onClick={() => setPreview(d)}
+                    className="card" style={{ padding: 12, textAlign: "left", cursor: "pointer", border: "1px solid var(--line)" }}>
               {isImage(d) ? (
-                <img src={d.file} alt={d.description}
+                <img src={fileSrc(d.file_url)} alt={d.description}
                      style={{ width: "100%", height: 130, objectFit: "cover", borderRadius: 8, marginBottom: 8 }} />
               ) : (
                 <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center",
-                              background: "var(--petrol-soft)", borderRadius: 8, marginBottom: 8, fontSize: 34 }}>
-                  📄
-                </div>
+                              background: "var(--petrol-soft)", borderRadius: 8, marginBottom: 8, fontSize: 34 }}>📄</div>
               )}
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{d.description || "Documento"}</div>
-              <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
-                {DOC_CATEGORIES[d.doc_type] || d.doc_type} · {(d.uploaded_at || "").slice(0, 10)}
+              <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {d.description || d.file_name || "Documento"}
               </div>
-            </a>
+              <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+                {d.doc_type_display || DOC_CATEGORIES[d.doc_type] || d.doc_type} · {(d.uploaded_at || "").slice(0, 10)}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+                {fmtSize(d.file_size)} · {d.uploaded_by_name || "—"}
+              </div>
+            </button>
           ))}
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0 }}>
+          <table>
+            <thead><tr><th>Nombre</th><th>Categoría</th><th>Tamaño</th><th>Cargado por</th><th>Fecha</th><th></th></tr></thead>
+            <tbody>
+              {visible.map((d) => (
+                <tr key={d.id}>
+                  <td style={{ fontWeight: 600 }}>{d.description || d.file_name || "Documento"}</td>
+                  <td>{d.doc_type_display || DOC_CATEGORIES[d.doc_type] || d.doc_type}</td>
+                  <td className="tabular">{fmtSize(d.file_size)}</td>
+                  <td>{d.uploaded_by_name || "—"}</td>
+                  <td className="tabular">{(d.uploaded_at || "").slice(0, 10)}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
+                            onClick={() => setPreview(d)}>Ver</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

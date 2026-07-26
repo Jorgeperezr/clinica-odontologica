@@ -144,6 +144,39 @@ class PatientDocumentListCreateView(generics.ListCreateAPIView):
         serializer.save(patient=patient, uploaded_by=self.request.user)
 
 
+class PatientDocumentFileView(generics.GenericAPIView):
+    """
+    GET /api/v1/patients/{pk}/documents/{doc_id}/file/ — sirve el archivo
+    con control de acceso (Sprint 38). A diferencia de exponer /media/
+    directamente, aquí se valida tenant, paciente y permisos antes de
+    entregar el binario, con el Content-Type correcto. ?download=1 fuerza
+    la descarga; por defecto se muestra en el navegador (inline).
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "reception", "doctor", "auxiliary")]
+
+    def get(self, request, pk, doc_id):
+        import mimetypes
+
+        from django.http import FileResponse, Http404
+
+        doc = PatientDocument.objects.filter(
+            id=doc_id, patient_id=pk, patient__tenant=request.tenant, is_active=True
+        ).first()
+        if doc is None or not doc.file:
+            raise Http404("Documento no encontrado.")
+
+        content_type, _ = mimetypes.guess_type(doc.file.name)
+        content_type = content_type or "application/octet-stream"
+        as_download = request.query_params.get("download") in ("1", "true")
+        filename = doc.file.name.split("/")[-1]
+
+        response = FileResponse(doc.file.open("rb"), content_type=content_type)
+        disposition = "attachment" if as_download else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
+
 class PatientTreatmentHistoryView(generics.GenericAPIView):
     """
     GET /api/v1/patients/{id}/treatment-history/ — RF-PAC-05.

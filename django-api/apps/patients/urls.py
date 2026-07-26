@@ -11,6 +11,11 @@ urlpatterns = [
         name="patient-medical-background",
     ),
     path(
+        "patients/<uuid:pk>/documents/<int:doc_id>/file/",
+        views.PatientDocumentFileView.as_view(),
+        name="patient-document-file",
+    ),
+    path(
         "patients/<uuid:pk>/documents/",
         views.PatientDocumentListCreateView.as_view(),
         name="patient-documents",
