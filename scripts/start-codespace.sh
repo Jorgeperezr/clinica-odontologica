@@ -82,6 +82,32 @@ fi
 echo
 
 # ── 4. Contenedores y migraciones ────────────────────────────────────
+echo "▶ Esperando al daemon de Docker…"
+# Tras reiniciar el Codespace, docker-in-docker tarda unos segundos en
+# levantar. Sin esta espera el script fallaba con "Cannot connect to the
+# Docker daemon". Se intenta arrancarlo si no responde.
+docker_ready=false
+for i in $(seq 1 30); do
+  if docker info >/dev/null 2>&1; then
+    docker_ready=true
+    break
+  fi
+  if [ "$i" -eq 3 ]; then
+    # Intento de arranque en segundo plano (no todas las imágenes traen 'service docker')
+    sudo service docker start >/dev/null 2>&1 || sudo dockerd >/tmp/dockerd.log 2>&1 &
+  fi
+  sleep 2
+done
+
+if [ "$docker_ready" != true ]; then
+  echo "✗ El daemon de Docker no respondió tras 60 s."
+  echo "  Prueba: sudo service docker start   (o reconstruye el contenedor:"
+  echo "  Cmd/Ctrl+Shift+P → 'Codespaces: Rebuild Container')."
+  exit 1
+fi
+echo "✓ Docker listo"
+echo ""
+
 echo "▶ Levantando contenedores (puede tardar en el primer arranque)…"
 docker compose up -d --build
 

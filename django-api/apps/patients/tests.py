@@ -199,3 +199,74 @@ class PatientDocumentFlowTests(APITestCase):
             f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/file/"
         )
         self.assertEqual(resp.status_code, 404)
+
+
+class PatientDocumentDeleteTests(APITestCase):
+    """Sprint 39: eliminación de documentos (borrado suave, con permisos)."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Clínica Del", ruc="3333333333001")
+        self.other_tenant = Tenant.objects.create(name="Otra Del", ruc="4444444444001")
+        self.doctor = User.objects.create_user(
+            email="d@del.ec", password="superseguro123", role="doctor", tenant=self.tenant,
+        )
+        self.reception = User.objects.create_user(
+            email="r@del.ec", password="superseguro123", role="reception", tenant=self.tenant,
+        )
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Del", last_name="Doc", national_id="1818181818",
+        )
+
+    def _upload(self, user=None):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_authenticate(user=user or self.doctor)
+        pdf = SimpleUploadedFile("escaneo.pdf", b"%PDF-1.4 fake", content_type="application/pdf")
+        resp = self.client.post(
+            f"/api/v1/patients/{self.patient.id}/documents/",
+            {"doc_type": "exam", "description": "Escaneo", "file": pdf},
+            format="multipart",
+        )
+        from apps.patients.models import PatientDocument
+        return PatientDocument.objects.get(id=resp.data["id"])
+
+    def test_delete_is_soft_and_hides_document(self):
+        doc = self._upload()
+        resp = self.client.delete(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/"
+        )
+        self.assertEqual(resp.status_code, 204)
+        doc.refresh_from_db()
+        self.assertFalse(doc.is_active)  # se conserva el registro (trazabilidad)
+
+        # Ya no aparece en el listado
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/documents/")
+        ids = [d["id"] for d in (resp.data.get("results", resp.data))]
+        self.assertNotIn(doc.id, ids)
+
+        # Ni es accesible el archivo
+        resp = self.client.get(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/file/"
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_reception_cannot_delete(self):
+        doc = self._upload()
+        self.client.force_authenticate(user=self.reception)
+        resp = self.client.delete(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/"
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_other_tenant_cannot_delete(self):
+        doc = self._upload()
+        intruder = User.objects.create_user(
+            email="x@otradel.ec", password="superseguro123", role="doctor",
+            tenant=self.other_tenant,
+        )
+        self.client.force_authenticate(user=intruder)
+        resp = self.client.delete(
+            f"/api/v1/patients/{self.patient.id}/documents/{doc.id}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+        doc.refresh_from_db()
+        self.assertTrue(doc.is_active)  # intacto

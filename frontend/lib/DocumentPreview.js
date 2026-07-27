@@ -16,7 +16,7 @@ import { api } from "./api";
 const IMG_RE = /\.(png|jpe?g|gif|webp)$/i;
 const PDF_RE = /\.pdf$/i;
 
-export default function DocumentPreview({ doc, patientId, onClose }) {
+export default function DocumentPreview({ doc, patientId, onClose, onDelete }) {
   const [blobUrl, setBlobUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -101,6 +101,11 @@ export default function DocumentPreview({ doc, patientId, onClose }) {
         )}
         <button style={btn} onClick={download}>⭳ Descargar</button>
         <button style={btn} onClick={printDoc}>⎙ Imprimir</button>
+        {onDelete && (
+          <button style={{ ...btn, background: "rgba(239,68,68,.35)" }} onClick={onDelete}>
+            🗑 Eliminar
+          </button>
+        )}
         <button style={{ ...btn, background: "rgba(255,255,255,.28)" }} onClick={onClose}>✕ Cerrar</button>
       </div>
 

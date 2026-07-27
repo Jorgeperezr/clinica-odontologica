@@ -178,6 +178,7 @@ const DOC_CATEGORIES = {
 };
 
 export function DocumentsTab({ patientId }) {
+  const { confirm, ConfirmUI } = useConfirm();
   const [docs, setDocs] = useState([]);
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -227,6 +228,26 @@ export function DocumentsTab({ patientId }) {
     finally { setUploading(false); }
   }
 
+  async function removeDoc(d) {
+    const ok = await confirm({
+      title: "Eliminar documento",
+      message: `Se eliminará "${d.description || d.file_name || "el documento"}" del expediente.\nEl registro se conserva para trazabilidad clínica.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    setError("");
+    try {
+      const resp = await api(`/patients/${patientId}/documents/${d.id}/`, { method: "DELETE" });
+      if (!resp.ok && resp.status !== 204) {
+        throw new Error(resp.status === 403
+          ? "No tienes permiso para eliminar documentos."
+          : `No se pudo eliminar (error ${resp.status}).`);
+      }
+      if (preview?.id === d.id) setPreview(null);
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
   function fmtSize(bytes) {
     if (!bytes) return "—";
     if (bytes < 1024) return `${bytes} B`;
@@ -254,9 +275,11 @@ export function DocumentsTab({ patientId }) {
 
   return (
     <div>
+      <ConfirmUI />
       {error && <div className="error-box">{error}</div>}
       {preview && (
-        <DocumentPreview doc={preview} patientId={patientId} onClose={() => setPreview(null)} />
+        <DocumentPreview doc={preview} patientId={patientId} onClose={() => setPreview(null)}
+                         onDelete={() => removeDoc(preview)} />
       )}
       {scanning && (
         <DocumentScanner patientId={patientId} docType={form.doc_type}
@@ -329,8 +352,15 @@ export function DocumentsTab({ patientId }) {
       ) : view === "grid" ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 14 }}>
           {visible.map((d) => (
-            <button key={d.id} onClick={() => setPreview(d)}
-                    className="card" style={{ padding: 12, textAlign: "left", cursor: "pointer", border: "1px solid var(--line)" }}>
+            <div key={d.id} className="card" style={{ padding: 12, position: "relative", border: "1px solid var(--line)" }}>
+              <button onClick={(e) => { e.stopPropagation(); removeDoc(d); }}
+                      title="Eliminar documento"
+                      style={{ position: "absolute", top: 8, right: 8, zIndex: 2,
+                               background: "rgba(255,255,255,.92)", border: "1px solid var(--line)",
+                               borderRadius: 6, cursor: "pointer", padding: "2px 7px",
+                               fontSize: 13, lineHeight: 1.2, color: "var(--red)" }}>✕</button>
+              <button onClick={() => setPreview(d)}
+                      style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}>
               {isImage(d) ? (
                 <img src={fileSrc(d.file_url)} alt={d.description}
                      style={{ width: "100%", height: 130, objectFit: "cover", borderRadius: 8, marginBottom: 8 }} />
@@ -347,7 +377,8 @@ export function DocumentsTab({ patientId }) {
               <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
                 {fmtSize(d.file_size)} · {d.uploaded_by_name || "—"}
               </div>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       ) : (
@@ -362,9 +393,12 @@ export function DocumentsTab({ patientId }) {
                   <td className="tabular">{fmtSize(d.file_size)}</td>
                   <td>{d.uploaded_by_name || "—"}</td>
                   <td className="tabular">{(d.uploaded_at || "").slice(0, 10)}</td>
-                  <td style={{ textAlign: "right" }}>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
                             onClick={() => setPreview(d)}>Ver</button>
+                    <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12,
+                                                               marginLeft: 6, color: "var(--red)" }}
+                            onClick={() => removeDoc(d)}>Eliminar</button>
                   </td>
                 </tr>
               ))}

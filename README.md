@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 38 completado — módulo de documentos robustecido
+## Estado actual: Sprint 39 completado — eliminación de documentos y arranque robusto
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -340,6 +340,10 @@ Sin cambios de backend (los 132 tests no varían).
 - **Escaneo por cámara** (`lib/DocumentScanner.js`): captura de una o varias páginas con `getUserMedia`, realce de brillo/contraste, y combinación en un único PDF que se guarda en la historia clínica. (TWAIN/WIA no es accesible desde el navegador por seguridad; se documenta como limitación y se ofrece la captura por cámara, que cubre el caso habitual. Recorte de bordes y corrección de perspectiva quedan como mejora futura con OpenCV.js.)
 - **Gestión documental:** vista en cuadrícula y en lista, búsqueda por nombre/descripción, filtro por categoría y por fecha, orden por fecha o nombre, y metadatos visibles (tamaño del archivo, fecha, quién lo cargó). El serializer añade `file_name`, `file_size`, `doc_type_display` y `uploaded_by_name`.
 - **Seguridad verificada con tests:** aislamiento por clínica (un usuario de otra clínica recibe 404 al pedir el archivo), pertenencia al paciente correcto, autenticación obligatoria en la descarga.
+
+### Sprint 39 — Eliminación de documentos y arranque robusto (hecho)
+- **Eliminar documentos** (subidos o escaneados): botón en la vista de cuadrícula (✕ en la esquina de la tarjeta), en la vista de lista y dentro del modal de vista previa, siempre con diálogo de confirmación. Endpoint `DELETE patients/<pk>/documents/<id>/` con **borrado suave** (`is_active=False`): el documento desaparece del listado y su archivo deja de ser accesible (404), pero el registro se conserva para la trazabilidad de la historia clínica. Solo admin y doctor pueden eliminar (recepción recibe 403) y cada clínica solo puede eliminar lo suyo (404 entre tenants). Verificado con tests.
+- **Arranque robusto:** `scripts/start-codespace.sh` ahora espera al daemon de Docker (hasta 60 s) e intenta arrancarlo si no responde, en lugar de fallar con "Cannot connect to the Docker daemon" cuando docker-in-docker todavía está iniciando tras un reinicio del Codespace. Si no levanta, muestra la instrucción de rebuild.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

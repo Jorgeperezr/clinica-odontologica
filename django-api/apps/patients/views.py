@@ -177,6 +177,31 @@ class PatientDocumentFileView(generics.GenericAPIView):
         return response
 
 
+class PatientDocumentDeleteView(generics.GenericAPIView):
+    """
+    DELETE /api/v1/patients/{pk}/documents/{doc_id}/ — elimina un documento
+    (Sprint 39). Borrado SUAVE (is_active=False): el archivo deja de listarse
+    y de ser accesible, pero se preserva la trazabilidad de la historia
+    clínica. Valida tenant, paciente y permisos antes de eliminar.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def delete(self, request, pk, doc_id):
+        from django.http import Http404
+        from rest_framework.response import Response
+
+        doc = PatientDocument.objects.filter(
+            id=doc_id, patient_id=pk, patient__tenant=request.tenant, is_active=True
+        ).first()
+        if doc is None:
+            raise Http404("Documento no encontrado.")
+
+        doc.is_active = False
+        doc.save(update_fields=["is_active"])
+        return Response(status=204)
+
+
 class PatientTreatmentHistoryView(generics.GenericAPIView):
     """
     GET /api/v1/patients/{id}/treatment-history/ — RF-PAC-05.
