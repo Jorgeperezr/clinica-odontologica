@@ -1,23 +1,109 @@
-/* ── Sistema de diseño: Clínica Odontológica ─────────────────────────
-   Paleta petrol/menta: salud dental sin el azul-hospital genérico.
-   Datos en tipografía de sistema con números tabulares. */
+/* ═══════════════════════════════════════════════════════════════════
+   Sistema de diseño — Clínica Odontológica
+   ───────────────────────────────────────────────────────────────────
+   Dos capas de color, deliberadamente separadas:
+
+   1. MARCA  (--petrol, --petrol-deep, --petrol-soft, --mint)
+      Las escribe theme.js desde el logotipo de cada clínica. Cambian
+      por tenant y se recalculan según el modo para mantener contraste.
+
+   2. SUPERFICIE (--paper, --card, --ink, --line…)
+      Cambian con el modo claro/oscuro. Neutros ligeramente cálidos en
+      vez de grises azulados: bajo la corrección de blancos de pantallas
+      con True Tone el interfaz no vira a un tono sucio.
+
+   Esta separación permite que cada clínica conserve su identidad
+   visual tanto en claro como en oscuro.
+   ═════════════════════════════════════════════════════════════════ */
 
 :root {
+  color-scheme: light;
+
+  /* ── Marca (por defecto; theme.js las sobrescribe por clínica) ── */
   --petrol: #0e5a5e;
   --petrol-deep: #0a4144;
   --petrol-soft: #eaf3f2;
-  --ink: #16282b;
-  --ink-soft: #4c6367;
+  --mint: #ddeee9;
+
+  /* ── Superficie: modo claro ── */
   --paper: #f7f8f6;
   --card: #ffffff;
-  --mint: #ddeee9;
+  --elev: #ffffff;
+  --ink: #16282b;
+  --ink-soft: #4c6367;
+  --ink-faint: #7d9297;
+  --line: #dce3e0;
+  --line-strong: #c3cec9;
+  --overlay: rgba(15, 23, 42, .55);
+
+  /* ── Semánticos ── */
   --amber: #b7791f;
   --amber-soft: #fdf3e0;
   --red: #a83a3a;
   --red-soft: #fbeaea;
-  --line: #dce3e0;
-  --radius: 10px;
+  --green: #1d6b3c;
+  --green-soft: #e6f4ec;
+
+  /* ── Escala tipográfica (razón ~1.2, base 15px) ── */
+  --text-xs: 11.5px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 17px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 29px;
+
+  /* ── Espaciado (escala de 4) ── */
+  --sp-1: 4px;   --sp-2: 8px;   --sp-3: 12px;
+  --sp-4: 16px;  --sp-5: 20px;  --sp-6: 24px;
+  --sp-8: 32px;  --sp-10: 40px;
+
+  /* ── Radios ── */
+  --radius-sm: 7px;
+  --radius: 11px;
+  --radius-lg: 16px;
+
+  /* ── Elevación: sombras de tinta, no de humo gris ── */
+  --shadow-sm: 0 1px 2px rgba(16, 32, 35, .05);
+  --shadow: 0 2px 4px rgba(16, 32, 35, .05), 0 6px 16px rgba(16, 32, 35, .06);
+  --shadow-lg: 0 8px 24px rgba(16, 32, 35, .10), 0 24px 56px rgba(16, 32, 35, .12);
+
+  /* ── Movimiento: rápido, para uso intensivo ── */
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 260ms;
+
   --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ═══════════ Modo oscuro ═══════════
+   No es el claro invertido: los fondos son petróleo muy oscuro (no
+   negro puro, que produce halo en pantallas OLED) y la jerarquía se
+   construye elevando superficies, no bajando la opacidad del texto. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #0f1618;
+  --card: #16211f;
+  --elev: #1c2927;
+  --ink: #e8efec;
+  --ink-soft: #a4b8b6;
+  --ink-faint: #7b908e;
+  --line: #253431;
+  --line-strong: #334541;
+  --overlay: rgba(0, 0, 0, .68);
+
+  --amber: #e0a145;
+  --amber-soft: #33270f;
+  --red: #e2726f;
+  --red-soft: #3a1d1d;
+  --green: #6cc08a;
+  --green-soft: #14301f;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
+  --shadow: 0 2px 6px rgba(0, 0, 0, .38), 0 8px 20px rgba(0, 0, 0, .34);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, .48), 0 28px 60px rgba(0, 0, 0, .42);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,75 +112,239 @@ html, body {
   font-family: var(--font);
   background: var(--paper);
   color: var(--ink);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
-a { color: var(--petrol); text-decoration: none; }
+/* ── Tipografía: jerarquía por peso y tracking, no solo por tamaño ── */
+h1, h2, h3, h4 {
+  line-height: 1.2;
+  letter-spacing: -.018em;
+  color: var(--ink);
+  font-weight: 700;
+}
+h1 { font-size: var(--text-2xl); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-md); }
+h4 { font-size: var(--text-base); }
+
+a {
+  color: var(--petrol);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+a:hover { color: var(--petrol-deep); text-decoration: underline; text-underline-offset: 3px; }
+
 button { font-family: inherit; cursor: pointer; }
-input, select, textarea { font-family: inherit; font-size: inherit; }
+input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 
-/* Números tabulares para montos, cédulas y fechas */
-.tabular { font-variant-numeric: tabular-nums; }
+/* Cifras alineadas en columnas: montos, cédulas, fechas */
+.tabular { font-variant-numeric: tabular-nums; letter-spacing: 0; }
 
-/* ── Botones ── */
+/* ── Botones ──────────────────────────────────────────────────────
+   El feedback táctil (hundir 1px al presionar) es lo que separa un
+   botón que responde de uno que solo cambia de color. */
 .btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 9px 16px; border-radius: var(--radius);
-  border: 1px solid transparent; font-weight: 600; font-size: 14px;
-  transition: background .15s ease;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-weight: 600; font-size: var(--text-sm);
+  letter-spacing: -.006em;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
 }
-.btn-primary { background: var(--petrol); color: #fff; }
-.btn-primary:hover { background: var(--petrol-deep); }
-.btn-ghost { background: transparent; color: var(--petrol); border-color: var(--line); }
-.btn-ghost:hover { background: var(--petrol-soft); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+.btn-primary {
+  background: var(--petrol); color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover:not(:disabled) { background: var(--petrol-deep); box-shadow: var(--shadow); }
+
+/* En oscuro la marca se aclara para contrastar con el fondo, así que
+   el botón primario invierte su texto a tinta profunda. Sin esto el
+   blanco sobre un tono claro incumpliría AA. */
+[data-theme="dark"] .btn-primary { color: #0f1618; }
+
+.btn-ghost {
+  background: transparent; color: var(--petrol); border-color: var(--line);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--petrol-soft); border-color: var(--line-strong);
+}
 
 /* ── Formularios ── */
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-.field label { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--sp-4); }
+.field label {
+  font-size: var(--text-sm); font-weight: 600; color: var(--ink-soft);
+  letter-spacing: -.005em;
+}
 .field input, .field select, .field textarea {
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius);
-  background: #fff; outline: none;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--elev);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
 }
+.field input:hover, .field select:hover, .field textarea:hover { border-color: var(--line-strong); }
 .field input:focus, .field select:focus, .field textarea:focus {
-  border-color: var(--petrol); box-shadow: 0 0 0 3px var(--petrol-soft);
+  border-color: var(--petrol);
+  box-shadow: 0 0 0 3px var(--petrol-soft);
 }
+.field input::placeholder, .field textarea::placeholder { color: var(--ink-faint); }
+.field textarea { resize: vertical; min-height: 68px; }
 
-/* ── Tarjetas y tablas ── */
+/* ── Tarjetas ── */
 .card {
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--dur) var(--ease),
+              border-color var(--dur) var(--ease),
+              background var(--dur) var(--ease);
 }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th {
-  text-align: left; font-size: 12px; text-transform: uppercase;
-  letter-spacing: .04em; color: var(--ink-soft);
-  padding: 10px 12px; border-bottom: 2px solid var(--line);
-}
-td { padding: 11px 12px; border-bottom: 1px solid var(--line); }
-tr:hover td { background: var(--petrol-soft); }
 
-/* ── Badges de estado ── */
-.badge {
-  display: inline-block; padding: 3px 10px; border-radius: 999px;
-  font-size: 12px; font-weight: 600;
+/* ── Tablas ── */
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: var(--text-sm);
 }
-.badge-ok { background: var(--mint); color: var(--petrol-deep); }
+th {
+  text-align: left;
+  font-size: var(--text-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-faint);
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--card);
+  white-space: nowrap;
+}
+td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  transition: background var(--dur-fast) var(--ease);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--petrol-soft); }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: -.003em; white-space: nowrap;
+}
+.badge-ok { background: var(--green-soft); color: var(--green); }
 .badge-warn { background: var(--amber-soft); color: var(--amber); }
 .badge-danger { background: var(--red-soft); color: var(--red); }
 
-/* ── Mensajes ── */
+/* ── Mensajes y vacíos ── */
 .error-box {
   background: var(--red-soft); color: var(--red);
-  border-radius: var(--radius); padding: 12px 14px; font-size: 14px;
-  margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px; font-size: var(--text-sm);
+  margin-bottom: var(--sp-4);
+  animation: rise var(--dur) var(--ease);
 }
 .empty {
-  padding: 40px; text-align: center; color: var(--ink-soft);
+  padding: var(--sp-10) var(--sp-5);
+  text-align: center; color: var(--ink-faint);
+  font-size: var(--text-sm);
 }
 
-/* Accesibilidad: foco visible y movimiento reducido */
-:focus-visible { outline: 2px solid var(--petrol); outline-offset: 2px; }
+/* ── Movimiento ───────────────────────────────────────────────────
+   Tres gestos, reutilizados en todo el sistema: aparecer (contenido),
+   elevarse (modales) y latir (carga). Nada más. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(.975) translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pulse {
+  50% { opacity: .45; }
+}
+
+.animate-rise { animation: rise var(--dur) var(--ease) both; }
+.animate-fade { animation: fade var(--dur) var(--ease) both; }
+.animate-pop  { animation: pop var(--dur-slow) var(--ease) both; }
+
+/* Entrada de página: el contenido asciende una vez, sin rebote */
+main > * { animation: rise var(--dur-slow) var(--ease) both; }
+
+/* Esqueleto de carga */
+.skeleton {
+  background: var(--line);
+  border-radius: var(--radius-sm);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Accesibilidad ── */
+:focus-visible {
+  outline: 2px solid var(--petrol);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.btn:focus-visible {
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--petrol-soft);
+}
+
+/* Barras de desplazamiento acordes al modo */
+* { scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong); border-radius: 999px;
+  border: 2px solid var(--paper);
+}
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Responsive ───────────────────────────────────────────────────
+   Móvil: las tablas anchas se desplazan dentro de su tarjeta en vez
+   de romper el diseño. */
+@media (max-width: 900px) {
+  :root { --sp-5: 16px; --sp-6: 20px; --sp-8: 24px; }
+  .card { padding: var(--sp-4); border-radius: var(--radius-sm); }
+  h1 { font-size: var(--text-xl); }
+  h2 { font-size: var(--text-lg); }
+}
+@media (max-width: 640px) {
+  html, body { font-size: 15.5px; }
+  .card { overflow-x: auto; }
+  table { min-width: 520px; }
+  .btn { padding: 10px 14px; }
+}
+
+/* Impresión: documentos clínicos legibles en papel */
+@media print {
+  :root { --paper: #fff; --card: #fff; --ink: #000; --line: #999; }
+  .btn, nav, aside { display: none !important; }
+  .card { box-shadow: none; border: 1px solid #ccc; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
+  *, *::before, *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

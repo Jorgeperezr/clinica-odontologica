@@ -96,9 +96,9 @@ export default function LogoCropper({ file, onConfirm, onCancel }) {
   if (!file) return null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(15,23,42,.55)",
+    <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "var(--overlay)",
                   display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div className="card" style={{ maxWidth: 560, width: "100%" }}>
+      <div className="card animate-pop" style={{ maxWidth: 560, width: "100%" }}>
         <h3 style={{ marginBottom: 4 }}>Ajustar logotipo</h3>
         <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
           Mueve el recuadro para elegir la zona, o arrastra la esquina inferior derecha

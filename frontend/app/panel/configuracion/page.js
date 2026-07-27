@@ -700,7 +700,7 @@ function BrandingTab() {
             <button key={p.key} disabled={saving}
                     onClick={() => saveTheme({ preset: p.key, primary: "", secondary: "" })}
                     style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
-                             borderRadius: 10, cursor: "pointer", fontSize: 13, background: "#fff",
+                             borderRadius: 10, cursor: "pointer", fontSize: 13, background: "var(--elev)",
                              border: currentPreset === p.key
                                ? "2px solid var(--petrol)" : "1px solid var(--line)",
                              fontWeight: currentPreset === p.key ? 700 : 400 }}>

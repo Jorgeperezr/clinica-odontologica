@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 39 completado — eliminación de documentos y arranque robusto
+## Estado actual: Sprint 40 completado — sistema de diseño con temas claro y oscuro
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -344,6 +344,16 @@ Sin cambios de backend (los 132 tests no varían).
 ### Sprint 39 — Eliminación de documentos y arranque robusto (hecho)
 - **Eliminar documentos** (subidos o escaneados): botón en la vista de cuadrícula (✕ en la esquina de la tarjeta), en la vista de lista y dentro del modal de vista previa, siempre con diálogo de confirmación. Endpoint `DELETE patients/<pk>/documents/<id>/` con **borrado suave** (`is_active=False`): el documento desaparece del listado y su archivo deja de ser accesible (404), pero el registro se conserva para la trazabilidad de la historia clínica. Solo admin y doctor pueden eliminar (recepción recibe 403) y cada clínica solo puede eliminar lo suyo (404 entre tenants). Verificado con tests.
 - **Arranque robusto:** `scripts/start-codespace.sh` ahora espera al daemon de Docker (hasta 60 s) e intenta arrancarlo si no responde, en lugar de fallar con "Cannot connect to the Docker daemon" cuando docker-in-docker todavía está iniciando tras un reinicio del Codespace. Si no levanta, muestra la instrucción de rebuild.
+
+### Sprint 40 — Sistema de diseño: temas claro/oscuro y refinamiento visual (hecho)
+100% presentación; la lógica de negocio no cambia (la suite sigue en 153 tests).
+- **Dos capas de color separadas** en `globals.css`: la capa de MARCA (`--petrol`, `--mint`…) la sigue escribiendo `theme.js` desde el logotipo de cada clínica, y la capa de SUPERFICIE (`--paper`, `--card`, `--ink`, `--line`…) cambia con el modo. Así cada clínica conserva su identidad tanto en claro como en oscuro.
+- **Modo claro / oscuro / sistema** con control segmentado de tres estados en la barra lateral (`lib/ThemeSwitch.js`), preferencia persistida, y seguimiento automático del sistema operativo mientras esté en "Sistema". Un script síncrono en el layout raíz fija el tema antes del primer pintado para evitar el parpadeo de tema.
+- **Contraste garantizado en ambos modos:** en claro la marca se oscurece hasta contrastar con texto blanco; en oscuro se aclara hasta contrastar con el fondo profundo (`ensureAccessibleOnDark`), y el botón primario invierte su texto a tinta. Verificado ≥ 4.5:1 (WCAG AA) sobre los seis presets y colores extraídos de logotipos reales.
+- **Escala tipográfica** (razón 1.2), jerarquía por peso y tracking negativo en titulares, cifras tabulares en datos; **escala de espaciado** de 4; tres niveles de **elevación** con sombras de tinta; radios y estados de interacción (hover, focus visible con doble anillo, active que hunde 1px).
+- **Movimiento deliberado:** tres gestos reutilizados en todo el sistema —aparecer (contenido y páginas), emerger (modales) y latir (carga)— con duraciones cortas (120-260 ms) pensadas para uso intensivo, y `prefers-reduced-motion` respetado.
+- **Responsive y superficies:** puntos de corte en 900 px y 640 px, tablas con desplazamiento dentro de su tarjeta en móvil, barras de desplazamiento acordes al modo, y hoja de impresión para los documentos clínicos. Superficies fijas (`#fff`) migradas a tokens para que sigan al tema.
+- **Nota sobre True Tone:** es una adaptación de hardware del panel; una página web no puede leerla ni controlarla. Lo que sí se hace: declarar `color-scheme` (que integra el interfaz con la gestión de color del sistema) y usar neutros ligeramente cálidos en vez de grises azulados, de modo que bajo la corrección de blancos el interfaz no vire a un tono sucio.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

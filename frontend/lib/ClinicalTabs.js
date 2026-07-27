@@ -356,7 +356,7 @@ export function DocumentsTab({ patientId }) {
               <button onClick={(e) => { e.stopPropagation(); removeDoc(d); }}
                       title="Eliminar documento"
                       style={{ position: "absolute", top: 8, right: 8, zIndex: 2,
-                               background: "rgba(255,255,255,.92)", border: "1px solid var(--line)",
+                               background: "var(--card)", border: "1px solid var(--line)",
                                borderRadius: 6, cursor: "pointer", padding: "2px 7px",
                                fontSize: 13, lineHeight: 1.2, color: "var(--red)" }}>✕</button>
               <button onClick={() => setPreview(d)}

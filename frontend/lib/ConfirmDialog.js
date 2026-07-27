@@ -28,9 +28,9 @@ export function useConfirm() {
   }
 
   const ui = state ? (
-    <div style={overlay} role="dialog" aria-modal="true" aria-label={state.title}
+    <div className="animate-fade" style={overlay} role="dialog" aria-modal="true" aria-label={state.title}
          onClick={(e) => { if (e.target === e.currentTarget) close(false); }}>
-      <div style={box}>
+      <div className="animate-pop" style={box}>
         <h3 style={{ marginBottom: 8 }}>{state.title}</h3>
         <p style={{ fontSize: 14, color: "var(--ink-soft)", whiteSpace: "pre-line", marginBottom: 20 }}>
           {state.message}
@@ -55,11 +55,11 @@ export function useConfirm() {
 }
 
 const overlay = {
-  position: "fixed", inset: 0, background: "rgba(22,40,43,.45)",
+  position: "fixed", inset: 0, background: "var(--overlay)",
   display: "flex", alignItems: "center", justifyContent: "center",
   zIndex: 100, padding: 20,
 };
 const box = {
-  background: "#fff", borderRadius: 14, padding: "22px 24px",
+  background: "var(--card)", borderRadius: 14, padding: "22px 24px",
   maxWidth: 440, width: "100%", boxShadow: "0 18px 50px rgba(0,0,0,.22)",
 };

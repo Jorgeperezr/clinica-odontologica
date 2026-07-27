@@ -128,7 +128,7 @@ function DiagnosisForm({ patientId, onSaved, onCancel }) {
                placeholder="Ej: K02 o 'caries'…" autoComplete="off" />
         {results.length > 0 && !selected && (
           <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
-                        background: "#fff", border: "1px solid var(--line)", borderRadius: 8,
+                        background: "var(--elev)", border: "1px solid var(--line)", borderRadius: 8,
                         boxShadow: "0 6px 18px rgba(0,0,0,.12)", maxHeight: 240, overflowY: "auto" }}>
             {results.map((r) => (
               <div key={r.code} onClick={() => { setSelected(r); setResults([]); }}

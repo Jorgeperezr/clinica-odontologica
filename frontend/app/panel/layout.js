@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { api, currentUser, logout } from "../../lib/api";
-import { applyBrandingChrome, applyTheme, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
+import { applyBrandingChrome, applyTheme, initColorMode, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 import NavIcon from "../../lib/NavIcons";
+import ThemeSwitch from "../../lib/ThemeSwitch";
 
 // Navegación por rol (matriz de permisos del SRS)
 const NAV = [
@@ -34,6 +35,10 @@ export default function PanelLayout({ children }) {
     if (!u) { window.location.href = "/login/"; return; }
     setUser(u);
     setReady(true);
+    // Apariencia (claro/oscuro/sistema) antes de pintar la marca, para
+    // que los tonos se deriven ya con el modo correcto.
+    const stopColorMode = initColorMode();
+
     // Identidad visual por clínica: pintado instantáneo desde caché,
     // refresco desde la API y actualización en vivo al guardar cambios.
     const cached = readBrandingCache();
@@ -59,7 +64,7 @@ export default function PanelLayout({ children }) {
       applyTheme(b.theme);
       applyBrandingChrome(b);
     });
-    return unsubscribe;
+    return () => { unsubscribe(); stopColorMode(); };
     // Recordar la preferencia de menú colapsado
     try {
       const saved = localStorage.getItem("sidebarCollapsed");
@@ -125,6 +130,10 @@ export default function PanelLayout({ children }) {
             );
           })}
         </nav>
+
+        <div style={{ marginTop: 14 }}>
+          <ThemeSwitch compact={collapsed} />
+        </div>
 
         <div style={styles.userBox}>
           {!collapsed && (

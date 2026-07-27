@@ -108,18 +108,122 @@ export function resolveTheme(theme) {
   };
 }
 
-/** Aplica el tema recalculando las variables CSS globales. */
-export function applyTheme(theme) {
-  if (typeof document === "undefined") return;
-  const { primary, secondary } = resolveTheme(theme);
-  const safePrimary = ensureAccessiblePrimary(primary) || DEFAULT.primary;
-  const root = document.documentElement;
+/** Contraste de un color contra un fondo cualquiera. */
+function contrastRatio(hexA, hexB) {
+  const la = luminance(hexA), lb = luminance(hexB);
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+  return (hi + 0.05) / (lo + 0.05);
+}
 
-  root.style.setProperty("--petrol", safePrimary);
-  root.style.setProperty("--petrol-deep", withLightness(safePrimary, Math.max(0.10, rgbToHsl(hexToRgb(safePrimary))[2] - 0.12)));
-  root.style.setProperty("--petrol-soft", withLightness(safePrimary, 0.93));
+/**
+ * Aclara el color hasta que contraste AA (4.5:1) con el fondo oscuro.
+ * En modo oscuro la marca se usa sobre superficies profundas: el mismo
+ * tono que funciona en claro quedaría ilegible, así que se sube su
+ * luminosidad conservando matiz y saturación (la identidad se mantiene).
+ */
+export function ensureAccessibleOnDark(hex, bg = "#0f1618") {
+  if (!hexToRgb(hex)) return null;
+  const [h, s] = rgbToHsl(hexToRgb(hex));
+  let l = rgbToHsl(hexToRgb(hex))[2];
+  let out = rgbToHex(hslToRgb([h, s, l]));
+  let guard = 0;
+  while (contrastRatio(out, bg) < 4.5 && l < 0.95 && guard < 50) {
+    l += 0.02;
+    out = rgbToHex(hslToRgb([h, s, l]));
+    guard += 1;
+  }
+  return out;
+}
+
+// Último tema aplicado: al cambiar de modo se recalcula sobre él.
+let lastTheme = null;
+
+/**
+ * Aplica el tema recalculando las variables CSS de marca.
+ * El modo (claro/oscuro) determina cómo se derivan los tonos:
+ * en claro se oscurece la marca para contrastar con texto blanco;
+ * en oscuro se aclara para contrastar con el fondo profundo.
+ */
+export function applyTheme(theme, mode) {
+  if (typeof document === "undefined") return;
+  if (theme) lastTheme = theme;
+  const effective = theme || lastTheme;
+  const { primary, secondary } = resolveTheme(effective);
+  const root = document.documentElement;
+  const isDark = (mode || root.getAttribute("data-theme")) === "dark";
+
+  const base = hexToRgb(primary) ? primary : DEFAULT.primary;
+  const brand = isDark
+    ? (ensureAccessibleOnDark(base) || DEFAULT.primary)
+    : (ensureAccessiblePrimary(base) || DEFAULT.primary);
+  const brandL = rgbToHsl(hexToRgb(brand))[2];
+
+  root.style.setProperty("--petrol", brand);
+  // "deep" = estado hover: en claro se hunde, en oscuro se aclara más
+  root.style.setProperty(
+    "--petrol-deep",
+    isDark ? withLightness(brand, Math.min(0.86, brandL + 0.10))
+           : withLightness(brand, Math.max(0.10, brandL - 0.12)),
+  );
+  // "soft" = fondo de realce: casi blanco en claro, tinte profundo en oscuro
+  root.style.setProperty("--petrol-soft", withLightness(brand, isDark ? 0.17 : 0.93));
+
   const mint = hexToRgb(secondary) ? secondary : DEFAULT.secondary;
-  root.style.setProperty("--mint", withLightness(mint, Math.max(0.72, rgbToHsl(hexToRgb(mint))[2])));
+  const mintL = rgbToHsl(hexToRgb(mint))[2];
+  root.style.setProperty(
+    "--mint",
+    isDark ? withLightness(mint, 0.30) : withLightness(mint, Math.max(0.72, mintL)),
+  );
+}
+
+/* ═══════════ Modo de color: claro / oscuro / sistema ═══════════ */
+
+const MODE_KEY = "colorMode";           // "light" | "dark" | "system"
+const MODE_EVENT = "colormode:changed";
+
+export function readColorMode() {
+  if (typeof localStorage === "undefined") return "system";
+  return localStorage.getItem(MODE_KEY) || "system";
+}
+
+function systemPrefersDark() {
+  return typeof window !== "undefined"
+    && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+}
+
+/** Modo efectivo ("light" | "dark") resolviendo "system". */
+export function resolvedMode(mode = readColorMode()) {
+  return mode === "system" ? (systemPrefersDark() ? "dark" : "light") : mode;
+}
+
+/** Fija el modo, lo persiste y recalcula la marca para ese modo. */
+export function setColorMode(mode) {
+  if (typeof document === "undefined") return;
+  try { localStorage.setItem(MODE_KEY, mode); } catch { /* modo privado */ }
+  const effective = resolvedMode(mode);
+  document.documentElement.setAttribute("data-theme", effective);
+  applyTheme(null, effective);
+  window.dispatchEvent(new CustomEvent(MODE_EVENT, { detail: { mode, effective } }));
+}
+
+/**
+ * Arranca el modo guardado y sigue los cambios del sistema operativo
+ * mientras la preferencia sea "system". Devuelve la función de limpieza.
+ */
+export function initColorMode() {
+  if (typeof window === "undefined") return () => {};
+  setColorMode(readColorMode());
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const onChange = () => { if (readColorMode() === "system") setColorMode("system"); };
+  mq.addEventListener?.("change", onChange);
+  return () => mq.removeEventListener?.("change", onChange);
+}
+
+export function onColorModeChanged(handler) {
+  if (typeof window === "undefined") return () => {};
+  const fn = (e) => handler(e.detail);
+  window.addEventListener(MODE_EVENT, fn);
+  return () => window.removeEventListener(MODE_EVENT, fn);
 }
 
 /** Restablece las variables al tema del sistema. */
