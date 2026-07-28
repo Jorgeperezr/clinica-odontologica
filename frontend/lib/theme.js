@@ -82,8 +82,9 @@ export function ensureAccessiblePrimary(hex) {
 
 // ── temas predefinidos ──
 export const PRESETS = [
-  { key: "default", label: "Petróleo (sistema)", primary: "#0e5c63", secondary: "#9fe1cb" },
+  { key: "default", label: "Azul clínico (sistema)", primary: "#14639e", secondary: "#bcdcf2" },
   { key: "oceano", label: "Océano", primary: "#0f4c81", secondary: "#a7d3f0" },
+  { key: "petroleo", label: "Petróleo", primary: "#0e5c63", secondary: "#9fe1cb" },
   { key: "bosque", label: "Bosque", primary: "#1d6b3c", secondary: "#b6e2c5" },
   { key: "vino", label: "Vino", primary: "#7b1e3c", secondary: "#f0c9d4" },
   { key: "grafito", label: "Grafito", primary: "#374151", secondary: "#c7d2de" },

@@ -106,8 +106,8 @@ export default function AgendaPage() {
             <button key={m} onClick={() => setMode(m)}
               style={{
                 padding: "8px 16px", border: "none", fontWeight: 600, fontSize: 14,
-                background: mode === m ? "var(--petrol)" : "#fff",
-                color: mode === m ? "#fff" : "var(--ink)",
+                background: mode === m ? "var(--petrol)" : "var(--elev)",
+                color: mode === m ? "var(--on-brand)" : "var(--ink-soft)",
               }}>
               {m === "daily" ? "Día" : m === "weekly" ? "Semana" : "Mes"}
             </button>
@@ -240,7 +240,7 @@ function MonthGrid({ date, appointments, onDayClick }) {
               style={{
                 minHeight: 74, padding: 6, borderRadius: 8, cursor: "pointer",
                 border: isToday ? "2px solid var(--petrol)" : "1px solid var(--line)",
-                background: active > 0 ? "var(--petrol-soft)" : "#fff",
+                background: active > 0 ? "var(--petrol-soft)" : "var(--elev)",
                 display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4,
                 textAlign: "left",
               }}
@@ -387,7 +387,7 @@ function AppointmentForm({ doctors, defaultDate, onSaved }) {
             <div style={{
               position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
               background: "var(--elev)", border: "1px solid var(--line)", borderRadius: 8,
-              boxShadow: "0 6px 18px rgba(0,0,0,.08)",
+              boxShadow: "var(--shadow)",
             }}>
               {patientResults.map((p) => (
                 <div key={p.id}

@@ -147,7 +147,7 @@ export default function DocumentScanner({ patientId, docType = "exam", onDone, o
           <video ref={videoRef} playsInline muted
                  style={{ width: "100%", maxHeight: "70vh", background: "#000",
                           borderRadius: 10, objectFit: "contain" }} />
-          <button style={{ ...btn, background: "var(--petrol)", padding: "10px 24px", fontSize: 15 }}
+          <button style={{ ...btn, background: "var(--petrol)", color: "var(--on-brand)", padding: "10px 24px", fontSize: 15 }}
                   disabled={!ready} onClick={capture}>
             ◉ Capturar página
           </button>
@@ -173,7 +173,7 @@ export default function DocumentScanner({ patientId, docType = "exam", onDone, o
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "12px 16px" }}>
         <button style={btn} onClick={onClose}>Cancelar</button>
-        <button style={{ ...btn, background: "var(--petrol)" }} disabled={saving || pages.length === 0}
+        <button style={{ ...btn, background: "var(--petrol)", color: "var(--on-brand)" }} disabled={saving || pages.length === 0}
                 onClick={saveAsPdf}>
           {saving ? "Guardando…" : `Guardar PDF (${pages.length} pág.)`}
         </button>

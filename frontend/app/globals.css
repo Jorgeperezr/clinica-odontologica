@@ -8,9 +8,10 @@
       por tenant y se recalculan según el modo para mantener contraste.
 
    2. SUPERFICIE (--paper, --card, --ink, --line…)
-      Cambian con el modo claro/oscuro. Neutros ligeramente cálidos en
-      vez de grises azulados: bajo la corrección de blancos de pantallas
-      con True Tone el interfaz no vira a un tono sucio.
+      Cambian con el modo. Identidad del sector salud: blancos y grises
+      levemente azulados en claro; azules profundos y grises neutros en
+      oscuro. La saturación se mantiene baja para que el interfaz
+      transmita limpieza y no canse en jornadas largas.
 
    Esta separación permite que cada clínica conserve su identidad
    visual tanto en claro como en oscuro.
@@ -20,21 +21,23 @@
   color-scheme: light;
 
   /* ── Marca (por defecto; theme.js las sobrescribe por clínica) ── */
-  --petrol: #0e5a5e;
-  --petrol-deep: #0a4144;
-  --petrol-soft: #eaf3f2;
-  --mint: #ddeee9;
+  --petrol: #14639e;
+  --petrol-deep: #0e4a78;
+  --petrol-soft: #e8f1f9;
+  --mint: #bcdcf2;
+  /* Texto legible SOBRE la marca (botones, pastillas activas). */
+  --on-brand: #ffffff;
 
   /* ── Superficie: modo claro ── */
-  --paper: #f7f8f6;
+  --paper: #f4f7fa;
   --card: #ffffff;
   --elev: #ffffff;
-  --ink: #16282b;
-  --ink-soft: #4c6367;
-  --ink-faint: #7d9297;
-  --line: #dce3e0;
-  --line-strong: #c3cec9;
-  --overlay: rgba(15, 23, 42, .55);
+  --ink: #14212e;
+  --ink-soft: #4a5c6e;
+  --ink-faint: #7b8b9c;
+  --line: #dbe3ec;
+  --line-strong: #c2ceda;
+  --overlay: rgba(13, 20, 27, .55);
 
   /* Navegación: superficie propia. En claro es una franja de marca
      profunda; en oscuro NO sigue a la marca (aclararla convertiría el
@@ -44,17 +47,17 @@
   --nav-ink-soft: rgba(255, 255, 255, .62);
   --nav-line: rgba(255, 255, 255, .14);
   --nav-hover: rgba(255, 255, 255, .10);
-  --nav-active-ink: #ffffff;
+  --nav-active-ink: var(--on-brand);
   /* Texto legible SOBRE fondos de menta/acento claro */
-  --mint-ink: #0a4144;
+  --mint-ink: #0e4a78;
 
   /* ── Semánticos ── */
   --amber: #b7791f;
   --amber-soft: #fdf3e0;
   --red: #a83a3a;
   --red-soft: #fbeaea;
-  --green: #1d6b3c;
-  --green-soft: #e6f4ec;
+  --green: #1a7048;
+  --green-soft: #e4f3ec;
 
   /* ── Escala tipográfica (razón ~1.2, base 15px) ── */
   --text-xs: 11.5px;
@@ -76,9 +79,9 @@
   --radius-lg: 16px;
 
   /* ── Elevación: sombras de tinta, no de humo gris ── */
-  --shadow-sm: 0 1px 2px rgba(16, 32, 35, .05);
-  --shadow: 0 2px 4px rgba(16, 32, 35, .05), 0 6px 16px rgba(16, 32, 35, .06);
-  --shadow-lg: 0 8px 24px rgba(16, 32, 35, .10), 0 24px 56px rgba(16, 32, 35, .12);
+  --shadow-sm: 0 1px 2px rgba(13, 33, 46, .05);
+  --shadow: 0 2px 4px rgba(13, 33, 46, .05), 0 6px 16px rgba(13, 33, 46, .06);
+  --shadow-lg: 0 8px 24px rgba(13, 33, 46, .10), 0 24px 56px rgba(13, 33, 46, .12);
 
   /* ── Movimiento: rápido, para uso intensivo ── */
   --ease: cubic-bezier(.22, .61, .36, 1);
@@ -96,33 +99,34 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --paper: #0f1618;
-  --card: #16211f;
-  --elev: #1c2927;
-  --ink: #e8efec;
-  --ink-soft: #a4b8b6;
-  --ink-faint: #7b908e;
-  --line: #253431;
-  --line-strong: #334541;
+  --paper: #0d141b;
+  --card: #141d26;
+  --elev: #1a242f;
+  --ink: #e6edf4;
+  --ink-soft: #a3b3c2;
+  --ink-faint: #7a8b9b;
+  --line: #22303d;
+  --line-strong: #32424f;
   --overlay: rgba(0, 0, 0, .68);
+  --on-brand: #0d141b;
 
   /* En oscuro la navegación es una superficie neutra profunda, apenas
      un grado más oscura que el lienzo. El color de marca aparece solo
      en el acento del elemento activo, no como fondo. */
-  --nav-bg: #0b1113;
-  --nav-ink: #dae4e1;
-  --nav-ink-soft: #8ba09d;
+  --nav-bg: #0a1017;
+  --nav-ink: #dfe8f0;
+  --nav-ink-soft: #93a5b6;
   --nav-line: rgba(255, 255, 255, .08);
   --nav-hover: rgba(255, 255, 255, .06);
-  --nav-active-ink: #0b1113;
-  --mint-ink: #0b1113;
+  --nav-active-ink: var(--on-brand);
+  --mint-ink: #0d141b;
 
   --amber: #e0a145;
-  --amber-soft: #33270f;
+  --amber-soft: #2f2611;
   --red: #e2726f;
-  --red-soft: #3a1d1d;
-  --green: #6cc08a;
-  --green-soft: #14301f;
+  --red-soft: #351c1f;
+  --green: #5fc08d;
+  --green-soft: #0f2a1f;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
   --shadow: 0 2px 6px rgba(0, 0, 0, .38), 0 8px 20px rgba(0, 0, 0, .34);
@@ -195,7 +199,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 /* En oscuro la marca se aclara para contrastar con el fondo, así que
    el botón primario invierte su texto a tinta profunda. Sin esto el
    blanco sobre un tono claro incumpliría AA. */
-[data-theme="dark"] .btn-primary { color: #0f1618; }
+.btn-primary { color: var(--on-brand); }
 
 .btn-ghost {
   background: transparent; color: var(--petrol); border-color: var(--line);
@@ -211,7 +215,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 /* Botón de peligro, coherente con el resto */
 .btn-danger { background: var(--red); color: #fff; box-shadow: var(--shadow-sm); }
 .btn-danger:hover:not(:disabled) { filter: brightness(.93); box-shadow: var(--shadow); }
-[data-theme="dark"] .btn-danger { color: #0f1618; }
+[data-theme="dark"] .btn-danger { color: var(--paper); }
 
 /* ── Formularios ── */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--sp-4); }

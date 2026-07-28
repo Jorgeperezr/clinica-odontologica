@@ -268,7 +268,7 @@ function OdontogramTab({ patientId }) {
               <button key={n} className="btn btn-ghost"
                       style={{ padding: "6px 14px", fontWeight: 700,
                                ...(rm[rmEdit.code]?.[rmEdit.kind] === n
-                                   ? { background: "var(--petrol)", color: "#fff" } : {}) }}
+                                   ? { background: "var(--petrol)", color: "var(--on-brand)" } : {}) }}
                       onClick={() => saveRM(n)}>{n}</button>
             ))}
             <button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: 13 }}

@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 42 completado — contrastes, selector de tema y logotipo corregidos
+## Estado actual: Sprint 43 completado — identidad clínica azul en ambos modos
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -366,6 +366,13 @@ Sin cambios de backend (los 132 tests no varían).
 - **Selector de apariencia corregido:** la causa del desalineado era `repeat(3, 1fr)`, que NO produce columnas iguales (`1fr` equivale a `minmax(auto, 1fr)`, así que la columna de "Sistema" crecía con su texto y el indicador dejaba de coincidir); se cambió a `minmax(0, 1fr)`. Además, icono + texto de tres opciones no cabía en los ~180 px útiles del sidebar: ahora el control es de solo iconos, con `title` y `aria-label` por opción y un rótulo "Apariencia" encima.
 - **Contrastes del modo oscuro corregidos:** nueva clase `.success-box` (los mensajes de éxito reutilizaban `.error-box` con menta + petróleo profundo en línea, que en oscuro quedaba claro sobre claro e ilegible); token `--mint-ink` para el texto sobre fondos de menta (etiquetas de fila en la tabla CPO-ceo); celdas de totales del crema fijo `#f8d9bf` a los tokens de ámbar; botones de indicadores de salud bucal de `#fff` a `--elev`; y superficies claras fijas restantes en Pagos y Plataforma migradas a tokens. Verificado ≥ 4.5:1 en las nueve combinaciones de texto/fondo del modo oscuro.
 - **Reemplazo de logotipo:** `logoSrc()` ahora versiona la URL con `updated_at`, de modo que al reemplazar el logotipo la vista previa, el sidebar y el favicon muestran la imagen nueva en vez de la cacheada por el navegador. En el backend, al reemplazar se elimina el archivo anterior del disco (resuelve además la acumulación de logotipos huérfanos de cada prueba).
+
+### Sprint 43 — Identidad clínica azul y contrastes de Agenda (hecho)
+- **Agenda corregida:** las celdas del calendario mensual se pintaban con `#fff` fijo, quedando blancas sobre el fondo oscuro; ahora usan `--elev`. El control segmentado Día/Semana/Mes usaba blanco fijo para las opciones inactivas y texto blanco para la activa: ahora usa `--elev` / `--ink-soft` y `--on-brand`. Sombra del selector migrada al token del sistema.
+- **Nuevo token `--on-brand`:** color de texto legible SOBRE la marca (blanco en claro, tinta profunda en oscuro). Reemplaza los `color: "#fff"` escritos a mano en botones, pastillas activas y chips, que en oscuro quedaban blanco sobre un azul claro.
+- **Identidad visual del sector salud como tema por defecto:** azul clínico `#14639e` con acento cielo `#bcdcf2`. En claro predominan blancos y grises levemente azulados (`#f4f7fa` lienzo, tarjetas blancas); en oscuro, azules profundos y grises neutros (`#0d141b` lienzo, `#141d26` tarjetas, `#0a1017` navegación), con saturación baja para transmitir limpieza sin cansar en jornadas largas. Sombras con tinta azulada y semánticos (verde/ámbar/rojo) armonizados con la paleta fría.
+- **La personalización se mantiene intacta:** el preset "Petróleo" anterior sigue disponible en la lista, junto a Océano, Bosque, Vino, Grafito y Arena, y siguen funcionando los colores manuales y la extracción automática desde el logotipo. Solo cambia cuál es el tema del sistema.
+- Contraste verificado en ambos modos: de 3.49:1 (etiquetas tenues, mínimo AA grande 3:1) a 16.32:1, con la marca en 6.35:1 sobre blanco y 4.72:1 en su variante oscura.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
