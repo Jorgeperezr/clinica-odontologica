@@ -276,7 +276,7 @@ export function applyBrandingChrome(branding) {
       link.rel = "icon";
       document.head.appendChild(link);
     }
-    link.href = logoSrc(branding.logo_url);
+    link.href = logoSrc(branding.logo_url, branding.updated_at);
   }
 }
 
@@ -294,8 +294,13 @@ export function fileSrc(url) {
   return `${apiBase()}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
-export function logoSrc(url) {
+export function logoSrc(url, version) {
   if (!url) return null;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${apiBase()}${url.startsWith("/") ? "" : "/"}${url}`;
+  const abs = /^https?:\/\//i.test(url)
+    ? url
+    : `${apiBase()}${url.startsWith("/") ? "" : "/"}${url}`;
+  // Al reemplazar el logotipo la ruta puede repetirse; sin versionar, el
+  // navegador seguiría mostrando la imagen cacheada.
+  if (!version) return abs;
+  return `${abs}${abs.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
 }

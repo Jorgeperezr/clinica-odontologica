@@ -63,45 +63,55 @@ export default function ThemeSwitch({ compact = false }) {
   const index = Math.max(0, OPTIONS.findIndex((o) => o.key === mode));
 
   return (
-    <div role="radiogroup" aria-label="Apariencia"
-         style={{
-           position: "relative", display: "grid",
-           gridTemplateColumns: `repeat(${OPTIONS.length}, 1fr)`,
-           gap: 0, padding: 3, borderRadius: 999,
-           background: "var(--nav-hover)",
-           border: "1px solid var(--nav-line)",
-         }}>
-      {/* Indicador deslizante */}
-      <span aria-hidden="true"
-            style={{
-              position: "absolute", top: 3, bottom: 3, left: 3,
-              width: `calc((100% - 6px) / ${OPTIONS.length})`,
-              transform: `translateX(${index * 100}%)`,
-              borderRadius: 999,
-              background: "var(--petrol)",
-              transition: "transform var(--dur) var(--ease)",
-            }} />
-      {OPTIONS.map((o) => {
-        const active = o.key === mode;
-        const Icon = o.icon;
-        return (
-          <button key={o.key} type="button" role="radio" aria-checked={active}
-                  title={o.label} aria-label={o.label}
-                  onClick={() => setColorMode(o.key)}
-                  style={{
-                    position: "relative", zIndex: 1,
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    gap: 6, padding: compact ? "5px 0" : "5px 8px",
-                    background: "transparent", border: "none", borderRadius: 999,
-                    color: active ? "var(--nav-active-ink)" : "var(--nav-ink-soft)",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    transition: "color var(--dur) var(--ease)",
-                  }}>
-            <Icon />
-            {!compact && <span>{o.label}</span>}
-          </button>
-        );
-      })}
+    <div>
+      {!compact && (
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".06em",
+                      textTransform: "uppercase", color: "var(--nav-ink-soft)",
+                      marginBottom: 7 }}>
+          Apariencia
+        </div>
+      )}
+      <div role="radiogroup" aria-label="Apariencia"
+           style={{
+             position: "relative", display: "grid",
+             /* minmax(0,1fr) fuerza columnas EXACTAMENTE iguales: con
+                1fr a secas la columna de "Sistema" crecía con su texto
+                y el indicador dejaba de coincidir. */
+             gridTemplateColumns: `repeat(${OPTIONS.length}, minmax(0, 1fr))`,
+             gap: 0, padding: 3, borderRadius: 999,
+             background: "var(--nav-hover)",
+             border: "1px solid var(--nav-line)",
+           }}>
+        <span aria-hidden="true"
+              style={{
+                position: "absolute", top: 3, bottom: 3, left: 3,
+                width: `calc((100% - 6px) / ${OPTIONS.length})`,
+                transform: `translateX(${index * 100}%)`,
+                borderRadius: 999,
+                background: "var(--petrol)",
+                transition: "transform var(--dur) var(--ease)",
+              }} />
+        {OPTIONS.map((o) => {
+          const active = o.key === mode;
+          const Icon = o.icon;
+          return (
+            <button key={o.key} type="button" role="radio" aria-checked={active}
+                    title={o.label} aria-label={o.label}
+                    onClick={() => setColorMode(o.key)}
+                    style={{
+                      position: "relative", zIndex: 1, minWidth: 0,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      padding: "7px 0",
+                      background: "transparent", border: "none", borderRadius: 999,
+                      color: active ? "var(--nav-active-ink)" : "var(--nav-ink-soft)",
+                      cursor: "pointer",
+                      transition: "color var(--dur) var(--ease)",
+                    }}>
+              <Icon />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

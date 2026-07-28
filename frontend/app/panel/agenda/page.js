@@ -86,7 +86,7 @@ export default function AgendaPage() {
 
       {error && <div className="error-box">{error}</div>}
       {calNotice && (
-        <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>
+        <div className="success-box">
           ✓ URL del calendario copiada al portapapeles. {calNotice}
         </div>
       )}

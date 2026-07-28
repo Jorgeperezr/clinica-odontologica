@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 41 completado — tema oscuro sobrio y módulo de documentos corregido
+## Estado actual: Sprint 42 completado — contrastes, selector de tema y logotipo corregidos
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -361,6 +361,11 @@ Sin cambios de backend (los 132 tests no varían).
 - **Acentos suaves:** en modo oscuro la saturación de la marca se atenúa (tope 0.52) antes de aclararla, de modo que el matiz —y la identidad de la clínica— se conserva sin estridencia. Verificado ≥ 4.5:1 (WCAG AA) para vino, azul, naranja, petróleo y bosque.
 - **Selector de apariencia corregido:** el indicador deslizante quedaba desalineado sobre las etiquetas porque el `gap` de la rejilla rompía el cálculo de porcentajes; ahora se desplaza por `transform` en múltiplos exactos del ancho de columna.
 - **Componentes refinados:** iconos alineados y de tamaño fijo dentro de los botones, variante `.btn-danger` coherente, estados `:disabled` en campos, selectores con flecha propia (idéntica en ambos modos y navegadores), cabeceras de tabla fijas al desplazar, y colores fijos del sidebar migrados a tokens.
+
+### Sprint 42 — Selector de tema, contrastes del modo oscuro y reemplazo de logotipo (hecho)
+- **Selector de apariencia corregido:** la causa del desalineado era `repeat(3, 1fr)`, que NO produce columnas iguales (`1fr` equivale a `minmax(auto, 1fr)`, así que la columna de "Sistema" crecía con su texto y el indicador dejaba de coincidir); se cambió a `minmax(0, 1fr)`. Además, icono + texto de tres opciones no cabía en los ~180 px útiles del sidebar: ahora el control es de solo iconos, con `title` y `aria-label` por opción y un rótulo "Apariencia" encima.
+- **Contrastes del modo oscuro corregidos:** nueva clase `.success-box` (los mensajes de éxito reutilizaban `.error-box` con menta + petróleo profundo en línea, que en oscuro quedaba claro sobre claro e ilegible); token `--mint-ink` para el texto sobre fondos de menta (etiquetas de fila en la tabla CPO-ceo); celdas de totales del crema fijo `#f8d9bf` a los tokens de ámbar; botones de indicadores de salud bucal de `#fff` a `--elev`; y superficies claras fijas restantes en Pagos y Plataforma migradas a tokens. Verificado ≥ 4.5:1 en las nueve combinaciones de texto/fondo del modo oscuro.
+- **Reemplazo de logotipo:** `logoSrc()` ahora versiona la URL con `updated_at`, de modo que al reemplazar el logotipo la vista previa, el sidebar y el favicon muestran la imagen nueva en vez de la cacheada por el navegador. En el backend, al reemplazar se elimina el archivo anterior del disco (resuelve además la acumulación de logotipos huérfanos de cada prueba).
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

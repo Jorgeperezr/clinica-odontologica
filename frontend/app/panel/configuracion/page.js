@@ -301,7 +301,7 @@ function UsersTab() {
     <div>
       {error && <div className="error-box">{error}</div>}
       {okMsg && (
-        <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>
+        <div className="success-box">
           ✓ {okMsg}
         </div>
       )}
@@ -594,7 +594,7 @@ function BrandingTab() {
   return (
     <div style={{ display: "grid", gap: 18, maxWidth: 860 }}>
       {error && <div className="error-box">{error}</div>}
-      {okMsg && <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>✓ {okMsg}</div>}
+      {okMsg && <div className="success-box">✓ {okMsg}</div>}
 
       {/* Logotipo */}
       <div className="card">
@@ -611,7 +611,7 @@ function BrandingTab() {
                         backgroundSize: "16px 16px",
                         backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px" }}>
             {branding?.logo_url
-              ? <img src={logoSrc(branding.logo_url)} alt="Vista previa del logotipo"
+              ? <img src={logoSrc(branding.logo_url, branding.updated_at)} alt="Vista previa del logotipo"
                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
               : <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>Sin logotipo</span>}
           </div>

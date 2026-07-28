@@ -293,7 +293,7 @@ function AdminsTab() {
           <p style={{ fontSize: 14, marginBottom: 8 }}>
             Para <strong>{tempCred.email}</strong> — cópiala AHORA, no se puede volver a consultar:
           </p>
-          <code className="tabular" style={{ fontSize: 18, fontWeight: 700, background: "#fff",
+          <code className="tabular" style={{ fontSize: 18, fontWeight: 700, background: "var(--elev)",
                 padding: "8px 14px", borderRadius: 8, display: "inline-block" }}>
             {tempCred.temporary_password}
           </code>

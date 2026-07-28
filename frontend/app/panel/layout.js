@@ -91,7 +91,7 @@ export default function PanelLayout({ children }) {
       <aside style={{ ...styles.sidebar, flexBasis: W, width: W }}>
         <div style={{ ...styles.logo, justifyContent: collapsed ? "center" : "flex-start" }}>
           {branding?.logo_url ? (
-            <img src={logoSrc(branding.logo_url)} alt="Logotipo de la clínica"
+            <img src={logoSrc(branding.logo_url, branding.updated_at)} alt="Logotipo de la clínica"
                  style={{ height: collapsed ? 32 : 40, maxWidth: collapsed ? 46 : 70,
                           objectFit: "contain" }} />
           ) : (

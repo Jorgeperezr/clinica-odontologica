@@ -37,7 +37,7 @@ export default function PagosPage() {
         {results.length > 0 && !patient && (
           <div style={{
             position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
-            background: "#fff", border: "1px solid var(--line)", borderRadius: 8,
+            background: "var(--elev)", border: "1px solid var(--line)", borderRadius: 8,
             boxShadow: "0 6px 18px rgba(0,0,0,.08)",
           }}>
             {results.map((p) => (

@@ -144,6 +144,11 @@ class ClinicBrandingView(APIView):
             obj.logo = None
 
         if "logo" in request.FILES:
+            # Al reemplazar, el archivo anterior se borra del disco: evita
+            # acumular logotipos huérfanos de cada prueba y garantiza que
+            # no queden restos de la imagen previa.
+            if obj.logo:
+                obj.logo.delete(save=False)
             obj.logo = request.FILES["logo"]
             try:
                 auto_palette = extract_palette(request.FILES["logo"])

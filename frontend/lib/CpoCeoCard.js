@@ -54,9 +54,11 @@ export default function CpoCeoCard({ patientId, refreshKey }) {
   const base = { border: "1px solid var(--line)", padding: "8px 16px", textAlign: "center",
                  fontVariantNumeric: "tabular-nums" };
   const hdr = { ...base, fontWeight: 700, fontSize: 13, color: "var(--petrol-deep)" };
-  const rowLabel = { ...base, fontWeight: 700, background: "var(--mint)", minWidth: 40 };
+  const rowLabel = { ...base, fontWeight: 700, background: "var(--mint)",
+                     color: "var(--mint-ink)", minWidth: 40 };
   const numCell = { ...base, minWidth: 44 };
-  const totalCell = { ...base, fontWeight: 700, background: "#f8d9bf" };
+  const totalCell = { ...base, fontWeight: 700, background: "var(--amber-soft)",
+                      color: "var(--amber)" };
 
   return (
     <div className="card" style={{ marginBottom: 18 }}>

@@ -193,7 +193,7 @@ function RadioGroup({ label, value, onChange, options }) {
           <button key={k} type="button" onClick={() => onChange(value === k ? "" : k)}
                   style={{ padding: "7px 12px", borderRadius: 8, fontSize: 13, cursor: "pointer",
                            border: value === k ? "2px solid var(--petrol)" : "1px solid var(--line)",
-                           background: value === k ? "var(--petrol-soft)" : "#fff",
+                           background: value === k ? "var(--petrol-soft)" : "var(--elev)",
                            fontWeight: value === k ? 600 : 400 }}>
             {lbl}
           </button>

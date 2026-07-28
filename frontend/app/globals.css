@@ -45,6 +45,8 @@
   --nav-line: rgba(255, 255, 255, .14);
   --nav-hover: rgba(255, 255, 255, .10);
   --nav-active-ink: #ffffff;
+  /* Texto legible SOBRE fondos de menta/acento claro */
+  --mint-ink: #0a4144;
 
   /* ── Semánticos ── */
   --amber: #b7791f;
@@ -113,6 +115,7 @@
   --nav-line: rgba(255, 255, 255, .08);
   --nav-hover: rgba(255, 255, 255, .06);
   --nav-active-ink: #0b1113;
+  --mint-ink: #0b1113;
 
   --amber: #e0a145;
   --amber-soft: #33270f;
@@ -306,6 +309,14 @@ tbody tr:hover td { background: var(--petrol-soft); }
   margin-bottom: var(--sp-4);
   animation: rise var(--dur) var(--ease);
 }
+.success-box {
+  background: var(--green-soft); color: var(--green);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px; font-size: var(--text-sm);
+  margin-bottom: var(--sp-4);
+  animation: rise var(--dur) var(--ease);
+}
+
 .empty {
   padding: var(--sp-10) var(--sp-5);
   text-align: center; color: var(--ink-faint);
