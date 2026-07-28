@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 43 completado — identidad clínica azul en ambos modos
+## Estado actual: Sprint 44 completado — interfaz adaptada a móvil y tablet
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -373,6 +373,11 @@ Sin cambios de backend (los 132 tests no varían).
 - **Identidad visual del sector salud como tema por defecto:** azul clínico `#14639e` con acento cielo `#bcdcf2`. En claro predominan blancos y grises levemente azulados (`#f4f7fa` lienzo, tarjetas blancas); en oscuro, azules profundos y grises neutros (`#0d141b` lienzo, `#141d26` tarjetas, `#0a1017` navegación), con saturación baja para transmitir limpieza sin cansar en jornadas largas. Sombras con tinta azulada y semánticos (verde/ámbar/rojo) armonizados con la paleta fría.
 - **La personalización se mantiene intacta:** el preset "Petróleo" anterior sigue disponible en la lista, junto a Océano, Bosque, Vino, Grafito y Arena, y siguen funcionando los colores manuales y la extracción automática desde el logotipo. Solo cambia cuál es el tema del sistema.
 - Contraste verificado en ambos modos: de 3.49:1 (etiquetas tenues, mínimo AA grande 3:1) a 16.32:1, con la marca en 6.35:1 sobre blanco y 4.72:1 en su variante oscura.
+
+### Sprint 44 — Adaptación a móvil y tablet (hecho)
+- **Menú lateral como panel deslizante en pantallas estrechas (≤ 860 px):** antes ocupaba media pantalla del teléfono. Ahora se oculta fuera de vista y se abre con el botón de menú de una nueva barra superior (que muestra logotipo y nombre de la clínica); se cierra al tocar el fondo oscurecido, la ✕ o cualquier sección. Con el panel abierto se bloquea el desplazamiento del fondo. En móvil el menú siempre muestra las etiquetas —contraer a solo iconos es una función de escritorio— y el área principal ocupa todo el ancho.
+- **Botón de contraer rediseñado:** los glifos de texto « » se veían descentrados y de tamaño irregular. Ahora es un icono SVG de doble punta de flecha que gira según el estado, dentro de un botón circular de 30 px centrado en su fila, con el mismo trazo que el resto de la iconografía.
+- **Contenido adaptable:** las filas de pestañas (ficha del paciente y configuración) se desplazan en horizontal en vez de partirse en varias líneas; objetivos táctiles más cómodos en botones y campos (≈44 px de alto); titulares y espaciado reducidos en pantallas pequeñas.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

@@ -48,7 +48,7 @@ function PatientDetail() {
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
+      <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
         {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"]].map(([key, label]) => (

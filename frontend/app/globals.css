@@ -389,11 +389,26 @@ main > * { animation: rise var(--dur-slow) var(--ease) both; }
   h1 { font-size: var(--text-xl); }
   h2 { font-size: var(--text-lg); }
 }
+@media (max-width: 860px) {
+  /* Las filas de pestañas se desplazan en horizontal en vez de partirse
+     en varias líneas, que era lo que descuadraba la ficha del paciente. */
+  .tabs, [role="tablist"] {
+    display: flex; flex-wrap: nowrap; overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar, [role="tablist"]::-webkit-scrollbar { display: none; }
+  .tabs > *, [role="tablist"] > * { flex: 0 0 auto; white-space: nowrap; }
+}
+
 @media (max-width: 640px) {
   html, body { font-size: 15.5px; }
   .card { overflow-x: auto; }
   table { min-width: 520px; }
-  .btn { padding: 10px 14px; }
+  /* Objetivo táctil cómodo (≈44 px de alto con el interlineado) */
+  .btn { padding: 11px 15px; }
+  .field input, .field select, .field textarea { padding: 11px 12px; }
+  h1 { font-size: var(--text-lg); }
 }
 
 /* Impresión: documentos clínicos legibles en papel */

@@ -21,7 +21,7 @@ export default function ConfiguracionPage() {
     <div>
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
+      <div className="tabs" style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
         {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{
