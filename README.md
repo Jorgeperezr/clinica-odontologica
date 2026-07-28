@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 40 completado — sistema de diseño con temas claro y oscuro
+## Estado actual: Sprint 41 completado — tema oscuro sobrio y módulo de documentos corregido
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -354,6 +354,13 @@ Sin cambios de backend (los 132 tests no varían).
 - **Movimiento deliberado:** tres gestos reutilizados en todo el sistema —aparecer (contenido y páginas), emerger (modales) y latir (carga)— con duraciones cortas (120-260 ms) pensadas para uso intensivo, y `prefers-reduced-motion` respetado.
 - **Responsive y superficies:** puntos de corte en 900 px y 640 px, tablas con desplazamiento dentro de su tarjeta en móvil, barras de desplazamiento acordes al modo, y hoja de impresión para los documentos clínicos. Superficies fijas (`#fff`) migradas a tokens para que sigan al tema.
 - **Nota sobre True Tone:** es una adaptación de hardware del panel; una página web no puede leerla ni controlarla. Lo que sí se hace: declarar `color-scheme` (que integra el interfaz con la gestión de color del sistema) y usar neutros ligeramente cálidos en vez de grises azulados, de modo que bajo la corrección de blancos el interfaz no vire a un tono sucio.
+
+### Sprint 41 — Tema oscuro sobrio, refinamiento de componentes y fix de Documentos (hecho)
+- **Bug corregido en Documentos (causa raíz):** `DocumentsTab` desestructuraba `useConfirm()` como objeto (`const { confirm, ConfirmUI }`) cuando el hook devuelve una **tupla** `[confirm, ui]`, dejando ambos valores en `undefined`; además renderizaba `<ConfirmUI />` como componente cuando `ui` es un **elemento JSX**. De ahí el "Element type is invalid… got: undefined". Corregido a `const [confirm, ConfirmUI] = useConfirm()` y `{ConfirmUI}`, igual que el resto del sistema. Verificado además que todos los componentes usados en el módulo estén exportados e importados correctamente.
+- **Tema oscuro rediseñado:** el sidebar ya no toma el color de marca (que al aclararse para contrastar se volvía un bloque saturado). Se añadieron tokens propios de navegación (`--nav-bg`, `--nav-ink`, `--nav-line`, `--nav-hover`, `--nav-active-ink`): en claro siguen siendo una franja de marca profunda, y en oscuro una superficie neutra (#0b1113) donde la marca aparece solo como acento del elemento activo.
+- **Acentos suaves:** en modo oscuro la saturación de la marca se atenúa (tope 0.52) antes de aclararla, de modo que el matiz —y la identidad de la clínica— se conserva sin estridencia. Verificado ≥ 4.5:1 (WCAG AA) para vino, azul, naranja, petróleo y bosque.
+- **Selector de apariencia corregido:** el indicador deslizante quedaba desalineado sobre las etiquetas porque el `gap` de la rejilla rompía el cálculo de porcentajes; ahora se desplaza por `transform` en múltiplos exactos del ancho de columna.
+- **Componentes refinados:** iconos alineados y de tamaño fijo dentro de los botones, variante `.btn-danger` coherente, estados `:disabled` en campos, selectores con flecha propia (idéntica en ambos modos y navegadores), cabeceras de tabla fijas al desplazar, y colores fijos del sidebar migrados a tokens.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

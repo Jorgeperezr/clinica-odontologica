@@ -159,7 +159,7 @@ export default function PanelLayout({ children }) {
 const styles = {
   shell: { display: "flex", minHeight: "100vh" },
   sidebar: {
-    flexGrow: 0, flexShrink: 0, background: "var(--petrol-deep)", color: "#fff",
+    flexGrow: 0, flexShrink: 0, background: "var(--nav-bg)", color: "var(--nav-ink)",
     display: "flex", flexDirection: "column", padding: "20px 10px",
     position: "sticky", top: 0, height: "100vh",
     transition: "width .18s ease, flex-basis .18s ease",
@@ -167,19 +167,19 @@ const styles = {
   logo: { display: "flex", alignItems: "center", gap: 10, padding: "4px 6px 10px" },
   logoText: { fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em" },
   collapseBtn: {
-    alignSelf: "flex-end", background: "rgba(255,255,255,.1)", border: "none",
+    alignSelf: "flex-end", background: "var(--nav-hover)", border: "none",
     color: "#fff", borderRadius: 6, width: 26, height: 26, cursor: "pointer",
     fontSize: 14, lineHeight: 1, marginBottom: 4,
   },
   navItem: {
     display: "flex", alignItems: "center", gap: 11, borderRadius: 8,
-    color: "rgba(255,255,255,.82)", fontSize: 14, fontWeight: 500, marginBottom: 2,
+    color: "var(--nav-ink-soft)", fontSize: 14, fontWeight: 500, marginBottom: 2,
     whiteSpace: "nowrap", overflow: "hidden",
   },
-  navActive: { background: "var(--petrol)", color: "#fff" },
-  userBox: { borderTop: "1px solid rgba(255,255,255,.15)", paddingTop: 14, marginTop: 14 },
+  navActive: { background: "var(--petrol)", color: "var(--nav-active-ink)" },
+  userBox: { borderTop: "1px solid var(--nav-line)", paddingTop: 14, marginTop: 14 },
   logoutBtn: {
-    marginTop: 10, background: "transparent", border: "1px solid rgba(255,255,255,.3)",
+    marginTop: 10, background: "transparent", border: "1px solid var(--nav-line)",
     color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, width: "100%",
     cursor: "pointer",
   },

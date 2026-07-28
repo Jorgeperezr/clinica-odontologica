@@ -67,19 +67,19 @@ export default function ThemeSwitch({ compact = false }) {
          style={{
            position: "relative", display: "grid",
            gridTemplateColumns: `repeat(${OPTIONS.length}, 1fr)`,
-           gap: 2, padding: 3, borderRadius: 999,
-           background: "rgba(255,255,255,.10)",
-           border: "1px solid rgba(255,255,255,.14)",
+           gap: 0, padding: 3, borderRadius: 999,
+           background: "var(--nav-hover)",
+           border: "1px solid var(--nav-line)",
          }}>
       {/* Indicador deslizante */}
       <span aria-hidden="true"
             style={{
-              position: "absolute", top: 3, bottom: 3,
-              left: `calc(${(index * 100) / OPTIONS.length}% + 3px)`,
-              width: `calc(${100 / OPTIONS.length}% - 6px)`,
+              position: "absolute", top: 3, bottom: 3, left: 3,
+              width: `calc((100% - 6px) / ${OPTIONS.length})`,
+              transform: `translateX(${index * 100}%)`,
               borderRadius: 999,
-              background: "rgba(255,255,255,.92)",
-              transition: "left var(--dur) var(--ease)",
+              background: "var(--petrol)",
+              transition: "transform var(--dur) var(--ease)",
             }} />
       {OPTIONS.map((o) => {
         const active = o.key === mode;
@@ -93,7 +93,7 @@ export default function ThemeSwitch({ compact = false }) {
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     gap: 6, padding: compact ? "5px 0" : "5px 8px",
                     background: "transparent", border: "none", borderRadius: 999,
-                    color: active ? "var(--petrol-deep)" : "rgba(255,255,255,.82)",
+                    color: active ? "var(--nav-active-ink)" : "var(--nav-ink-soft)",
                     fontSize: 12, fontWeight: 600, cursor: "pointer",
                     transition: "color var(--dur) var(--ease)",
                   }}>

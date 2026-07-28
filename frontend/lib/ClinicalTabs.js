@@ -178,7 +178,7 @@ const DOC_CATEGORIES = {
 };
 
 export function DocumentsTab({ patientId }) {
-  const { confirm, ConfirmUI } = useConfirm();
+  const [confirm, ConfirmUI] = useConfirm();
   const [docs, setDocs] = useState([]);
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -275,7 +275,7 @@ export function DocumentsTab({ patientId }) {
 
   return (
     <div>
-      <ConfirmUI />
+      {ConfirmUI}
       {error && <div className="error-box">{error}</div>}
       {preview && (
         <DocumentPreview doc={preview} patientId={patientId} onClose={() => setPreview(null)}

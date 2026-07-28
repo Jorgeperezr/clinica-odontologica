@@ -123,8 +123,12 @@ function contrastRatio(hexA, hexB) {
  */
 export function ensureAccessibleOnDark(hex, bg = "#0f1618") {
   if (!hexToRgb(hex)) return null;
-  const [h, s] = rgbToHsl(hexToRgb(hex));
-  let l = rgbToHsl(hexToRgb(hex))[2];
+  const [h, s0, l0] = rgbToHsl(hexToRgb(hex));
+  // Sobre fondo oscuro un tono saturado "grita": al aclararlo se vuelve
+  // fluorescente. Se atenúa la saturación para obtener un acento suave
+  // que conserva el matiz —y por tanto la identidad— sin estridencia.
+  const s = Math.min(s0 * 0.78, 0.52);
+  let l = l0;
   let out = rgbToHex(hslToRgb([h, s, l]));
   let guard = 0;
   while (contrastRatio(out, bg) < 4.5 && l < 0.95 && guard < 50) {
@@ -166,13 +170,20 @@ export function applyTheme(theme, mode) {
            : withLightness(brand, Math.max(0.10, brandL - 0.12)),
   );
   // "soft" = fondo de realce: casi blanco en claro, tinte profundo en oscuro
-  root.style.setProperty("--petrol-soft", withLightness(brand, isDark ? 0.17 : 0.93));
+  if (isDark) {
+    // Realce: tinte muy profundo y desaturado, para franjas de hover
+    const [bh, bs] = rgbToHsl(hexToRgb(brand));
+    root.style.setProperty("--petrol-soft",
+      rgbToHex(hslToRgb([bh, Math.min(bs, 0.28), 0.155])));
+  } else {
+    root.style.setProperty("--petrol-soft", withLightness(brand, 0.93));
+  }
 
   const mint = hexToRgb(secondary) ? secondary : DEFAULT.secondary;
   const mintL = rgbToHsl(hexToRgb(mint))[2];
   root.style.setProperty(
     "--mint",
-    isDark ? withLightness(mint, 0.30) : withLightness(mint, Math.max(0.72, mintL)),
+    isDark ? withLightness(mint, 0.62) : withLightness(mint, Math.max(0.72, mintL)),
   );
 }
 

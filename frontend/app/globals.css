@@ -36,6 +36,16 @@
   --line-strong: #c3cec9;
   --overlay: rgba(15, 23, 42, .55);
 
+  /* Navegación: superficie propia. En claro es una franja de marca
+     profunda; en oscuro NO sigue a la marca (aclararla convertiría el
+     sidebar en un bloque saturado) sino una superficie neutra. */
+  --nav-bg: var(--petrol-deep);
+  --nav-ink: rgba(255, 255, 255, .92);
+  --nav-ink-soft: rgba(255, 255, 255, .62);
+  --nav-line: rgba(255, 255, 255, .14);
+  --nav-hover: rgba(255, 255, 255, .10);
+  --nav-active-ink: #ffffff;
+
   /* ── Semánticos ── */
   --amber: #b7791f;
   --amber-soft: #fdf3e0;
@@ -93,6 +103,16 @@
   --line: #253431;
   --line-strong: #334541;
   --overlay: rgba(0, 0, 0, .68);
+
+  /* En oscuro la navegación es una superficie neutra profunda, apenas
+     un grado más oscura que el lienzo. El color de marca aparece solo
+     en el acento del elemento activo, no como fondo. */
+  --nav-bg: #0b1113;
+  --nav-ink: #dae4e1;
+  --nav-ink-soft: #8ba09d;
+  --nav-line: rgba(255, 255, 255, .08);
+  --nav-hover: rgba(255, 255, 255, .06);
+  --nav-active-ink: #0b1113;
 
   --amber: #e0a145;
   --amber-soft: #33270f;
@@ -181,6 +201,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   background: var(--petrol-soft); border-color: var(--line-strong);
 }
 
+/* Iconos dentro de botones: alineados al texto y sin encogerse */
+.btn svg { flex-shrink: 0; width: 16px; height: 16px; }
+.btn > * { line-height: 1; }
+
+/* Botón de peligro, coherente con el resto */
+.btn-danger { background: var(--red); color: #fff; box-shadow: var(--shadow-sm); }
+.btn-danger:hover:not(:disabled) { filter: brightness(.93); box-shadow: var(--shadow); }
+[data-theme="dark"] .btn-danger { color: #0f1618; }
+
 /* ── Formularios ── */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--sp-4); }
 .field label {
@@ -203,6 +232,23 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   box-shadow: 0 0 0 3px var(--petrol-soft);
 }
 .field input::placeholder, .field textarea::placeholder { color: var(--ink-faint); }
+.field input:disabled, .field select:disabled, .field textarea:disabled {
+  background: var(--paper); color: var(--ink-faint); cursor: not-allowed;
+}
+
+/* Selector: una sola flecha, dibujada por nosotros, igual en todo el
+   sistema y en ambos modos (la nativa cambia de color con el SO). */
+.field select {
+  appearance: none;
+  padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 18px) center, calc(100% - 13px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--ink);
+}
+input[type="date"], input[type="file"] { color-scheme: inherit; }
 .field textarea { resize: vertical; min-height: 68px; }
 
 /* ── Tarjetas ── */
@@ -238,6 +284,7 @@ td {
   transition: background var(--dur-fast) var(--ease);
 }
 tbody tr:last-child td { border-bottom: none; }
+thead th { position: sticky; top: 0; z-index: 1; }
 tbody tr:hover td { background: var(--petrol-soft); }
 
 /* ── Badges ── */
