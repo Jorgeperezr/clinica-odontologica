@@ -213,16 +213,19 @@ function OdontogramTab({ patientId, initialView }) {
     setPendingReg({ stateId: state.id, label: state.label, color: state.color });
   }
 
-  async function registerState(stateId) {
+  async function registerState(stateId, override = {}) {
     setError("");
+    const tooth = override.tooth ?? selected;
+    const surface = override.surface ?? selectedSurface;
+    const notes = override.notes ?? toothNotes;
     try {
       const resp = await api(`/patients/${patientId}/tooth-records/`, {
         method: "POST",
         body: JSON.stringify({
-          tooth_fdi_code: selected,
-          surface: selectedSurface,
+          tooth_fdi_code: tooth,
+          surface: surface,
           state: stateId,
-          notes: toothNotes,
+          notes: notes,
           date: new Date().toISOString().slice(0, 10),
         }),
       });
@@ -235,7 +238,7 @@ function OdontogramTab({ patientId, initialView }) {
         throw new Error(msg);
       }
       await loadCurrent();
-      await loadHistory(selected);
+      await loadHistory(tooth);
       setToothNotes("");
       setPendingReg(null);
     } catch (err) { setError(err.message); }
@@ -288,7 +291,14 @@ function OdontogramTab({ patientId, initialView }) {
                   selectedTooth={selected} selectedSurface={selectedSurface}
                   onSurfaceClick={handleSurfaceClick}
                   onRMClick={handleRMClick}
-                  history={history} />
+                  history={history}
+                  states={states}
+                  onQuickRegister={(stateId, tooth, surface) =>
+                    registerState(stateId, {
+                      tooth: tooth ?? selected,
+                      surface: surface ?? selectedSurface,
+                      notes: "",
+                    })} />
           );
         })()}
         {selected && (

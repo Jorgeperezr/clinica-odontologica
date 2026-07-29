@@ -12,7 +12,7 @@
 
 import ClassicOdontogram from "../Odontogram";
 import AnatomicalView from "./AnatomicalView";
-import CompactView from "./CompactView";
+import AdvancedCompactView from "./advanced/AdvancedCompactView";
 import Odontogram3D from "./Odontogram3D";
 
 export const VIEWS = [
@@ -31,8 +31,8 @@ export const VIEWS = [
   {
     key: "compacto",
     label: "Compacto",
-    description: "Cuadrícula por cuadrantes, ideal para pantallas pequeñas.",
-    Component: CompactView,
+    description: "Ficha por columnas con navegación por cuadrantes, cursor de teclado, zoom y registro rápido.",
+    Component: AdvancedCompactView,
   },
   {
     key: "tridimensional",

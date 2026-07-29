@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 49 completado — odontograma 3D con anatomía y materiales realistas
+## Estado actual: Sprint 50 completado — odontograma compacto avanzado
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -429,6 +429,15 @@ Sin cambios de backend (los 132 tests no varían).
 - **Patologías como tinte sobre el esmalte:** el color clínico se mezcla al 62 % con el marfil natural y añade un halo tenue, de modo que el hallazgo es inequívoco pero el diente conserva translucidez y reflejos. Los materiales restauradores se distinguen además por acabado: implante metálico pulido, corona muy pulida, prótesis cerámica mate.
 - **Cámara:** giro vertical amplio (360° útiles), zoom de 4.5 a 30 unidades y desplazamiento libre; todas las transiciones interpoladas por fotograma.
 - Se mantienen la liberación de recursos al desmontar (incluidos contornos y mapa de entorno) y la garantía de que el modelo 3D no realiza ninguna llamada a la API.
+
+### Sprint 50 — Odontograma compacto avanzado (hecho)
+100% presentación; sin cambios de datos, API ni lógica (la suite sigue en 156 tests).
+- **Sustituye al modelo Compacto** adaptando la arquitectura visual de PeriodontalCharting. El proyecto de referencia es **Swift/SwiftUI (iOS)**, así que no había código reutilizable: se adaptaron sus patrones de interacción, no su implementación.
+- Patrones adaptados: `ToothColumnView` → cada pieza es una **columna de celdas apilables** (número, ilustración, cruz de superficies e indicador de registro), lo que permite leer varias dimensiones clínicas de una pieza de un vistazo; `QuadrantView` → **navegación directa por cuadrante** con línea media; `ChartingCursor` → **cursor de teclado** (← → recorren piezas, ↑ ↓ cambian de superficie, Enter abre el registro rápido, Esc cierra); `ZoomableScrollView` → **zoom de 1× a 3×** con **desplazamiento automático** de la pieza activa al centro del visor; `NumberPadPopoverView` → **registro rápido** en panel lateral con la paleta clínica completa del sistema.
+- **Celdas reutilizables** (`SurfaceCell`, `SurfaceCross`, `RecordDot`, `ToothColumn`), direccionables por (pieza, superficie) como en el modelo de selección del proyecto original, con roles ARIA (`grid`, `gridcell`, `aria-selected`) y etiquetas descriptivas.
+- **Registro rápido sin condiciones de carrera:** la vista envía pieza y superficie explícitas y el contenedor las usa mediante el parámetro `override` que `registerState` ya aceptaba, en lugar de depender de estado asíncrono de React.
+- **Se conservan los cuatro modelos** (Clásico, Anatómico, Compacto avanzado y 3D) sobre la misma fuente de datos. Verificado que ninguna de las cuatro vistas realiza llamadas a la API: la sincronización entre ellas es estructural, no algo que haya que mantener. Historial, evoluciones, diagnósticos, plan de tratamiento, índices CPO-ceo, formularios MSP y exportaciones PDF siguen leyendo de lo almacenado.
+- Limpieza: se eliminaron archivos duplicados de intentos paralelos (`CompactView.js`, `CompactAdvancedView.js`) y se añadió una verificación de que todos los imports internos del módulo resuelven a archivos existentes.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
