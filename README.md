@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 45 completado — cobros en ficha, avisos del día y color por profesional
+## Estado actual: Sprint 46 completado — múltiples modelos de odontograma
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -386,6 +386,16 @@ Sin cambios de backend (los 132 tests no varían).
 - **Recordatorios de cumpleaños:** endpoint `patients/birthdays/?days=7` que compara mes y día (funciona en cualquier año) y tarjeta en el panel de inicio con los cumpleaños de hoy y de la semana, con la edad que cumple cada paciente y enlace a su ficha.
 - **Aviso de llegada al profesional:** endpoint `appointments/waiting/` y tarjeta en el panel. El odontólogo ve sus pacientes en sala; recepción y administración, los de toda la clínica, con los minutos de espera (en rojo a partir de 15). No requirió un modelo de notificaciones: la señal ya estaba en los datos (hay check-in y la atención no ha comenzado), de modo que el aviso siempre es coherente con el estado real de la agenda y no puede quedar "pegado". Se refresca cada minuto. El aviso por WhatsApp que ya existía sigue funcionando en paralelo.
 - **Color identificativo por profesional en la agenda:** franja lateral y punto de color en cada cita, más una leyenda cuando hay varios profesionales. Usa el campo `calendar_color` que el modelo `Doctor` ya tenía; si algún profesional no lo tiene configurado, se deriva un color estable de su nombre para que nunca queden dos agendas indistinguibles.
+
+### Sprint 46 — Múltiples modelos de odontograma (patrón Strategy) (hecho)
+100% presentación: la estructura clínica y los datos almacenados no cambian (la suite sigue en 156 tests).
+- **Capa de estrategia** en `lib/odontogram/`: `contract.js` documenta el contrato que todo modelo debe cumplir y centraliza la disposición FDI; `registry.js` es el punto único de extensión (añadir un cuarto modelo es crear un componente y registrarlo, sin tocar la lógica clínica).
+- **Tres modelos intercambiables** con selector en la pestaña Odontograma, y la preferencia recordada por persona (`localStorage`, no viaja al servidor porque es una preferencia de vista, no un dato clínico):
+  - **Clásico** (predeterminado): el esquema MSP por superficies que ya existía, sin cambios.
+  - **Anatómico**: silueta de la corona según la familia de la pieza (incisivo, canino, premolar, molar, derivada del último dígito FDI) más una rueda de cinco superficies; la arcada inferior se dibuja en espejo.
+  - **Compacto**: cuadrícula por cuadrantes en HTML, con cinco franjas de color por pieza y selección de superficie con botones grandes; pensado para pantallas pequeñas y revisión rápida.
+- **Una sola fuente de datos, garantizada por diseño:** los tres modelos reciben exactamente las mismas props y emiten las mismas intenciones (`onSurfaceClick`, `onRMClick`); ninguno tiene estado propio, efectos ni llamadas a la API. El registro ocurre una única vez en el contenedor `OdontogramTab`, de modo que cambiar de modelo no puede alterar ni duplicar información, y el historial por pieza, los índices CPO-ceo, los diagnósticos y las exportaciones (PDF, formulario oficial MSP) se generan siempre desde lo almacenado, con independencia del modelo usado para registrar.
+- **Nota de alcance:** la edición de recesión y movilidad sigue disponible solo en el modelo Clásico, que es donde vive esa fila; los otros dos se centran en superficies. Cambiar de modelo para editarlas no afecta a los datos.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

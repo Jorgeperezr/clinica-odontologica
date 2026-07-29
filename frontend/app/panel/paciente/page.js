@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { api, currentUser } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import PatientPayments from "../../../lib/PatientPayments";
-import Odontogram from "../../../lib/Odontogram";
+import { VIEWS, getView, readPreferredView, savePreferredView } from "../../../lib/odontogram/registry";
 import Form033Panel from "../../../lib/Form033Panel";
 import DiagnosisSection from "../../../lib/DiagnosisTab";
 import CpoCeoCard from "../../../lib/CpoCeoCard";
@@ -99,8 +99,11 @@ function OdontogramTab({ patientId }) {
   const [rm, setRm] = useState({});                // { "16": { recession, mobility } }
   const [selected, setSelected] = useState(null);  // pieza seleccionada
   const [selectedSurface, setSelectedSurface] = useState("whole"); // superficie activa
+  const [viewKey, setViewKey] = useState("clasico");
   const [rmEdit, setRmEdit] = useState(null);      // { code, kind } en edición
   const [pendingReg, setPendingReg] = useState(null); // { stateId, label } desde la simbología
+
+  useEffect(() => { setViewKey(readPreferredView()); }, []);
   const [history, setHistory] = useState([]);      // historial de la pieza
   const [error, setError] = useState("");
 
@@ -246,10 +249,45 @@ function OdontogramTab({ patientId }) {
       {error && <div className="error-box">{error}</div>}
 
       <div className="card" style={{ marginBottom: 18 }}>
-        <Odontogram surfacesByTooth={teeth} rmByTooth={rm}
-                    selectedTooth={selected} selectedSurface={selectedSurface}
-                    onSurfaceClick={handleSurfaceClick}
-                    onRMClick={handleRMClick} />
+        {/* Selector de modelo. Los tres son vistas de los MISMOS datos:
+            reciben las mismas props y emiten las mismas intenciones, así
+            que registrar en uno se refleja al instante en los otros. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8,
+                      marginBottom: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".05em",
+                         textTransform: "uppercase", color: "var(--ink-faint)" }}>
+            Modelo
+          </span>
+          <div role="radiogroup" aria-label="Modelo de odontograma"
+               style={{ display: "inline-flex", gap: 2, padding: 3,
+                        background: "var(--paper)", borderRadius: 999,
+                        border: "1px solid var(--line)" }}>
+            {VIEWS.map((v) => (
+              <button key={v.key} type="button" role="radio"
+                      aria-checked={viewKey === v.key} title={v.description}
+                      onClick={() => { setViewKey(v.key); savePreferredView(v.key); }}
+                      style={{
+                        padding: "5px 12px", borderRadius: 999, border: "none",
+                        fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                        background: viewKey === v.key ? "var(--petrol)" : "transparent",
+                        color: viewKey === v.key ? "var(--on-brand)" : "var(--ink-soft)",
+                        transition: "background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease)",
+                      }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {(() => {
+          const View = getView(viewKey).Component;
+          return (
+            <View surfacesByTooth={teeth} rmByTooth={rm}
+                  selectedTooth={selected} selectedSurface={selectedSurface}
+                  onSurfaceClick={handleSurfaceClick}
+                  onRMClick={handleRMClick} />
+          );
+        })()}
         {selected && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10,
                         flexWrap: "wrap", fontSize: 13.5 }}>
