@@ -12,7 +12,7 @@
 
 import ClassicOdontogram from "../Odontogram";
 import AnatomicalView from "./AnatomicalView";
-import AdvancedCompactView from "./advanced/AdvancedCompactView";
+import AdvancedCompactView from "./AdvancedCompactView";
 import Odontogram3D from "./Odontogram3D";
 
 export const VIEWS = [
@@ -31,7 +31,7 @@ export const VIEWS = [
   {
     key: "compacto",
     label: "Compacto",
-    description: "Ficha por columnas con navegación por cuadrantes, cursor de teclado, zoom y registro rápido.",
+    description: "Matriz clínica: columnas por diente y filas por superficie, con navegación por cuadrantes, zoom y registro rápido.",
     Component: AdvancedCompactView,
   },
   {
