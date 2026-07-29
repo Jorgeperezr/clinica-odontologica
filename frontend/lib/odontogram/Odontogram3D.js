@@ -34,6 +34,7 @@ import {
   dominantState, hasRecords,
 } from "./contract";
 import { toothFamily, isUpper } from "./ToothArt";
+import { buildToothGeometry } from "./toothGeometry";
 
 /** Filtros clínicos: resaltan solo las piezas cuyo estado coincide. */
 const FILTERS = [
@@ -119,53 +120,132 @@ export default function Odontogram3D({
       });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(width, height);
+      // Tono cinematográfico: evita que los blancos del esmalte se quemen
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       mount.appendChild(renderer.domElement);
 
-      // Iluminación de consultorio: cenital fuerte y relleno suave
-      scene.add(new THREE.AmbientLight(0xffffff, 0.72));
-      const key = new THREE.DirectionalLight(0xffffff, 0.85);
-      key.position.set(4, 12, 8);
-      scene.add(key);
-      const fill = new THREE.DirectionalLight(0xdce8f2, 0.35);
-      fill.position.set(-6, 2, -6);
-      scene.add(fill);
+      /* ── Entorno para reflejos ──
+         Sin un mapa de entorno, un material físico no tiene nada que
+         reflejar y el esmalte se ve mate. Se genera proceduralmente con
+         RoomEnvironment (viene en el paquete de three, no se descarga
+         nada) y se preconvoluciona con PMREM para reflejos correctos. */
+      let envRT = null;
+      try {
+        const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+        scene.environment = envRT.texture;
+        pmrem.dispose();
+      } catch {
+        // Sin entorno la escena sigue siendo válida, solo menos reflectante
+      }
+
+      /* ── Iluminación de tres puntos ──
+         Principal cenital (modela el volumen y proyecta la sombra),
+         relleno frío lateral (abre las zonas oscuras sin aplanar) y
+         contraluz posterior (separa las piezas del fondo). */
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xb9c6d2, 0.42));
+
+      const keyLight = new THREE.DirectionalLight(0xfff4e8, 1.5);
+      keyLight.position.set(5, 14, 9);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.set(1024, 1024);
+      keyLight.shadow.camera.near = 1;
+      keyLight.shadow.camera.far = 40;
+      keyLight.shadow.camera.left = -12;
+      keyLight.shadow.camera.right = 12;
+      keyLight.shadow.camera.top = 12;
+      keyLight.shadow.camera.bottom = -12;
+      keyLight.shadow.bias = -0.0012;
+      keyLight.shadow.radius = 4;
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0xd8e8f6, 0.55);
+      fillLight.position.set(-8, 3, 6);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0xffffff, 0.7);
+      rimLight.position.set(0, 4, -12);
+      scene.add(rimLight);
+
+      // Suelo receptor de sombra: da asiento a las arcadas sin verse
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(60, 60),
+        new THREE.ShadowMaterial({ opacity: 0.16 }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -4.6;
+      floor.receiveShadow = true;
+      scene.add(floor);
 
       // ── Arcadas ──
       const teeth = [];
       const group = new THREE.Group();
+
+      /* ── Material de esmalte ──
+         MeshPhysicalMaterial con capa de barniz (clearcoat) y algo de
+         transmisión: el esmalte real es translúcido y deja pasar luz
+         hacia la dentina, que es lo que impide que un diente se vea
+         como plástico blanco. Cada pieza recibe su propia instancia
+         porque el color y el resaltado se animan por separado. */
+      function enamelMaterial() {
+        return new THREE.MeshPhysicalMaterial({
+          color: 0xf6f4ef,
+          roughness: 0.28,
+          metalness: 0.0,
+          clearcoat: 0.85,
+          clearcoatRoughness: 0.16,
+          transmission: 0.18,       // translucidez sutil
+          thickness: 0.6,
+          ior: 1.63,                // índice de refracción del esmalte
+          attenuationColor: new THREE.Color(0xffe9cf),
+          attenuationDistance: 1.4,
+          emissive: new THREE.Color(0x000000),
+          transparent: true,
+          opacity: 1,
+        });
+      }
+
+      // Contorno luminoso: copia ampliada dibujada por su cara interna.
+      // Resalta la pieza sin alterar su color, que es lo que pedía el
+      // criterio clínico de no falsear el aspecto del diente.
+      const outlineMat = new THREE.MeshBasicMaterial({
+        color: 0x2e9bdc, side: THREE.BackSide,
+        transparent: true, opacity: 0, depthWrite: false,
+      });
 
       function buildArch(codes, { radiusX, radiusZ, y, upper, visible }) {
         const n = codes.length;
         codes.forEach((code, i) => {
           // Distribución sobre una elipse: forma real de la arcada
           const t = n === 1 ? 0.5 : i / (n - 1);
-          const ang = Math.PI * (0.08 + 0.84 * t);   // de derecha a izquierda
+          const ang = Math.PI * (0.06 + 0.88 * t);
           const x = -Math.cos(ang) * radiusX;
           const z = Math.sin(ang) * radiusZ;
 
-          const [w, h, d] = toothDims(code);
-          const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2);
-          // Redondeo simple: se estrecha el extremo apical para insinuar el cuello
-          const pos = geo.attributes.position;
-          for (let k = 0; k < pos.count; k++) {
-            const py = pos.getY(k);
-            if ((upper && py < 0) || (!upper && py > 0)) {
-              pos.setX(k, pos.getX(k) * 0.72);
-              pos.setZ(k, pos.getZ(k) * 0.72);
-            }
-          }
-          geo.computeVertexNormals();
-
-          const mat = new THREE.MeshStandardMaterial({
-            color: 0xf2f6f8, roughness: 0.42, metalness: 0.04,
-            transparent: true, opacity: 1,
-          });
-          const mesh = new THREE.Mesh(geo, mat);
+          const geo = buildToothGeometry(THREE, code);
+          const mesh = new THREE.Mesh(geo, enamelMaterial());
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
           mesh.position.set(x, y, z);
           mesh.lookAt(0, y, 0);
           mesh.rotateY(Math.PI);
+          // Ligera inclinación vestibular, como en una arcada real
+          mesh.rotateX((upper ? 1 : -1) * 0.06);
           mesh.visible = visible;
           mesh.userData = { code, baseY: y };
+
+          // Contorno como hijo: hereda transformaciones sin duplicar lógica
+          const outline = new THREE.Mesh(geo, outlineMat.clone());
+          outline.scale.setScalar(1.055);
+          outline.renderOrder = -1;
+          mesh.add(outline);
+          mesh.userData.outline = outline;
+
           group.add(mesh);
           teeth.push(mesh);
         });
@@ -180,8 +260,10 @@ export default function Odontogram3D({
       [1.85, -1.85].forEach((gy) => {
         const g = new THREE.Mesh(
           new THREE.TorusGeometry(4.3, 0.55, 12, 48, Math.PI * 1.05),
-          new THREE.MeshStandardMaterial({
-            color: 0xe4b3ac, roughness: 0.85, transparent: true, opacity: 0.5,
+          new THREE.MeshPhysicalMaterial({
+            color: 0xd99a95, roughness: 0.72, clearcoat: 0.25,
+            transmission: 0.12, thickness: 0.4,
+            transparent: true, opacity: 0.55,
           }),
         );
         g.rotation.x = Math.PI / 2;
@@ -214,7 +296,7 @@ export default function Odontogram3D({
         lastX = e.clientX; lastY = e.clientY;
         if (dragging === "rotate") {
           state.rotY += dx * 0.008;
-          state.rotX = Math.max(-0.2, Math.min(1.35, state.rotX + dy * 0.006));
+          state.rotX = Math.max(-1.3, Math.min(1.4, state.rotX + dy * 0.006));  // giro vertical amplio
         } else {
           state.panX -= dx * 0.02;
           state.panY += dy * 0.02;
@@ -227,7 +309,7 @@ export default function Odontogram3D({
       };
       const onWheel = (e) => {
         e.preventDefault();
-        state.dist = Math.max(6, Math.min(26, state.dist + e.deltaY * 0.012));
+        state.dist = Math.max(4.5, Math.min(30, state.dist + e.deltaY * 0.01));
       };
 
       // ── Selección por raycasting ──
@@ -287,6 +369,13 @@ export default function Odontogram3D({
           t.material.opacity += (so - t.material.opacity) * Math.min(1, dt * 9);
           const sc = t.userData.targetScale ?? 1;
           t.scale.lerp(new THREE.Vector3(sc, sc, sc), Math.min(1, dt * 9));
+          // Contorno luminoso: aparece y desaparece con suavidad
+          const ol = t.userData.outline;
+          if (ol) {
+            const to = (t.userData.targetOutline ?? 0) * (t.userData.targetOpacity ?? 1);
+            ol.material.opacity += (to - ol.material.opacity) * Math.min(1, dt * 10);
+            ol.visible = ol.material.opacity > 0.01;
+          }
         }
         renderer.render(scene, camera);
       }
@@ -311,7 +400,12 @@ export default function Odontogram3D({
         el.removeEventListener("pointerdown", onDown);
         el.removeEventListener("wheel", onWheel);
         el.removeEventListener("click", onClick);
-        teeth.forEach((t) => { t.geometry.dispose(); t.material.dispose(); });
+        teeth.forEach((t) => {
+          t.userData.outline?.material.dispose();
+          t.geometry.dispose();
+          t.material.dispose();
+        });
+        envRT?.dispose();
         renderer.dispose();
         if (el.parentNode) el.parentNode.removeChild(el);
         sceneRef.current = null;
@@ -331,33 +425,61 @@ export default function Odontogram3D({
     const { THREE, teeth } = s;
     const f = FILTERS.find((x) => x.key === filter);
 
+    const ENAMEL = new THREE.Color(0xf6f4ef);
+
     for (const t of teeth) {
       const code = t.userData.code;
       const surfaces = surfacesByTooth[code];
       const st = dominantState(surfaces);
       const registrado = hasRecords(surfaces);
-
-      // Color: estado clínico o esmalte natural
-      t.material.color.set(st?.color || "#f2f6f8");
-      // El metalizado insinúa materiales restauradores (corona, implante)
       const label = (st?.label || "").toLowerCase();
-      t.material.metalness = /corona|implante|pr[óo]tesis/.test(label) ? 0.55 : 0.04;
-      t.material.roughness = /corona|implante/.test(label) ? 0.22 : 0.42;
+      const m = t.material;
 
-      // Filtro: lo que no coincide se atenúa en vez de ocultarse, para no
+      /* Patología como TINTE sobre el esmalte, no como repintado.
+         Se mezcla el color clínico con el marfil natural, así el diente
+         sigue leyéndose como diente —conserva translucidez y reflejos—
+         mientras el hallazgo queda inequívoco. */
+      if (st?.color) {
+        const tint = new THREE.Color(st.color);
+        m.color.copy(ENAMEL).lerp(tint, 0.62);
+        // Un halo tenue del propio color mejora la lectura a distancia
+        m.emissive.copy(tint).multiplyScalar(0.10);
+      } else {
+        m.color.copy(ENAMEL);
+        m.emissive.setHex(0x000000);
+      }
+
+      /* Materiales restauradores: coronas e implantes son metálicos y
+         pulidos; las prótesis, cerámicas mates. La diferencia de
+         acabado se percibe antes que la de color. */
+      if (/implante/.test(label)) {
+        m.metalness = 0.92; m.roughness = 0.24; m.transmission = 0;
+        m.clearcoat = 0.4;
+      } else if (/corona/.test(label)) {
+        m.metalness = 0.45; m.roughness = 0.18; m.transmission = 0.05;
+        m.clearcoat = 1.0;
+      } else if (/pr[óo]tesis/.test(label)) {
+        m.metalness = 0.05; m.roughness = 0.5; m.transmission = 0.06;
+        m.clearcoat = 0.5;
+      } else {
+        m.metalness = 0.0; m.roughness = 0.28; m.transmission = 0.18;
+        m.clearcoat = 0.85;
+      }
+
+      // Filtro: lo no coincidente se atenúa, nunca se oculta, para no
       // perder la referencia anatómica de la boca completa.
       let coincide = true;
       if (f?.key === "registrado") coincide = registrado;
       else if (f?.match) coincide = f.match.test(label);
-      t.userData.targetOpacity = coincide ? 1 : 0.12;
+      t.userData.targetOpacity = coincide ? 1 : 0.14;
 
-      // Selección: la pieza se separa de la arcada y crece un poco
+      // Selección: contorno luminoso + ligera separación de la arcada
       const sel = selectedTooth === code;
+      const hov = hovered === code;
       const dir = isUpper(code) ? 1 : -1;
-      t.userData.targetY = t.userData.baseY + (sel ? dir * 0.55 : 0);
-      t.userData.targetScale = sel ? 1.18 : (hovered === code ? 1.07 : 1);
-      if (sel) t.material.emissive = new THREE.Color(0x14639e).multiplyScalar(0.22);
-      else t.material.emissive = new THREE.Color(0x000000);
+      t.userData.targetY = t.userData.baseY + (sel ? dir * 0.42 : 0);
+      t.userData.targetScale = sel ? 1.05 : 1;
+      t.userData.targetOutline = sel ? 0.9 : (hov ? 0.35 : 0);
     }
   }, [surfacesByTooth, selectedTooth, filter, hovered, ready]);
 

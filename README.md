@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 48 completado — odontograma 3D interactivo
+## Estado actual: Sprint 49 completado — odontograma 3D con anatomía y materiales realistas
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -417,6 +417,18 @@ Sin cambios de backend (los 132 tests no varían).
 - **Captura de imagen** de la vista actual en PNG para informes y explicación al paciente (`preserveDrawingBuffer` en el renderizador).
 - **Rendimiento:** Three.js se importa de forma diferida, así que su peso no entra en el paquete inicial y la escena solo se construye al abrir la pestaña; geometría de bajo polígono, sin sombras, con liberación de recursos al desmontar.
 - **Sincronización garantizada por diseño:** el modelo 3D no tiene base de datos propia ni una sola llamada a la API (verificado). Un efecto reacciona a los datos clínicos y actualiza colores, materiales y filtros, de modo que un registro hecho en cualquier otro modelo se refleja aquí de inmediato, y viceversa.
+
+### Sprint 49 — Realismo del odontograma 3D (hecho)
+100% presentación; sin cambios de datos ni de lógica (la suite sigue en 156 tests).
+- **Geometría anatómica generada por lofting** (`lib/odontogram/toothGeometry.js`), en sustitución de las cajas: se apilan secciones transversales a lo largo del eje del diente y se cosen con normales suavizadas. La forma se controla con dos funciones —radio(θ,t) y altura(θ,t)— que producen cuatro cúspides en un molar, dos en un premolar, una en un canino y un borde en lámina en un incisivo; el perfil vertical reproduce el ecuador en el tercio medio de la corona, la constricción cervical y raíces que afinan hasta el ápice. El número de raíces sigue la anatomía (tres en molares superiores, dos en inferiores y en el primer premolar superior, una en el resto) y las piezas temporales son más bulbosas y de raíz corta. Unos 1.400 triángulos por corona, con normales suavizadas para que no se vean facetas.
+- **Materiales PBR:** esmalte con `MeshPhysicalMaterial`, capa de barniz (`clearcoat`), transmisión e índice de refracción 1.63 con atenuación cálida, que es lo que evita el aspecto de plástico blanco; encía translúcida con su propio material físico.
+- **Entorno para reflejos:** mapa generado proceduralmente con `RoomEnvironment` (incluido en el paquete de three, no se descarga nada) y preconvolucionado con `PMREMGenerator`. Sin entorno, un material físico no tiene nada que reflejar.
+- **Iluminación de tres puntos** (principal cálida cenital con sombra, relleno frío lateral y contraluz posterior) más hemisférica de ambiente, con tono ACES Filmic para que los blancos del esmalte no se quemen.
+- **Sombras suaves** (`PCFSoftShadowMap`) sobre un plano receptor invisible que da asiento a las arcadas.
+- **Selección por contorno luminoso:** malla ampliada dibujada por su cara interna, que aparece y desaparece interpolada, en vez de recolorear la pieza.
+- **Patologías como tinte sobre el esmalte:** el color clínico se mezcla al 62 % con el marfil natural y añade un halo tenue, de modo que el hallazgo es inequívoco pero el diente conserva translucidez y reflejos. Los materiales restauradores se distinguen además por acabado: implante metálico pulido, corona muy pulida, prótesis cerámica mate.
+- **Cámara:** giro vertical amplio (360° útiles), zoom de 4.5 a 30 unidades y desplazamiento libre; todas las transiciones interpoladas por fotograma.
+- Se mantienen la liberación de recursos al desmontar (incluidos contornos y mapa de entorno) y la garantía de que el modelo 3D no realiza ninguna llamada a la API.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
