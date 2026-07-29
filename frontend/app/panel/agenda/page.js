@@ -22,6 +22,17 @@ export default function AgendaPage() {
   const [mode, setMode] = useState("daily");
   const [date, setDate] = useState(todayISO());
   const [doctors, setDoctors] = useState([]);
+
+  // Color identificativo por profesional. El backend ya guarda
+  // `calendar_color`; si algún doctor no lo tiene, se deriva uno estable
+  // de su nombre para que nunca queden dos citas sin distinguir.
+  function doctorColor(name) {
+    const d = doctors.find((x) => (x.full_name || x.email) === name);
+    if (d?.calendar_color) return d.calendar_color;
+    let h = 0;
+    for (const ch of String(name || "")) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return `hsl(${h} 45% 48%)`;
+  }
   const [doctorId, setDoctorId] = useState("");
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -153,6 +164,21 @@ export default function AgendaPage() {
         ) : appointments.length === 0 ? (
           <div className="empty">No hay citas en este período. Agenda la primera con “+ Nueva cita”.</div>
         ) : (
+          <>
+          {doctors.length > 1 && (
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "10px 14px",
+                          borderBottom: "1px solid var(--line)", fontSize: 12.5 }}
+                 aria-label="Leyenda de profesionales">
+              {doctors.map((d) => (
+                <span key={d.id} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span aria-hidden="true"
+                        style={{ width: 9, height: 9, borderRadius: "50%",
+                                 background: doctorColor(d.full_name || d.email) }} />
+                  <span style={{ color: "var(--ink-soft)" }}>{d.full_name || d.email}</span>
+                </span>
+              ))}
+            </div>
+          )}
           <table>
             <thead>
               <tr>
@@ -168,7 +194,8 @@ export default function AgendaPage() {
               {appointments.map((a) => {
                 const st = STATUS_STYLE[a.status] || { label: a.status, cls: "badge-warn" };
                 return (
-                  <tr key={a.id}>
+                  <tr key={a.id}
+                      style={{ boxShadow: `inset 3px 0 0 ${doctorColor(a.doctor_name)}` }}>
                     <td className="tabular" style={{ whiteSpace: "nowrap" }}>
                       {fmtTime(a.scheduled_start)}–{fmtTime(a.scheduled_end)}
                     </td>
@@ -176,7 +203,14 @@ export default function AgendaPage() {
                       <td className="tabular">{a.scheduled_start.slice(0, 10)}</td>
                     )}
                     <td style={{ fontWeight: 600 }}>{a.patient_name}</td>
-                    <td>{a.doctor_name}</td>
+                    <td>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                        <span aria-hidden="true"
+                              style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
+                                       background: doctorColor(a.doctor_name) }} />
+                        {a.doctor_name}
+                      </span>
+                    </td>
                     <td>
                       <span className={`badge ${st.cls}`}>{st.label}</span>
                       {a.reminder_sent_at && (
@@ -192,6 +226,7 @@ export default function AgendaPage() {
               })}
             </tbody>
           </table>
+          </>
         )}
       </div>
       )}

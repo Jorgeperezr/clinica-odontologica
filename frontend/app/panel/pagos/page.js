@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import BackButton from "../../../lib/BackButton";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 
 const METHODS = { cash: "Efectivo", transfer: "Transferencia", card: "Tarjeta" };
@@ -25,6 +26,7 @@ export default function PagosPage() {
 
   return (
     <div>
+      <BackButton fallback="/panel/" />
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Pagos</h1>
 
       <div className="field" style={{ position: "relative", maxWidth: 460 }}>

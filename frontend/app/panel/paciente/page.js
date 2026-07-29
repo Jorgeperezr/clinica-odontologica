@@ -2,7 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api } from "../../../lib/api";
+import { api, currentUser } from "../../../lib/api";
+import BackButton from "../../../lib/BackButton";
+import PatientPayments from "../../../lib/PatientPayments";
 import Odontogram from "../../../lib/Odontogram";
 import Form033Panel from "../../../lib/Form033Panel";
 import DiagnosisSection from "../../../lib/DiagnosisTab";
@@ -30,7 +32,14 @@ export default function PatientDetailPage() {
 function PatientDetail() {
   const id = useSearchParams().get("id");
   const [patient, setPatient] = useState(null);
+  const [role, setRole] = useState("");
   const [tab, setTab] = useState("odontograma");
+
+  useEffect(() => {
+    (async () => {
+      try { const u = await currentUser(); setRole(u?.role || ""); } catch { /* opcional */ }
+    })();
+  }, []);
 
   useEffect(() => {
     api(`/patients/${id}/`).then(async (r) => setPatient(await r.json())).catch(() => {});
@@ -40,7 +49,7 @@ function PatientDetail() {
 
   return (
     <div>
-      <a href="/panel/pacientes/" style={{ fontSize: 13 }}>← Pacientes</a>
+      <BackButton fallback="/panel/pacientes/" label="Pacientes" />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "8px 0 4px" }}>
         <h1 style={{ fontSize: 24 }}>{patient.full_name}</h1>
         <span className="tabular" style={{ color: "var(--ink-soft)", fontSize: 14 }}>
@@ -51,7 +60,8 @@ function PatientDetail() {
       <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
         {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
-          ["consentimientos", "Consentimientos"]].map(([key, label]) => (
+          ["consentimientos", "Consentimientos"],
+          ...(["admin", "reception"].includes(role) ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -74,6 +84,7 @@ function PatientDetail() {
         </>
       )}
       {tab === "consentimientos" && <ConsentsTab patientId={id} />}
+      {tab === "cobros" && <PatientPayments patientId={id} role={role} />}
     </div>
   );
 }

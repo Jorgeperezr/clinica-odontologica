@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import BackButton from "../../../lib/BackButton";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 const METHOD_LABELS = { cash: "Efectivo", transfer: "Transferencia", card: "Tarjeta" };
@@ -100,6 +101,7 @@ export default function ReportesPage() {
 
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between",
                                           alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <BackButton fallback="/panel/" />
         <h1 style={{ fontSize: 24, margin: 0 }}>Reportes</h1>
         <button className="btn btn-ghost" onClick={() => window.print()}>🖨 Imprimir</button>
       </div>

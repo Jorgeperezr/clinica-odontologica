@@ -214,3 +214,80 @@ class AppointmentsSummaryReportTests(APITestCase):
         self.client.force_authenticate(user=reception)
         resp = self.client.get("/api/v1/reports/appointments-summary/")
         self.assertEqual(resp.status_code, 403)
+
+
+class Sprint45Tests(APITestCase):
+    """Pago desde la ficha, cumpleaños y pacientes en espera."""
+
+    def setUp(self):
+        from apps.common.models import Tenant
+        self.tenant = Tenant.objects.create(name="T s45")
+        self.admin = User.objects.create_user(
+            email="a@s45.ec", password="superseguro123", role="admin", tenant=self.tenant)
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Cum", last_name="Pleaños",
+            national_id="1919191919")
+
+    def test_register_payment_from_patient_file(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(f"/api/v1/patients/{self.patient.id}/payments/", {
+            "amount": "45.50", "method": "cash", "date": "2026-07-28",
+        }, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        # Aparece en el listado del propio paciente
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/payments/")
+        rows = resp.data.get("results", resp.data)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(str(rows[0]["amount"]), "45.50")
+
+    def test_birthdays_today_and_upcoming(self):
+        from datetime import date, timedelta
+        today = date.today()
+        soon = today + timedelta(days=3)
+        Patient.objects.create(tenant=self.tenant, first_name="Hoy", last_name="Cumple",
+                               national_id="2020202020",
+                               birth_date=date(1990, today.month, today.day))
+        Patient.objects.create(tenant=self.tenant, first_name="Pronto", last_name="Cumple",
+                               national_id="2121212121",
+                               birth_date=date(1985, soon.month, soon.day))
+        Patient.objects.create(tenant=self.tenant, first_name="Lejos", last_name="Cumple",
+                               national_id="2222222222", birth_date=date(1980, 1, 1))
+
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get("/api/v1/patients/birthdays/?days=7")
+        self.assertEqual(resp.status_code, 200)
+        nombres = [r["full_name"] for r in resp.data]
+        self.assertIn("Hoy Cumple", nombres)
+        self.assertIn("Pronto Cumple", nombres)
+        # El de enero solo aparecería si hoy cayera en esa ventana
+        self.assertTrue(resp.data[0]["is_today"])
+
+    def test_waiting_patients_after_checkin(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.agenda.models import Appointment, Doctor
+
+        du = User.objects.create_user(email="d@s45.ec", password="superseguro123",
+                                      role="doctor", tenant=self.tenant, full_name="Dra. Espera")
+        doctor = Doctor.objects.create(tenant=self.tenant, user=du)
+        start = timezone.now() + timedelta(hours=1)
+        appt = Appointment.objects.create(
+            tenant=self.tenant, patient=self.patient, doctor=doctor,
+            scheduled_start=start, scheduled_end=start + timedelta(minutes=30),
+            status="confirmed")
+
+        # Antes del check-in no hay nadie esperando
+        self.client.force_authenticate(user=du)
+        self.assertEqual(len(self.client.get("/api/v1/appointments/waiting/").data), 0)
+
+        # Recepción marca la llegada
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(f"/api/v1/appointments/{appt.id}/checkin/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+        # El doctor ve el aviso de que su paciente llegó
+        self.client.force_authenticate(user=du)
+        esperando = self.client.get("/api/v1/appointments/waiting/").data
+        self.assertEqual(len(esperando), 1)
+        self.assertEqual(esperando[0]["patient_name"], "Cum Pleaños")
+        self.assertIn("waiting_minutes", esperando[0])

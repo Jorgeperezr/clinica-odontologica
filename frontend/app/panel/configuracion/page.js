@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, apiBase } from "../../../lib/api";
+import BackButton from "../../../lib/BackButton";
 import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../../../lib/theme";
 import LogoCropper from "../../../lib/LogoCropper";
 
@@ -19,6 +20,7 @@ export default function ConfiguracionPage() {
 
   return (
     <div>
+      <BackButton fallback="/panel/" />
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div className="tabs" style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>

@@ -10,6 +10,7 @@ urlpatterns = [
     path("appointments/<uuid:pk>/confirm/", views.AppointmentConfirmView.as_view(), name="appointment-confirm"),
     path("appointments/<uuid:pk>/cancel/", views.AppointmentCancelView.as_view(), name="appointment-cancel"),
     path("appointments/<uuid:pk>/reschedule/", views.AppointmentRescheduleView.as_view(), name="appointment-reschedule"),
+    path("appointments/waiting/", views.WaitingPatientsView.as_view(), name="appointments-waiting"),
     path("appointments/<uuid:pk>/checkin/", views.AppointmentCheckinView.as_view(), name="appointment-checkin"),
     path("appointments/<uuid:pk>/start/", views.AppointmentStartView.as_view(), name="appointment-start"),
     path("doctors/me/signature/", views.DoctorMySignatureView.as_view(), name="doctor-my-signature"),

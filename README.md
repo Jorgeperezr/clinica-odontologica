@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 44 completado — interfaz adaptada a móvil y tablet
+## Estado actual: Sprint 45 completado — cobros en ficha, avisos del día y color por profesional
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -378,6 +378,14 @@ Sin cambios de backend (los 132 tests no varían).
 - **Menú lateral como panel deslizante en pantallas estrechas (≤ 860 px):** antes ocupaba media pantalla del teléfono. Ahora se oculta fuera de vista y se abre con el botón de menú de una nueva barra superior (que muestra logotipo y nombre de la clínica); se cierra al tocar el fondo oscurecido, la ✕ o cualquier sección. Con el panel abierto se bloquea el desplazamiento del fondo. En móvil el menú siempre muestra las etiquetas —contraer a solo iconos es una función de escritorio— y el área principal ocupa todo el ancho.
 - **Botón de contraer rediseñado:** los glifos de texto « » se veían descentrados y de tamaño irregular. Ahora es un icono SVG de doble punta de flecha que gira según el estado, dentro de un botón circular de 30 px centrado en su fila, con el mismo trazo que el resto de la iconografía.
 - **Contenido adaptable:** las filas de pestañas (ficha del paciente y configuración) se desplazan en horizontal en vez de partirse en varias líneas; objetivos táctiles más cómodos en botones y campos (≈44 px de alto); titulares y espaciado reducidos en pantallas pequeñas.
+
+### Sprint 45 — Cobros en ficha, avisos del día, navegación y color por profesional (hecho)
+- **Cobros desde la ficha del paciente:** nueva pestaña "Cobros" (solo admin y recepción) con el historial y el registro directo sin salir de la ficha. Endpoint `patients/<pk>/payments/`; el pago queda sin cuota asociada, que el modelo ya contemplaba (`installment` es opcional), así que no hizo falta migración. Los abonos a un plan de financiamiento siguen en el módulo Pagos, que es donde vive esa lógica.
+- **Botón "Regresar"** (`lib/BackButton.js`) en la ficha del paciente, Pagos, Reportes, Inventario y Configuración. Usa el historial del navegador y, si la persona llegó por enlace directo, cae a una ruta segura en vez de dejarla fuera del panel.
+- **Icono de contraer sustituido:** la doble punta de flecha se confundía con "regresar". Ahora es un icono de panel lateral (marco con su columna izquierda resaltada), que comunica plegar/desplegar en vez de una dirección.
+- **Recordatorios de cumpleaños:** endpoint `patients/birthdays/?days=7` que compara mes y día (funciona en cualquier año) y tarjeta en el panel de inicio con los cumpleaños de hoy y de la semana, con la edad que cumple cada paciente y enlace a su ficha.
+- **Aviso de llegada al profesional:** endpoint `appointments/waiting/` y tarjeta en el panel. El odontólogo ve sus pacientes en sala; recepción y administración, los de toda la clínica, con los minutos de espera (en rojo a partir de 15). No requirió un modelo de notificaciones: la señal ya estaba en los datos (hay check-in y la atención no ha comenzado), de modo que el aviso siempre es coherente con el estado real de la agenda y no puede quedar "pegado". Se refresca cada minuto. El aviso por WhatsApp que ya existía sigue funcionando en paralelo.
+- **Color identificativo por profesional en la agenda:** franja lateral y punto de color en cada cita, más una leyenda cuando hay varios profesionales. Usa el campo `calendar_color` que el modelo `Doctor` ya tenía; si algún profesional no lo tiene configurado, se deriva un color estable de su nombre para que nunca queden dos agendas indistinguibles.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

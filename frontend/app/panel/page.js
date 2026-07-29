@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, currentUser } from "../../lib/api";
+import DayAlerts from "../../lib/DayAlerts";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -92,6 +93,9 @@ export default function Dashboard() {
           <a className="btn btn-ghost" href="/panel/pagos/">Registrar cobro</a>
         )}
       </div>
+
+      {/* Avisos del día: llegadas de pacientes y cumpleaños */}
+      <DayAlerts role={user.role} />
 
       {/* Indicadores */}
       <div style={{ display: "flex", gap: 14, marginBottom: 22, flexWrap: "wrap" }}>

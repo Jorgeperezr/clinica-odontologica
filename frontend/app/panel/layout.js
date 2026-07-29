@@ -165,7 +165,7 @@ export default function PanelLayout({ children }) {
           <button onClick={toggleCollapsed} style={styles.collapseBtn}
                   aria-label={collapsed ? "Expandir menú" : "Contraer menú"}
                   title={collapsed ? "Expandir menú" : "Contraer menú"}>
-            <ChevronIcon open={!collapsed} />
+            <PanelIcon open={!collapsed} />
           </button>
         )}
 
@@ -225,13 +225,16 @@ function MenuIcon() {
 function CloseIcon() {
   return <svg width="18" height="18" {...strokeIcon}><path d="M6 6l12 12M18 6L6 18" /></svg>;
 }
-/* Doble punta de flecha: indica plegar/desplegar sin depender de glifos
-   de texto, que se veían descentrados y de tamaño irregular. */
-function ChevronIcon({ open }) {
+/* Panel lateral: un marco con su columna izquierda resaltada. Comunica
+   "plegar/desplegar el menú" en lugar de una dirección, que se confundía
+   con el botón de regresar. La barra interior se atenúa al contraer. */
+function PanelIcon({ open }) {
   return (
-    <svg width="16" height="16" {...strokeIcon}
-         style={{ transform: open ? "none" : "rotate(180deg)", transition: "transform .2s var(--ease)" }}>
-      <path d="M13 6l-5 6 5 6M18.5 6l-5 6 5 6" />
+    <svg width="17" height="17" {...strokeIcon}>
+      <rect x="3" y="4.5" width="18" height="15" rx="2.2" />
+      <path d="M9.5 4.5v15" />
+      <path d="M13 9.5h4.5M13 14.5h4.5"
+            style={{ opacity: open ? 1 : 0.35, transition: "opacity .2s var(--ease)" }} />
     </svg>
   );
 }

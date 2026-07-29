@@ -339,3 +339,44 @@ class DoctorMySignatureView(APIView):
         doctor.save()
         return Response({"has_signature": bool(doctor.signature_image),
                          "license_number": doctor.license_number})
+
+
+class WaitingPatientsView(APIView):
+    """
+    GET /api/v1/appointments/waiting/ — Sprint 45.
+    Pacientes que ya llegaron a la clínica y aún no son atendidos. El
+    odontólogo ve solo los suyos; admin y recepción ven los de toda la
+    clínica (para saber a quién avisar).
+
+    No requiere un modelo de notificaciones: la señal ya está en los datos
+    —hay check-in registrado y la atención no ha comenzado—, de modo que
+    el aviso es siempre coherente con el estado real de la agenda.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "reception", "doctor", "auxiliary")]
+
+    def get(self, request):
+        from django.utils import timezone
+
+        today = timezone.localdate()
+        qs = Appointment.objects.filter(
+            tenant=request.tenant,
+            checkin_at__isnull=False,
+            attention_started_at__isnull=True,
+            scheduled_start__date=today,
+        ).exclude(status__in=["cancelled", "no_show"]).select_related("patient", "doctor__user")
+
+        if request.user.role == "doctor":
+            doctor = Doctor.objects.filter(tenant=request.tenant, user=request.user).first()
+            qs = qs.filter(doctor=doctor) if doctor else qs.none()
+
+        data = [{
+            "id": str(a.id),
+            "patient_id": str(a.patient_id),
+            "patient_name": f"{a.patient.first_name} {a.patient.last_name}",
+            "doctor_name": (a.doctor.user.full_name or a.doctor.user.email) if a.doctor else "—",
+            "scheduled_start": a.scheduled_start.isoformat(),
+            "checkin_at": a.checkin_at.isoformat(),
+            "waiting_minutes": int((timezone.now() - a.checkin_at).total_seconds() // 60),
+        } for a in qs.order_by("checkin_at")]
+        return Response(data)

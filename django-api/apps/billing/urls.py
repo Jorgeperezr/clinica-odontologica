@@ -13,6 +13,8 @@ urlpatterns = [
     path("payment-plans/<uuid:pk>/installments/", views.PaymentPlanInstallmentsView.as_view(), name="payment-plan-installments"),
     path("installments/<uuid:pk>/pay/", views.PayInstallmentView.as_view(), name="installment-pay"),
     # Estado de cuenta
+    path("patients/<uuid:pk>/payments/", views.PatientPaymentListCreateView.as_view(), name="patient-payments"),
+    path("patients/birthdays/", views.BirthdaysView.as_view(), name="patient-birthdays"),
     path("patients/<uuid:pk>/account-statement/", views.PatientAccountStatementView.as_view(), name="account-statement"),
     # Honorarios
     path("doctors/<uuid:pk>/fees/", views.DoctorFeeListCreateView.as_view(), name="doctor-fees"),

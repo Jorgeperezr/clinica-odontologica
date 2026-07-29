@@ -486,3 +486,83 @@ class AppointmentsSummaryReportView(APIView):
             "attendance_rate": round(completed / attended_universe * 100, 1) if attended_universe else None,
             "cancellation_rate": round(cancelled / total * 100, 1) if total else None,
         })
+
+
+class PatientPaymentListCreateView(generics.ListCreateAPIView):
+    """
+    GET/POST /api/v1/patients/{pk}/payments/ — Sprint 45.
+    Cobros del paciente y registro directo desde su ficha, sin cambiar de
+    módulo. El pago queda sin cuota asociada (`installment=null`), que el
+    modelo ya contempla; los abonos a un plan siguen usando su endpoint.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "reception")]
+
+    def get_serializer_class(self):
+        from apps.billing.serializers import PaymentSerializer
+        return PaymentSerializer
+
+    def get_queryset(self):
+        return Payment.objects.filter(
+            tenant=self.request.tenant, patient_id=self.kwargs["pk"]
+        ).order_by("-date", "-created_at")
+
+    def perform_create(self, serializer):
+        patient = generics.get_object_or_404(
+            Patient, pk=self.kwargs["pk"], tenant=self.request.tenant
+        )
+        serializer.save(
+            tenant=self.request.tenant, patient=patient,
+            registered_by=self.request.user,
+        )
+
+
+class BirthdaysView(APIView):
+    """
+    GET /api/v1/patients/birthdays/?days=7 — Sprint 45.
+    Pacientes que cumplen años hoy y en los próximos días, para recordarlo
+    desde el panel de inicio y desde recepción. Compara mes y día, así que
+    funciona igual en cualquier año.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "reception", "doctor", "auxiliary")]
+
+    def get(self, request):
+        from datetime import date, timedelta
+
+        try:
+            days = max(0, min(int(request.query_params.get("days", 7)), 60))
+        except ValueError:
+            days = 7
+
+        today = date.today()
+        # Pares (mes, día) de la ventana consultada
+        wanted = {}
+        for offset in range(days + 1):
+            d = today + timedelta(days=offset)
+            wanted.setdefault((d.month, d.day), offset)
+
+        qs = Patient.objects.filter(
+            tenant=request.tenant, is_active=True, birth_date__isnull=False
+        ).only("id", "first_name", "last_name", "birth_date", "phone")
+
+        results = []
+        for p in qs:
+            key = (p.birth_date.month, p.birth_date.day)
+            if key not in wanted:
+                continue
+            offset = wanted[key]
+            turns = today.year - p.birth_date.year
+            if (today.month, today.day) < key:
+                turns = today.year - p.birth_date.year
+            results.append({
+                "id": str(p.id),
+                "full_name": f"{p.first_name} {p.last_name}",
+                "phone": p.phone,
+                "birth_date": p.birth_date.isoformat(),
+                "in_days": offset,
+                "is_today": offset == 0,
+                "turns": turns,
+            })
+        results.sort(key=lambda r: (r["in_days"], r["full_name"]))
+        return Response(results)
