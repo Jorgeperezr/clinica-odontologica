@@ -15,8 +15,9 @@
 import {
   PERM_LOWER_L, PERM_LOWER_R, PERM_UPPER_L, PERM_UPPER_R,
   SURFACES, SURFACE_LABELS, TEMP_LOWER_L, TEMP_LOWER_R,
-  TEMP_UPPER_L, TEMP_UPPER_R, hasRecords,
+  TEMP_UPPER_L, TEMP_UPPER_R, dominantState, hasRecords,
 } from "./contract";
+import ToothArt from "./ToothArt";
 
 function ToothChip({ code, surfaces, selected, onClick }) {
   const marked = hasRecords(surfaces);
@@ -31,8 +32,10 @@ function ToothChip({ code, surfaces, selected, onClick }) {
               borderRadius: 8, cursor: "pointer",
               transition: "background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease)",
             }}>
+      {/* Miniatura anatómica: identifica la familia dental de un vistazo */}
+      <ToothArt code={code} fill={dominantState(surfaces)?.color} size={26} />
       {/* Cinco franjas: una por superficie */}
-      <span style={{ display: "flex", gap: 1.5, height: 12 }} aria-hidden="true">
+      <span style={{ display: "flex", gap: 1.5, height: 9 }} aria-hidden="true">
         {SURFACES.map((s) => (
           <span key={s} style={{
             width: 4, height: "100%", borderRadius: 1,

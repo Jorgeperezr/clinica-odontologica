@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 46 completado — múltiples modelos de odontograma
+## Estado actual: Sprint 48 completado — odontograma 3D interactivo
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -396,6 +396,27 @@ Sin cambios de backend (los 132 tests no varían).
   - **Compacto**: cuadrícula por cuadrantes en HTML, con cinco franjas de color por pieza y selección de superficie con botones grandes; pensado para pantallas pequeñas y revisión rápida.
 - **Una sola fuente de datos, garantizada por diseño:** los tres modelos reciben exactamente las mismas props y emiten las mismas intenciones (`onSurfaceClick`, `onRMClick`); ninguno tiene estado propio, efectos ni llamadas a la API. El registro ocurre una única vez en el contenedor `OdontogramTab`, de modo que cambiar de modelo no puede alterar ni duplicar información, y el historial por pieza, los índices CPO-ceo, los diagnósticos y las exportaciones (PDF, formulario oficial MSP) se generan siempre desde lo almacenado, con independencia del modelo usado para registrar.
 - **Nota de alcance:** la edición de recesión y movilidad sigue disponible solo en el modelo Clásico, que es donde vive esa fila; los otros dos se centran en superficies. Cambiar de modelo para editarlas no afecta a los datos.
+
+### Sprint 47 — Set de ilustraciones dentales anatómicas (hecho)
+100% presentación; la lógica y los datos no cambian (la suite sigue en 156 tests).
+- **Ilustraciones vectoriales dibujadas a medida** (`lib/odontogram/ToothArt.js`), no imágenes de mapa de bits: escalan sin pérdida en pantallas retina de tablet, heredan los tokens del tema (funcionan en claro y oscuro sin mantener dos juegos de recursos), pesan bytes en vez de kilobytes y no dependen de recursos de terceros ni de sus licencias. Además, al ser vectores cada superficie sigue siendo una región clicable con su color clínico encima, cosa que un dibujo plano no permitiría.
+- **Morfología según anatomía real:** la familia dental se deduce del último dígito FDI (incisivo, canino, premolar, molar; en las piezas temporales, los dígitos 4 y 5 son molares) y el número de raíces del cuadrante — tres en molares superiores, dos en inferiores y en el primer premolar superior, una en el resto. La corona cambia de perfil, número de cúspides y surcos por familia; las piezas temporales son más estrechas y de raíz más corta. La arcada inferior se dibuja reflejada.
+- **Nuevos tokens de color dental** (`--tooth-enamel-hi`, `--tooth-enamel`, `--tooth-dentin`, `--tooth-root`, `--tooth-stroke`, `--tooth-groove`) con degradado de esmalte a dentina. En modo oscuro la pieza no se invierte a negro: sigue leyéndose como diente claro, solo atenuado, para no perder la referencia anatómica ni deslumbrar.
+- **Modelo anatómico recompuesto en HTML** (una celda por pieza en vez de un único SVG con coordenadas absolutas): cada diente es un objetivo táctil independiente y la rejilla se reordena sola en tablet. El modelo compacto incorpora miniaturas de 26 px que permiten identificar la familia dental de un vistazo.
+- La garantía del Sprint 46 se mantiene verificada: los tres modelos y el set de ilustraciones siguen sin escrituras, sin estado y sin efectos.
+
+### Sprint 48 — Odontograma 3D (hecho)
+100% presentación; sin tablas ni registros nuevos (la suite sigue en 156 tests).
+- **Nueva pestaña "Odontograma 3D"** en la ficha del paciente. No es un módulo aparte: monta el MISMO contenedor `OdontogramTab` con la vista fijada en 3D, de modo que comparte al cien por cien la carga de datos, el registro y el historial. Es también la cuarta estrategia del registro (`registry.js`), así que aparece igualmente en el selector de modelos.
+- **Tipodonto interactivo** (`lib/odontogram/Odontogram3D.js`) con rotación (arrastrar), zoom (rueda), desplazamiento (Mayús + arrastrar) y selección de piezas por raycasting. Órbita implementada a mano para no depender de complementos fuera del paquete.
+- **Geometría procedural:** las piezas se generan desde el número FDI (dimensiones por familia dental, estrechamiento hacia el cuello, distribución sobre una elipse que reproduce la forma de la arcada) en vez de cargar un modelo descargado. Esto evita depender de recursos de terceros y de sus licencias, y —lo decisivo— hace que cada diente sea un objeto independiente sobre el que se puede hacer raycasting; una malla única importada no lo permitiría sin trabajo de segmentación.
+- **Representación de tratamientos:** color por estado clínico, y material metálico y pulido para coronas, implantes y prótesis, de modo que los materiales restauradores se distinguen de la pieza natural.
+- **Filtros** para resaltar caries, obturaciones, coronas, endodoncias, implantes, prótesis, extracciones, sellantes, fracturas o cualquier pieza con registro. Lo que no coincide se atenúa en vez de ocultarse, para no perder la referencia anatómica de la boca completa.
+- **Panel lateral** al seleccionar una pieza: estado actual por superficie e historial clínico completo, alimentado por los datos que el contenedor ya cargaba.
+- **Animaciones suaves:** la pieza seleccionada se separa de la arcada y crece; los cambios de opacidad, escala y posición se interpolan por fotograma.
+- **Captura de imagen** de la vista actual en PNG para informes y explicación al paciente (`preserveDrawingBuffer` en el renderizador).
+- **Rendimiento:** Three.js se importa de forma diferida, así que su peso no entra en el paquete inicial y la escena solo se construye al abrir la pestaña; geometría de bajo polígono, sin sombras, con liberación de recursos al desmontar.
+- **Sincronización garantizada por diseño:** el modelo 3D no tiene base de datos propia ni una sola llamada a la API (verificado). Un efecto reacciona a los datos clínicos y actualiza colores, materiales y filtros, de modo que un registro hecho en cualquier otro modelo se refleja aquí de inmediato, y viceversa.
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

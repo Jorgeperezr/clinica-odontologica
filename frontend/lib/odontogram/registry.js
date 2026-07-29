@@ -13,6 +13,7 @@
 import ClassicOdontogram from "../Odontogram";
 import AnatomicalView from "./AnatomicalView";
 import CompactView from "./CompactView";
+import Odontogram3D from "./Odontogram3D";
 
 export const VIEWS = [
   {
@@ -32,6 +33,12 @@ export const VIEWS = [
     label: "Compacto",
     description: "Cuadrícula por cuadrantes, ideal para pantallas pequeñas.",
     Component: CompactView,
+  },
+  {
+    key: "tridimensional",
+    label: "3D",
+    description: "Tipodonto interactivo: rotación, zoom, filtros y captura de imagen.",
+    Component: Odontogram3D,
   },
 ];
 

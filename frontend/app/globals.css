@@ -51,6 +51,15 @@
   /* Texto legible SOBRE fondos de menta/acento claro */
   --mint-ink: #0e4a78;
 
+  /* Ilustración dental: esmalte cálido sobre superficies frías, que es
+     como se percibe un diente natural bajo la luz de un consultorio. */
+  --tooth-enamel-hi: #ffffff;
+  --tooth-enamel: #f2f6f8;
+  --tooth-dentin: #e2e9ee;
+  --tooth-root: #ecdfd2;
+  --tooth-stroke: #93a6b4;
+  --tooth-groove: #8fa3b2;
+
   /* ── Semánticos ── */
   --amber: #b7791f;
   --amber-soft: #fdf3e0;
@@ -120,6 +129,16 @@
   --nav-hover: rgba(255, 255, 255, .06);
   --nav-active-ink: var(--on-brand);
   --mint-ink: #0d141b;
+
+  /* En oscuro el diente no se invierte a negro: seguiría leyéndose como
+     pieza clara, solo que atenuada, para no perder la referencia
+     anatómica ni deslumbrar. */
+  --tooth-enamel-hi: #dbe5ee;
+  --tooth-enamel: #c3d1dd;
+  --tooth-dentin: #a7b8c7;
+  --tooth-root: #b6a595;
+  --tooth-stroke: #6a7f90;
+  --tooth-groove: #7a8d9c;
 
   --amber: #e0a145;
   --amber-soft: #2f2611;

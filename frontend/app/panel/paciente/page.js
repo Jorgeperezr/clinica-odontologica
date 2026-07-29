@@ -61,6 +61,7 @@ function PatientDetail() {
         {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"],
+          ["odontograma3d", "Odontograma 3D"],
           ...(["admin", "reception"].includes(role) ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
@@ -84,6 +85,7 @@ function PatientDetail() {
         </>
       )}
       {tab === "consentimientos" && <ConsentsTab patientId={id} />}
+      {tab === "odontograma3d" && <OdontogramTab patientId={id} initialView="tridimensional" />}
       {tab === "cobros" && <PatientPayments patientId={id} role={role} />}
     </div>
   );
@@ -91,7 +93,7 @@ function PatientDetail() {
 
 /* ───────────────────────── Odontograma ───────────────────────── */
 
-function OdontogramTab({ patientId }) {
+function OdontogramTab({ patientId, initialView }) {
   const [confirm, ConfirmUI] = useConfirm();
   const [toothNotes, setToothNotes] = useState("");
   const [states, setStates] = useState([]);       // catálogo de estados
@@ -103,7 +105,7 @@ function OdontogramTab({ patientId }) {
   const [rmEdit, setRmEdit] = useState(null);      // { code, kind } en edición
   const [pendingReg, setPendingReg] = useState(null); // { stateId, label } desde la simbología
 
-  useEffect(() => { setViewKey(readPreferredView()); }, []);
+  useEffect(() => { setViewKey(initialView || readPreferredView()); }, [initialView]);
   const [history, setHistory] = useState([]);      // historial de la pieza
   const [error, setError] = useState("");
 
@@ -252,7 +254,7 @@ function OdontogramTab({ patientId }) {
         {/* Selector de modelo. Los tres son vistas de los MISMOS datos:
             reciben las mismas props y emiten las mismas intenciones, así
             que registrar en uno se refleja al instante en los otros. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8,
+        <div style={{ display: initialView ? "none" : "flex", alignItems: "center", gap: 8,
                       marginBottom: 12, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".05em",
                          textTransform: "uppercase", color: "var(--ink-faint)" }}>
@@ -285,7 +287,8 @@ function OdontogramTab({ patientId }) {
             <View surfacesByTooth={teeth} rmByTooth={rm}
                   selectedTooth={selected} selectedSurface={selectedSurface}
                   onSurfaceClick={handleSurfaceClick}
-                  onRMClick={handleRMClick} />
+                  onRMClick={handleRMClick}
+                  history={history} />
           );
         })()}
         {selected && (
