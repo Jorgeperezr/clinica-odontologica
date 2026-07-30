@@ -569,3 +569,63 @@ class ConsentDetailView(generics.RetrieveUpdateAPIView):
                 action=f"Estado → {updated.get_status_display()}",
                 actor=self.request.user,
             )
+
+
+class PeriodontalExamListCreateView(generics.ListCreateAPIView):
+    """
+    GET/POST /api/v1/patients/{pk}/periodontal-exams/ — Sprint 52.
+    Exploraciones periodontales del paciente. Al crear una, se siembran
+    las 32 piezas permanentes con valores en cero, de modo que la matriz
+    llega completa al frontend y no hay que crear filas al escribir.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import PeriodontalExamSerializer
+        return PeriodontalExamSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import PeriodontalExam
+        return (PeriodontalExam.objects
+                .filter(tenant=self.request.tenant, patient_id=self.kwargs["pk"])
+                .prefetch_related("teeth"))
+
+    def perform_create(self, serializer):
+        from django.utils import timezone
+
+        from apps.clinical.models import PeriodontalTooth
+        patient = _get_patient(self.request, self.kwargs["pk"])
+        exam = serializer.save(
+            tenant=self.request.tenant, patient=patient,
+            created_by=self.request.user,
+            date=serializer.validated_data.get("date") or timezone.localdate(),
+        )
+        # Dentición permanente completa, en orden clínico
+        codes = ([f"1{n}" for n in range(8, 0, -1)] + [f"2{n}" for n in range(1, 9)]
+                 + [f"4{n}" for n in range(8, 0, -1)] + [f"3{n}" for n in range(1, 9)])
+        PeriodontalTooth.objects.bulk_create([
+            PeriodontalTooth(
+                tenant=self.request.tenant, exam=exam, tooth_code=c,
+                probing_depth=[0] * 6, gingival_margin=[0] * 6,
+                bleeding=[False] * 6, plaque=[False] * 6,
+            ) for c in codes
+        ])
+
+
+class PeriodontalToothUpdateView(generics.RetrieveUpdateAPIView):
+    """
+    GET/PATCH /api/v1/periodontal-teeth/{id}/ — Sprint 52.
+    Actualiza las mediciones de una pieza. El frontend envía solo los
+    campos modificados, así que un cambio de celda no reescribe la fila.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "doctor")]
+
+    def get_serializer_class(self):
+        from apps.clinical.serializers import PeriodontalToothSerializer
+        return PeriodontalToothSerializer
+
+    def get_queryset(self):
+        from apps.clinical.models import PeriodontalTooth
+        return PeriodontalTooth.objects.filter(tenant=self.request.tenant)

@@ -292,6 +292,7 @@ function OdontogramTab({ patientId, initialView }) {
                   onSurfaceClick={handleSurfaceClick}
                   onRMClick={handleRMClick}
                   history={history}
+                  patientId={patientId}
                   states={states}
                   onQuickRegister={(stateId, tooth, surface) =>
                     registerState(stateId, {

@@ -712,3 +712,100 @@ class ConsentImprovementsTests(APITestCase):
         self.assertEqual(resp.status_code, 201, resp.content)
         consent = InformedConsent.objects.get(id=resp.data["id"])
         self.assertTrue(ConsentAuditLog.objects.filter(consent=consent, action="Creado").exists())
+
+
+class PeriodontalChartTests(APITestCase):
+    """Sprint 52: exploración periodontal, mediciones por sitio y estadísticas."""
+
+    def setUp(self):
+        from django.core.management import call_command
+        self.tenant = Tenant.objects.create(name="Clínica Perio")
+        call_command("bootstrap", tenant_name=self.tenant.name)
+        self.doctor_user = User.objects.create_user(
+            email="d@perio.ec", password="superseguro123", role="doctor",
+            tenant=self.tenant, full_name="Dra. Perio",
+        )
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Peri", last_name="Odonto",
+            national_id="2323232323",
+        )
+        self.client.force_authenticate(user=self.doctor_user)
+
+    def _crear_exam(self):
+        return self.client.post(
+            f"/api/v1/patients/{self.patient.id}/periodontal-exams/",
+            {"date": "2026-07-29"}, format="json",
+        )
+
+    def test_exam_seeds_32_teeth(self):
+        resp = self._crear_exam()
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(len(resp.data["teeth"]), 32)
+        pieza = resp.data["teeth"][0]
+        self.assertEqual(len(pieza["probing_depth"]), 6)
+        self.assertEqual(len(pieza["bleeding"]), 6)
+        self.assertTrue(pieza["is_present"])
+
+    def test_update_measurements_and_derived_attachment_level(self):
+        exam = self._crear_exam().data
+        tooth = exam["teeth"][0]
+        resp = self.client.patch(f"/api/v1/periodontal-teeth/{tooth['id']}/", {
+            "probing_depth": [3, 4, 3, 2, 5, 4],
+            "gingival_margin": [1, 1, 0, 0, 2, 1],
+            "bleeding": [True, False, False, False, True, False],
+            "mobility": 2,
+        }, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        # El nivel de inserción es derivado: sondaje + margen
+        self.assertEqual(resp.data["attachment_level"], [4, 5, 3, 2, 7, 5])
+        self.assertEqual(resp.data["mobility"], 2)
+
+    def test_series_validation(self):
+        exam = self._crear_exam().data
+        tid = exam["teeth"][0]["id"]
+        # Longitud incorrecta
+        r = self.client.patch(f"/api/v1/periodontal-teeth/{tid}/",
+                              {"probing_depth": [1, 2, 3]}, format="json")
+        self.assertEqual(r.status_code, 400)
+        # Fuera de rango
+        r = self.client.patch(f"/api/v1/periodontal-teeth/{tid}/",
+                              {"probing_depth": [1, 2, 3, 4, 5, 99]}, format="json")
+        self.assertEqual(r.status_code, 400)
+        # Movilidad fuera de grado
+        r = self.client.patch(f"/api/v1/periodontal-teeth/{tid}/",
+                              {"mobility": 7}, format="json")
+        self.assertEqual(r.status_code, 400)
+
+    def test_statistics_are_computed_from_stored_data(self):
+        exam = self._crear_exam().data
+        t1, t2 = exam["teeth"][0], exam["teeth"][1]
+        self.client.patch(f"/api/v1/periodontal-teeth/{t1['id']}/", {
+            "probing_depth": [2, 2, 2, 2, 2, 2],
+            "gingival_margin": [1, 1, 1, 1, 1, 1],
+            "plaque": [True, True, True, False, False, False],
+            "bleeding": [True, False, False, False, False, False],
+        }, format="json")
+        # Pieza ausente: no debe entrar en los índices
+        self.client.patch(f"/api/v1/periodontal-teeth/{t2['id']}/", {
+            "is_present": False, "probing_depth": [9, 9, 9, 9, 9, 9],
+        }, format="json")
+
+        resp = self.client.get(f"/api/v1/patients/{self.patient.id}/periodontal-exams/")
+        datos = resp.data.get("results", resp.data)
+        stats = datos[0]["statistics"]
+        # 31 piezas presentes × 6 sitios = 186
+        self.assertEqual(stats["sites"], 186)
+        self.assertAlmostEqual(stats["mean_probing_depth"], round(12 / 186, 2))
+        self.assertAlmostEqual(stats["mean_attachment_level"], round(18 / 186, 2))
+        self.assertAlmostEqual(stats["plaque_percent"], round(3 * 100 / 186, 2))
+        self.assertAlmostEqual(stats["bleeding_percent"], round(1 * 100 / 186, 2))
+
+    def test_tenant_isolation(self):
+        exam = self._crear_exam().data
+        tid = exam["teeth"][0]["id"]
+        otro = Tenant.objects.create(name="Otra Perio")
+        intruso = User.objects.create_user(
+            email="x@otra.ec", password="superseguro123", role="doctor", tenant=otro)
+        self.client.force_authenticate(user=intruso)
+        r = self.client.patch(f"/api/v1/periodontal-teeth/{tid}/", {"mobility": 3}, format="json")
+        self.assertEqual(r.status_code, 404)

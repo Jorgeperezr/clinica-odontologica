@@ -12,7 +12,7 @@
 
 import ClassicOdontogram from "../Odontogram";
 import AnatomicalView from "./AnatomicalView";
-import AdvancedCompactView from "./AdvancedCompactView";
+import PeriodontalMatrix from "../periodontal/PeriodontalMatrix";
 import Odontogram3D from "./Odontogram3D";
 
 export const VIEWS = [
@@ -31,8 +31,8 @@ export const VIEWS = [
   {
     key: "compacto",
     label: "Compacto",
-    description: "Matriz clínica: columnas por diente y filas por superficie, con navegación por cuadrantes, zoom y registro rápido.",
-    Component: AdvancedCompactView,
+    description: "Ficha clínica completa: estados por superficie más mediciones periodontales (sondaje, margen, placa, sangrado, movilidad y furcación) con índices agregados.",
+    Component: PeriodontalMatrix,
   },
   {
     key: "tridimensional",

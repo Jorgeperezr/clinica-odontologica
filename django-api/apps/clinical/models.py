@@ -587,3 +587,97 @@ class ConsentAuditLog(TenantAwareModel):
 
     def __str__(self):
         return f"{self.action} · {self.at:%Y-%m-%d %H:%M}"
+
+
+class PeriodontalExam(TenantAwareModel):
+    """
+    Sesión de exploración periodontal (Sprint 52).
+
+    Capa de datos NUEVA: el odontograma registra estados por superficie
+    (caries, corona, implante…) y esto registra MEDICIONES por sitio
+    (profundidad de sondaje, margen gingival, placa, sangrado). Son dos
+    instrumentos distintos y por eso viven en tablas separadas: mezclarlos
+    obligaría a que un registro de caries tuviera columnas de sondaje.
+
+    Un paciente puede tener varias exploraciones a lo largo del tiempo, lo
+    que permite comparar evolución periodontal entre sesiones.
+    """
+
+    patient = models.ForeignKey(
+        "patients.Patient", on_delete=models.CASCADE, related_name="periodontal_exams"
+    )
+    date = models.DateField(help_text="Fecha de la exploración.")
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Exploración periodontal"
+        verbose_name_plural = "Exploraciones periodontales"
+        ordering = ["-date", "-created_at"]
+
+    def __str__(self):
+        return f"Periodontograma {self.patient} · {self.date}"
+
+
+class PeriodontalTooth(TenantAwareModel):
+    """
+    Mediciones de una pieza dentro de una exploración (Sprint 52).
+
+    Réplica de la estructura de `MouthItem` del proyecto de referencia:
+    presencia, implante, movilidad, furcación y SEIS SITIOS por pieza.
+
+    Orden de los sitios (índices 0 a 5), convención periodontal:
+        0,1,2 → vestibular: mesial, central, distal
+        3,4,5 → palatino/lingual: mesial, central, distal
+
+    Las series de seis valores se guardan en JSON en vez de veinticuatro
+    columnas sueltas: mantiene el modelo legible, Postgres las indexa como
+    JSONB y el serializador valida longitud y rango. El nivel de inserción
+    (CAL) no se almacena porque es derivado: profundidad + margen.
+    """
+
+    SITES = 6
+
+    exam = models.ForeignKey(
+        PeriodontalExam, on_delete=models.CASCADE, related_name="teeth"
+    )
+    tooth_code = models.CharField(max_length=2, help_text="Código FDI, p. ej. 16.")
+
+    is_present = models.BooleanField(default=True, help_text="Pieza presente en boca.")
+    has_implant = models.BooleanField(default=False)
+    mobility = models.PositiveSmallIntegerField(default=0, help_text="Grado 0 a 3.")
+    furcation_buccal = models.PositiveSmallIntegerField(default=0, help_text="Grado 0 a 3.")
+    furcation_lingual = models.PositiveSmallIntegerField(default=0)
+    gum_width = models.PositiveSmallIntegerField(default=0, help_text="Ancho de encía en mm.")
+
+    probing_depth = models.JSONField(default=list, blank=True, help_text="6 enteros (mm).")
+    gingival_margin = models.JSONField(default=list, blank=True, help_text="6 enteros (mm).")
+    bleeding = models.JSONField(default=list, blank=True, help_text="6 booleanos.")
+    plaque = models.JSONField(default=list, blank=True, help_text="6 booleanos.")
+
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "Pieza del periodontograma"
+        verbose_name_plural = "Piezas del periodontograma"
+        ordering = ["tooth_code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exam", "tooth_code"], name="unique_tooth_per_periodontal_exam"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.tooth_code} · {self.exam.date}"
+
+    @property
+    def attachment_level(self):
+        """Nivel de inserción por sitio: derivado, nunca almacenado."""
+        pd = self.probing_depth or []
+        gm = self.gingival_margin or []
+        return [
+            (pd[i] if i < len(pd) else 0) + (gm[i] if i < len(gm) else 0)
+            for i in range(self.SITES)
+        ]

@@ -43,6 +43,8 @@ urlpatterns = [
     path("consents/<uuid:pk>/sign/", views.ConsentSignView.as_view(), name="consent-sign"),
     path("consents/<uuid:pk>/detail/", views.ConsentDetailView.as_view(), name="consent-detail"),
     path("consents/<uuid:pk>/pdf/", form033_views.ConsentPDFView.as_view(), name="consent-pdf"),
+    path("patients/<uuid:pk>/periodontal-exams/", views.PeriodontalExamListCreateView.as_view(), name="periodontal-exams"),
+    path("periodontal-teeth/<uuid:pk>/", views.PeriodontalToothUpdateView.as_view(), name="periodontal-tooth"),
     path("consent-templates/", views.ConsentTemplateListCreateView.as_view(), name="consent-template-list"),
     path("consent-templates/<uuid:pk>/", views.ConsentTemplateDetailView.as_view(), name="consent-template-detail"),
 ]
