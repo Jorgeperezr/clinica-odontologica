@@ -57,10 +57,10 @@ const PROFILE = [
 
 /** Tono por banda: multiplica al color del material, nunca lo sustituye. */
 const BAND_SHADE = [
-  [1.02, 0.90, 0.90],   // margen: rosa coral
-  [1.00, 0.95, 0.94],   // encía adherida: pálida y mate
-  [0.97, 0.81, 0.82],   // unión mucogingival
-  [0.88, 0.63, 0.66],   // mucosa alveolar: más roja y oscura
+  [1.06, 0.93, 0.92],   // margen: rosa coral, algo más luminoso
+  [1.00, 0.92, 0.91],   // encía adherida: pálida y mate
+  [0.84, 0.64, 0.67],   // unión mucogingival
+  [0.62, 0.39, 0.43],   // mucosa alveolar: más roja y oscura
 ];
 
 const SUB = 2;          // subdivisiones por tramo del perfil
@@ -100,11 +100,11 @@ function sampleProfile() {
  *
  * @param THREE
  * @param curve       curva de la arcada (archCurve)
- * @param placements  piezas colocadas: { length, halfDepth, eminence }
- * @param opts        { upper, marginY, papilla }
+ * @param placements  piezas: { length, halfDepth, eminence, marginY }
+ * @param opts        { upper, papilla }
  */
 export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
-  const { upper = false, marginY = 0, papilla = 0.22 } = opts;
+  const { upper = false, papilla = 0.22 } = opts;
   const dir = upper ? -1 : 1;              // hacia dónde "crece" la encía
   const prof = sampleProfile();
   const ring = prof.length;
@@ -115,14 +115,22 @@ export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
   const from = Math.max(0, first - 1.0);
   const to = Math.min(curve.total, last + 1.0);
 
-  /** Semiprofundidad local: interpolada entre las piezas vecinas. */
-  function halfDepthAt(l) {
+  /**
+   * Interpola una magnitud de las piezas vecinas a lo largo del arco.
+   * Se usa para la semiprofundidad y —lo importante— para la ALTURA DEL
+   * MARGEN: cada pieza tiene su cuello a distinta altura (curva de Spee,
+   * coronas de distinto tamaño), así que un margen a altura constante se
+   * despegaba del cuello en unas piezas y montaba sobre la corona en
+   * otras. Interpolándolo, el margen recorre la arcada pegado al cuello.
+   */
+  function lerpAt(l, field) {
     let i = 0;
     while (i < centers.length - 1 && centers[i + 1] < l) i++;
     const a = placements[i], b = placements[Math.min(i + 1, placements.length - 1)];
     const span = (b.length - a.length) || 1;
     const t = Math.max(0, Math.min(1, (l - a.length) / span));
-    return a.halfDepth + (b.halfDepth - a.halfDepth) * t;
+    const smooth = t * t * (3 - 2 * t);
+    return a[field] + (b[field] - a[field]) * smooth;
   }
 
   /**
@@ -179,7 +187,8 @@ export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
   for (let s = 0; s <= samples; s++) {
     const l = from + ((to - from) * s) / samples;
     const fr = curve.frameAtLength(l);
-    const hd = halfDepthAt(l);
+    const hd = lerpAt(l, "halfDepth");
+    const my = lerpAt(l, "marginY");
     const scal = scallopAt(l);
     const emin = eminenceAt(l);
     const taper = endTaper(l);
@@ -190,14 +199,19 @@ export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
       const nOff = (p.n * hd + (p.n > 0.5 ? emin * Math.min(1, p.n) : 0)) * taper;
       pos.push(
         fr.x + fr.nx * nOff,
-        marginY + dir * (p.y * taper + papilla * scal * p.lift),
+        my + dir * (p.y * taper + papilla * scal * p.lift),
         fr.z + fr.nz * nOff,
       );
       uvs.push((l / curve.total) * 6, r / ring);
 
       const sh = BAND_SHADE[p.band];
-      // Sombra de contacto en la tronera: oscurece la papila junto al diente
-      const ao = 1 - 0.16 * p.margin * scal;
+      /* Sombra del surco. El punto donde la encía se encuentra con el
+         diente es una hendidura estrecha a la que casi no llega luz; sin
+         ella el tejido parece pegado con adhesivo al diente y el conjunto
+         se lee como una prótesis de resina. Se refuerza en la tronera,
+         que es la zona más cerrada. */
+      const sulcus = 1 - 0.30 * p.margin * Math.max(0, 1 - Math.abs(p.n) / 1.25);
+      const ao = sulcus * (1 - 0.18 * p.margin * scal);
       col.push(sh[0] * ao, sh[1] * ao, sh[2] * ao);
     }
   }

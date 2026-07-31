@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 53 completado — realismo visual del odontograma 3D
+## Estado actual: Sprint 54 completado — anatomía y acabado del odontograma 3D
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -494,6 +494,52 @@ Se corrigieron además tres defectos de malla que deformaban el modelo.
   material. Medido en el rasterizador por software del entorno de pruebas,
   el coste queda ~12 % por encima del anterior con mucha más superficie en
   pantalla; en GPU real la diferencia es menor.
+
+
+### Sprint 54 — Anatomía por pieza y acabado del odontograma 3D (hecho)
+Segunda vuelta sobre el modelo 3D. Sigue siendo 100% presentación: no
+cambian los datos, la lógica clínica ni la interacción.
+
+- **Bug corregido en el caché de geometría:** la clave no distinguía la
+  cara oclusal, así que el primer molar inferior (cinco cúspides, patrón
+  Y5) y el segundo (cuatro) compartían malla y ganaba el que se
+  construyera primero. Ahora la variante oclusal entra en la clave.
+- **Anatomía por pieza:** proporciones propias de cada diente dentro de su
+  familia (el lateral superior frente al central, los incisivos inferiores
+  como piezas más estrechas de la boca, el primer molar mayor que el
+  cordal), aplicadas como escala del objeto para no romper la
+  reutilización de mallas.
+- **Postura real en la arcada** (`toothPose`): torque vestíbulo-lingual e
+  inclinación mesio-distal por familia, siguiendo el orden de la
+  prescripción ortodóncica habitual, y curva de Spee que acerca los
+  sectores posteriores al plano oclusal. Antes todas las piezas quedaban
+  verticales y paralelas.
+- **Contactos interproximales:** las piezas se reparten prácticamente sin
+  holgura y las secciones llevan convexidad proximal, de modo que las
+  coronas se tocan en su punto de contacto en vez de dejar rendijas.
+- **Oclusión ambiental horneada en el color de vértice**, gratis en tiempo
+  de ejecución: las fosas y los surcos de desarrollo se oscurecen (las
+  fisuras se leen como surcos y no como un dibujo), las caras proximales
+  se ensombrecen hacia el cuello (sin ello las coronas contiguas se
+  funden en una masa clara continua) y la encía dibuja la sombra del
+  surco donde se encuentra con cada diente.
+- **Encía ligada al cuello real de cada pieza:** la altura del margen se
+  interpola entre piezas vecinas a partir de su cuello, que la curva de
+  Spee desplaza. Con un margen a altura constante el tejido se despegaba
+  en unas piezas y montaba sobre la corona en otras.
+- **Transición de color continua** esmalte → dentina cervical → cemento
+  con una sola función axial; antes había dos funciones distintas y el
+  salto entre ambas dibujaba un anillo en el cuello.
+- **Malla más suave:** anillos agrupados en los extremos (donde está la
+  curvatura) en vez de repartidos por igual, lo que da la misma suavidad
+  aparente con menos triángulos y permitió subir el detalle oclusal.
+- **Cara oclusal más detallada:** cúspides con número y posición propios
+  de cada pieza —incluida la quinta del primer molar inferior—, rebordes
+  marginales, cresta oblicua del molar superior, cíngulo y fosa lingual
+  en el sector anterior, y ángulos incisales redondeados en el lateral.
+- **Iluminación contrastada:** el reparto de intensidades entre los cuatro
+  focos era demasiado plano; repartir la luz por igual ilumina todas las
+  caras y anula el volumen.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.

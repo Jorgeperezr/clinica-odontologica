@@ -34,7 +34,7 @@ import {
   dominantState, hasRecords,
 } from "./contract";
 import { toothFamily, isUpper } from "./ToothArt";
-import { getToothGeometry, toothMetrics, toothScale } from "./toothGeometry";
+import { getToothGeometry, toothMetrics, toothPose, toothScale } from "./toothGeometry";
 import { createArchCurve, distributeAlongArch } from "./archCurve";
 import { buildGingivaGeometry } from "./gingivaGeometry";
 import {
@@ -162,10 +162,15 @@ export default function Odontogram3D({
          relleno frío lateral (abre las zonas oscuras sin aplanar),
          contraluz posterior (separa las piezas del fondo) y un rebote
          tenue desde abajo para que las caras inferiores no se cierren en
-         negro, que es lo que delata una escena con una sola luz. */
-      scene.add(new THREE.HemisphereLight(0xfff6ee, 0xa9b8c6, 0.38));
+         negro, que es lo que delata una escena con una sola luz.
 
-      const keyLight = new THREE.DirectionalLight(0xfff2e4, 1.5);
+         El reparto está deliberadamente CONTRASTADO: repartir la luz a
+         partes iguales entre los cuatro focos ilumina cada cara por igual
+         y aplana el volumen, que es lo que hacía que las arcadas se
+         leyeran como una masa clara continua. */
+      scene.add(new THREE.HemisphereLight(0xfff6ee, 0xa9b8c6, 0.26));
+
+      const keyLight = new THREE.DirectionalLight(0xfff2e4, 1.95);
       keyLight.position.set(5.5, 13, 9);
       keyLight.castShadow = true;
       keyLight.shadow.mapSize.set(1024, 1024);
@@ -182,15 +187,15 @@ export default function Odontogram3D({
       keyLight.shadow.radius = 3;
       scene.add(keyLight);
 
-      const fillLight = new THREE.DirectionalLight(0xd6e6f6, 0.5);
+      const fillLight = new THREE.DirectionalLight(0xd6e6f6, 0.32);
       fillLight.position.set(-9, 3.5, 6);
       scene.add(fillLight);
 
-      const rimLight = new THREE.DirectionalLight(0xffffff, 0.85);
+      const rimLight = new THREE.DirectionalLight(0xffffff, 0.55);
       rimLight.position.set(0, 4.5, -12);
       scene.add(rimLight);
 
-      const bounceLight = new THREE.DirectionalLight(0xffd9c0, 0.28);
+      const bounceLight = new THREE.DirectionalLight(0xffd9c0, 0.18);
       bounceLight.position.set(0, -9, 4);
       scene.add(bounceLight);
 
@@ -279,7 +284,7 @@ export default function Odontogram3D({
           roughness: 1,
           roughnessMap: texRoughGum,
           bumpMap: texBumpGum,
-          bumpScale: 0.022,
+          bumpScale: 0.036,
           metalness: 0,
           /* Sin capa de barniz: en la encía el brillo húmedo lo da ya el
              mapa de rugosidad (margen brillante, encía adherida mate), y
@@ -299,7 +304,12 @@ export default function Odontogram3D({
       function buildArch(codes, shape, { upper, visible }) {
         const curve = createArchCurve(shape.rx, shape.rz, ARCH_FROM, ARCH_TO);
         const metrics = codes.map((c) => toothMetrics(c));
-        const spots = distributeAlongArch(curve, metrics.map((m) => m.mdWidth), 0.02);
+        /* Sin holgura entre piezas: las secciones llevan convexidad
+           proximal, así que a separación cero las coronas se tocan en su
+           punto de contacto, como en una arcada real. Con holgura se
+           veían rendijas de luz entre diente y diente. */
+        const spots = distributeAlongArch(curve, metrics.map((m) => m.mdWidth), 0.012);
+        const poses = codes.map((c) => toothPose(c));
 
         codes.forEach((code, i) => {
           const geo = getToothGeometry(THREE, code, geoCache);
@@ -308,7 +318,12 @@ export default function Odontogram3D({
           mesh.receiveShadow = true;
 
           const spot = spots[i];
-          mesh.position.set(spot.x, shape.y, spot.z);
+          const pose = poses[i];
+          /* Curva de Spee: los sectores posteriores se acercan al plano
+             oclusal. Sin ella las muelas —de corona más baja— dejan un
+             hueco creciente hacia atrás. */
+          const cervixY = shape.y + (upper ? -pose.rise : pose.rise);
+          mesh.position.set(spot.x, cervixY, spot.z);
           /* Orientación explícita: el eje X local es mesio-distal y sigue
              la tangente de la arcada; el eje Z local es vestibular y
              apunta hacia fuera. La versión anterior usaba `lookAt`, que
@@ -319,8 +334,12 @@ export default function Odontogram3D({
           // La arcada superior es la misma malla girada sobre su eje
           // vestíbulo-lingual: corona hacia abajo, vestibular intacto.
           if (upper) mesh.rotateZ(Math.PI);
-          // Ligera inclinación vestibular, como en una arcada real
-          mesh.rotateX((upper ? 1 : -1) * 0.05);
+          /* Torque e inclinación por pieza. Girar la arcada entera un
+             ángulo fijo deja todas las coronas paralelas, que es el rasgo
+             que delata un montaje a mano; cada familia tiene el suyo. */
+          const side = i < codes.length / 2 ? -1 : 1;
+          mesh.rotateZ(side * pose.tip * (upper ? -1 : 1));
+          mesh.rotateX(upper ? -pose.torque : pose.torque);
 
           // Ajuste de tamaño por pieza concreta (un lateral es más
           // estrecho que un central). Se guarda como escala base porque
@@ -328,28 +347,30 @@ export default function Odontogram3D({
           const [sx, sy, sz] = toothScale(code);
           mesh.scale.set(sx, sy, sz);
           mesh.visible = visible;
-          mesh.userData = { code, baseY: shape.y, baseScale: [sx, sy, sz] };
+          mesh.userData = { code, baseY: cervixY, baseScale: [sx, sy, sz] };
 
           group.add(mesh);
           teeth.push(mesh);
         });
 
         // ── Encía de esta arcada ──
-        const placements = spots.map((spot, i) => ({
-          length: spot.length,
-          halfDepth: metrics[i].blDepth / 2,
-          eminence: rootEminence(codes[i]),
-        }));
+        const placements = spots.map((spot, i) => {
+          const cy = shape.y + (upper ? -poses[i].rise : poses[i].rise);
+          return {
+            length: spot.length,
+            halfDepth: metrics[i].blDepth / 2,
+            eminence: rootEminence(codes[i]),
+            /* El margen se sitúa sobre la corona, no sobre el cuello: como
+               el collar del perfil va por dentro de la pieza, la encía
+               emerge algo más abajo que el plano del margen. Y va ligado
+               al cuello REAL de cada pieza, que la curva de Spee desplaza:
+               con un margen a altura constante, el tejido se despegaba del
+               cuello en unas piezas y montaba sobre la corona en otras. */
+            marginY: cy + (upper ? -0.22 : 0.22),
+          };
+        });
         const gumGeo = buildGingivaGeometry(THREE, curve, placements, {
-          upper,
-          /* El margen se sitúa sobre la corona, no sobre el cuello: como
-             el collar del perfil va por dentro de la pieza, la encía
-             emerge algo más abajo que el plano del margen. Con solo 0.10
-             el borde visible caía justo en la unión amelocementaria y
-             dejaba ver el resalte cervical como una línea brillante
-             cruzando todas las piezas. */
-          marginY: shape.y + (upper ? -0.22 : 0.22),
-          papilla: 0.26,
+          upper, papilla: 0.24,
         });
         const gum = new THREE.Mesh(gumGeo, gingivaMaterial());
         /* La encía recibe sombra (la de las piezas sobre el tejido es la
