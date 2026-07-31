@@ -198,6 +198,94 @@ export function toothPose(code) {
    lámina. Se añade la concavidad lingual y las convexidades proximales
    (áreas de contacto), que son las que hacen que dos piezas vecinas se
    toquen de forma creíble. */
+/**
+ * Lóbulos de desarrollo. Una corona no crece como un cilindro: se forma
+ * a partir de lóbulos que se fusionan, y los surcos que quedan entre
+ * ellos son lo que da a cada familia su silueta propia. Modelarlos es lo
+ * que evita que incisivo, canino, premolar y molar parezcan la misma
+ * geometría reescalada.
+ *
+ *   incisivo → tres lóbulos vestibulares (de ahí los mamelones del borde
+ *              y las dos depresiones verticales de la cara) más cíngulo
+ *   canino   → lóbulo medio dominante, que forma la cresta vestibular
+ *   premolar → un lóbulo vestibular marcado y otro palatino menor
+ *   molar    → dos vestibulares y dos palatinos, uno por cúspide
+ *
+ * θ = 0 mira a mesial/distal, θ = π/2 a vestibular, θ = −π/2 a lingual.
+ */
+const B = Math.PI / 2;      // vestibular
+const L = -Math.PI / 2;     // lingual / palatino
+
+function lobeSpec(fam, up) {
+  switch (fam) {
+    case "incisivo":
+      return [
+        { a: B - 0.62, amp: 0.055, w: 0.10 },
+        { a: B, amp: 0.070, w: 0.11 },
+        { a: B + 0.62, amp: 0.055, w: 0.10 },
+        { a: L, amp: 0.045, w: 0.22 },
+      ];
+    case "canino":
+      return [
+        { a: B - 0.72, amp: 0.038, w: 0.10 },
+        { a: B, amp: 0.115, w: 0.13 },        // cresta vestibular del canino
+        { a: B + 0.72, amp: 0.038, w: 0.10 },
+        { a: L, amp: 0.075, w: 0.20 },        // cíngulo marcado
+      ];
+    case "premolar":
+      return [
+        { a: B, amp: 0.105, w: 0.16 },        // cresta vestibular
+        { a: L, amp: up ? 0.080 : 0.062, w: 0.19 },
+      ];
+    default:
+      return [
+        { a: B - 0.60, amp: 0.075, w: 0.115 },
+        { a: B + 0.60, amp: 0.068, w: 0.115 },
+        { a: L - 0.58, amp: 0.070, w: 0.120 },
+        { a: L + 0.58, amp: 0.060, w: 0.120 },
+      ];
+  }
+}
+
+/** Diferencia angular mínima entre dos ángulos. */
+function angDelta(x, y) {
+  let d = (x - y) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/**
+ * Factor de radio por lóbulos a la altura v. Los lóbulos se difuminan
+ * hacia el cuello —donde la corona es lisa— y se marcan hacia el tercio
+ * oclusal, que es como se forman realmente.
+ */
+function lobeFactor(spec, theta, v) {
+  const fade = v <= 0.18 ? 0 : Math.min(1, (v - 0.18) / 0.5);
+  const soft = fade * fade * (3 - 2 * fade);
+  if (soft <= 0) return 1;
+  let f = 1;
+  for (const lo of spec) {
+    const d = angDelta(theta, lo.a);
+    f += lo.amp * Math.exp(-(d * d) / lo.w) * soft;
+  }
+  return f;
+}
+
+/**
+ * Cresta cervical: el rodete que rodea la corona junto al cuello
+ * (cíngulo en el sector anterior, cresta cervical vestibular en el
+ * posterior). Actúa al revés que los lóbulos: máximo en el cuello.
+ */
+function cervicalRidge(fam, theta, v) {
+  const amp = { incisivo: 0.055, canino: 0.075, premolar: 0.050, molar: 0.045 }[fam];
+  const band = Math.exp(-((v - 0.22) ** 2) / 0.020);
+  const dl = angDelta(theta, L), db = angDelta(theta, B);
+  const lingual = Math.exp(-(dl * dl) / 0.55);
+  const buccal = Math.exp(-(db * db) / 0.75) * (fam === "molar" || fam === "premolar" ? 1 : 0.35);
+  return 1 + amp * band * (lingual + buccal);
+}
+
 function sectionRadius(fam, theta, a, b) {
   const n = { molar: 3.3, premolar: 2.8, canino: 2.35, incisivo: 2.2 }[fam];
   const ct = Math.cos(theta), st = Math.sin(theta);
@@ -288,6 +376,9 @@ function occlusalVariant(code) {
   const n = Number(String(code).slice(-1));
   if (fam === "molar") return isUpper(code) ? "mu" : (n === 6 ? "m5" : "m4");
   if (fam === "premolar") return isUpper(code) ? "pu" : "pl";
+  // El lateral redondea más sus ángulos incisales que el central: es otra
+  // cara oclusal y por tanto otra malla.
+  if (fam === "incisivo") return n === 2 ? "i2" : "i1";
   return "-";
 }
 
@@ -458,7 +549,9 @@ export function buildToothGeometry(THREE, code) {
   let rimA = 1e-6, rimB = 1e-6;
   for (let i = 0; i < RADIAL; i++) {
     const th = (i / RADIAL) * Math.PI * 2;
-    const r = sectionRadius(fam, th, (mw / 2) * profTop, (bl / 2) * profTop * fzTop);
+    const r = sectionRadius(fam, th, (mw / 2) * profTop, (bl / 2) * profTop * fzTop)
+            * lobeFactor(lobeSpec(fam, isUpper(code)), th, 1)
+            * cervicalRidge(fam, th, 1);
     rimA = Math.max(rimA, Math.abs(Math.cos(th) * r));
     rimB = Math.max(rimB, Math.abs(Math.sin(th) * r));
   }
@@ -470,7 +563,11 @@ export function buildToothGeometry(THREE, code) {
    * tiempo de ejecución. `hRel` es la altura del campo oclusal.
    */
   function fissureAO(hRel) {
-    return 0.60 + 0.40 * Math.min(1, Math.max(0, hRel));
+    /* Se oscurece el fondo de fosa, pero con moderación: llevado al
+       extremo, toda la mesa oclusal —que está llena de valles— se apaga
+       y la cara masticatoria se lee como un agujero negro en vez de como
+       un relieve. */
+    return 0.80 + 0.20 * Math.min(1, Math.max(0, hRel));
   }
 
   /**
@@ -483,7 +580,7 @@ export function buildToothGeometry(THREE, code) {
    */
   function proximalAO(theta, v) {
     const prox = Math.pow(Math.abs(Math.cos(theta)), 3);
-    return 1 - 0.34 * prox * (1 - 0.5 * v);
+    return 1 - 0.28 * prox * (1 - 0.5 * v);
   }
 
   /** Color de un punto de la corona a altura v con relieve hRel. */
@@ -495,13 +592,17 @@ export function buildToothGeometry(THREE, code) {
   }
 
   // ── Corona ──
+  const lobes = lobeSpec(fam, isUpper(code));
+
   function crownRing(v) {
     const prof = crownProfile(v, fam);
     const fz = blTaper(fam, v);
     return (theta) => {
       // Los semiejes se escalan por separado: el mesio-distal conserva el
       // ancho y el vestíbulo-lingual se achata hacia el borde.
-      const r = sectionRadius(fam, theta, (mw / 2) * prof, (bl / 2) * prof * fz);
+      const r = sectionRadius(fam, theta, (mw / 2) * prof, (bl / 2) * prof * fz)
+              * lobeFactor(lobes, theta, v)
+              * cervicalRidge(fam, theta, v);
       const x = Math.cos(theta) * r;
       const z = Math.sin(theta) * r;
       const blend = v > 0.74 ? (v - 0.74) / 0.26 : 0;
@@ -557,11 +658,30 @@ export function buildToothGeometry(THREE, code) {
      Una sola raíz continúa el tronco sin costura. Con dos o tres, el
      tronco baja hasta la furca, se cierra, y cada raíz nace dentro de él:
      piezas cerradas que se interpenetran, nunca un agujero. */
+  /* Curvatura radicular por familia. Casi ninguna raíz es recta: se
+     inclinan a distal y el tercio apical acentúa el giro. */
+  const rootCurve = { incisivo: 0.09, canino: 0.11, premolar: 0.13, molar: 0.16 }[fam];
+
+  /**
+   * Concavidades longitudinales de la raíz. Las caras mesial y distal de
+   * casi todas las raíces están acanaladas —muy marcado en el primer
+   * premolar superior y en las raíces de los molares—, y es lo que
+   * distingue una raíz de un cono liso. La acanaladura es máxima en el
+   * tercio medio y se cierra hacia el ápice.
+   */
+  function rootGroove(theta, v, depth) {
+    const prox = Math.pow(Math.abs(Math.cos(theta)), 2);
+    const band = Math.exp(-((v - 0.42) ** 2) / 0.14);
+    return 1 - depth * prox * band;
+  }
+  const grooveDepth = fam === "premolar" ? 0.20 : fam === "molar" ? 0.16 : 0.10;
+
   function rootRing(v, ox, oz, thick, len) {
     return (theta) => {
       const taper = rootProfile(v);
-      const r = cervical(theta) * taper * thick;
-      const bend = 0.10 * mw * v * v;      // curvatura distal progresiva
+      const r = cervical(theta) * taper * thick * rootGroove(theta, v, grooveDepth);
+      // La curvatura se acelera hacia el ápice, no crece de forma lineal
+      const bend = rootCurve * mw * Math.pow(v, 1.8);
       return [
         Math.cos(theta) * r + ox * v + bend,
         -v * len + cejScallop(theta, ch) * (1 - Math.min(1, v * 3)),

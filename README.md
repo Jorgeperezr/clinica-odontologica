@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 56 completado — proveedor de mallas y variación anatómica
+## Estado actual: Sprint 57 completado — lóbulos de desarrollo y anatomía radicular
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -620,6 +620,40 @@ El motor de render deja de saber CÓMO se fabrica un diente.
 - **Cámara inicial** más cercana y con un ángulo menos cenital.
 - **Limpieza:** eliminados los generadores de mapas de relieve, sin uso
   desde que el microrrelieve va por mapas de normales.
+
+
+### Sprint 57 — Lóbulos de desarrollo y anatomía radicular (hecho)
+Salto anatómico del generador procedural. Sin tocar la lógica clínica, la
+sincronización, el raycasting ni la arquitectura `MeshProvider`.
+
+- **Lóbulos de desarrollo.** Era el límite de fondo del generador: todas
+  las familias usaban la misma sección transversal (una superelipse
+  escalada), así que solo se diferenciaban en proporciones. Una corona no
+  crece como un cilindro, se forma a partir de lóbulos que se fusionan, y
+  los surcos que quedan entre ellos son lo que da a cada familia su
+  silueta. Ahora se modelan explícitamente:
+  - incisivo: tres lóbulos vestibulares —de ahí los mamelones del borde y
+    las dos depresiones verticales de la cara— más cíngulo;
+  - canino: lóbulo medio dominante, que forma la cresta vestibular;
+  - premolar: un lóbulo vestibular marcado y otro palatino menor;
+  - molar: dos vestibulares y dos palatinos, uno por cúspide.
+  Los lóbulos se difuminan hacia el cuello, donde la corona es lisa, y se
+  marcan hacia el tercio oclusal, como en la formación real.
+- **Cresta cervical** (cíngulo en el sector anterior, cresta vestibular en
+  el posterior): el rodete que rodea la corona junto al cuello, que actúa
+  al revés que los lóbulos.
+- **Anatomía radicular:** concavidades longitudinales en las caras mesial
+  y distal —muy marcadas en el primer premolar superior y en las raíces
+  de los molares, y lo que distingue una raíz de un cono liso—, y
+  curvatura distal que se acelera hacia el ápice en vez de crecer de
+  forma lineal, con valor propio por familia.
+- **Bug corregido en el caché:** la variante oclusal del incisivo no
+  entraba en la clave, así que el central y el lateral —que redondean sus
+  ángulos incisales de forma distinta— compartían malla. Es el mismo
+  fallo que ya se corrigió para los molares inferiores.
+- **Oclusión ambiental horneada, moderada:** llevada al extremo apagaba
+  toda la mesa oclusal —que está llena de valles— y la cara masticatoria
+  se leía como un agujero negro en vez de como un relieve.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
