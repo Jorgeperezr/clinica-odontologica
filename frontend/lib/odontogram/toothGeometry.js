@@ -143,6 +143,35 @@ export function toothScale(code) {
  * Sin esto todas las piezas quedan verticales y paralelas, que es el
  * rasgo que delata una arcada montada a mano.
  */
+/**
+ * Variación anatómica por pieza. Dos dientes de la misma persona no son
+ * iguales, y una arcada de piezas idénticas se lee de inmediato como
+ * generada por ordenador. Se deriva de forma DETERMINISTA del número
+ * FDI: la misma pieza tiene siempre la misma variación, así que el
+ * modelo no "baila" entre visitas ni entre exportaciones del informe.
+ */
+function hash01(code, salt) {
+  let h = 2166136261 ^ salt;
+  const s = String(code);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 8) & 0xffff) / 0xffff;
+}
+
+/** Desviaciones pequeñas de tamaño y aplomo, centradas en cero. */
+export function toothJitter(code) {
+  const j = (salt) => hash01(code, salt) * 2 - 1;
+  return {
+    scale: [1 + j(11) * 0.035, 1 + j(23) * 0.045, 1 + j(37) * 0.035],
+    rotY: j(53) * 0.055,      // ligera rotación sobre su eje
+    torque: j(67) * 0.045,    // aplomo vestíbulo-lingual
+    tip: j(83) * 0.04,        // aplomo mesio-distal
+    rise: j(97) * 0.018,      // altura en el plano oclusal
+  };
+}
+
 export function toothPose(code) {
   const fam = toothFamily(code);
   const up = isUpper(code);

@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 55 completado — oclusión ambiental y normales en el odontograma 3D
+## Estado actual: Sprint 56 completado — proveedor de mallas y variación anatómica
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -586,6 +586,40 @@ con compresión, y normalizar orientación y escala de cada pieza al marco
 local que ya usa el sistema (`+X` mesio-distal, `+Z` vestibular, cuello
 en el origen). La capa de colocación, la encía, el raycasting y la
 sincronización clínica están preparadas para recibirlas sin cambios.
+
+
+### Sprint 56 — Proveedor de mallas y variación anatómica (hecho)
+El motor de render deja de saber CÓMO se fabrica un diente.
+
+- **Interfaz `MeshProvider`** (`lib/odontogram/meshProvider.js`): el motor
+  pide una pieza por su número FDI y recibe siempre lo mismo —geometría
+  en el marco local canónico, escala y medidas—. Hay dos proveedores:
+  - *procedural*, el generador actual, siempre disponible;
+  - *gltf*, que carga mallas `.glb`/`.gltf` desde `public/models/teeth/`.
+- **Listo para mallas profesionales sin tocar código:** basta con dejar
+  los ficheros y un `manifest.json` en esa carpeta. El manifiesto puede
+  corregir orientación, escala y origen de cada pieza, de modo que no hay
+  que reexportar los modelos para adaptarlos al marco del sistema. Si una
+  pieza falta, la cubre la procedural: un juego incompleto nunca deja
+  huecos en la arcada. Si no hay manifiesto, no se emite ni un error en
+  consola. Documentado en `public/models/teeth/README.md`.
+- **Independencia real:** las medidas (`mdWidth`, `blDepth`, `crownH`,
+  `rootH`) las publica el proveedor, así que el reparto por longitud de
+  arco, el margen gingival que sigue el cuello, el raycasting, la
+  selección, el historial y la sincronización clínica funcionan igual
+  venga la malla de donde venga.
+- **Variación anatómica por pieza:** desviaciones pequeñas de tamaño y
+  aplomo derivadas de forma DETERMINISTA del número FDI. Una arcada de
+  piezas idénticas se lee de inmediato como generada por ordenador; al
+  ser determinista, la misma pieza tiene siempre la misma variación y el
+  modelo no cambia entre visitas ni entre exportaciones del informe.
+- **Adaptación al tema claro/oscuro:** el lienzo es transparente y se ve
+  sobre el fondo de la aplicación. Se mide la luminancia REAL del fondo
+  —no el nombre del tema— para que funcione también con los colores de
+  marca de cada clínica, y se ajustan exposición, luces y entorno.
+- **Cámara inicial** más cercana y con un ángulo menos cenital.
+- **Limpieza:** eliminados los generadores de mapas de relieve, sin uso
+  desde que el microrrelieve va por mapas de normales.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.

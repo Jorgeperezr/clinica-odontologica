@@ -34,7 +34,8 @@ import {
   dominantState, hasRecords,
 } from "./contract";
 import { toothFamily, isUpper } from "./ToothArt";
-import { getToothGeometry, toothMetrics, toothPose, toothScale } from "./toothGeometry";
+import { toothJitter, toothPose } from "./toothGeometry";
+import { createMeshProvider } from "./meshProvider";
 import { createArchCurve, distributeAlongArch } from "./archCurve";
 import { buildGingivaGeometry } from "./gingivaGeometry";
 import {
@@ -126,7 +127,7 @@ export default function Odontogram3D({
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 200);
-      camera.position.set(0, 7, 15);
+      camera.position.set(0, 5.4, 13.5);
 
       const renderer = new THREE.WebGLRenderer({
         antialias: true, alpha: true, preserveDrawingBuffer: true, // permite capturar la imagen
@@ -140,6 +141,34 @@ export default function Odontogram3D({
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       mount.appendChild(renderer.domElement);
+
+      /* ── Adaptación al tema claro / oscuro ──
+         El lienzo es transparente y se ve sobre el fondo de la
+         aplicación. Con la misma exposición en ambos modos, en oscuro las
+         piezas quedan como un recorte deslumbrante sobre el fondo y en
+         claro se lavan. Se mide la luminancia real del fondo —no el
+         nombre del tema— para que funcione también con los colores de
+         marca de cada clínica. */
+      const themeLights = [];
+      function applyTheme() {
+        let lum = 1;
+        try {
+          const bg = getComputedStyle(mount).backgroundColor || "";
+          const m = bg.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+          if (m) {
+            lum = (0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3]) / 255;
+          }
+        } catch { /* se queda en claro */ }
+        const dark = lum < 0.45;
+        renderer.toneMappingExposure = dark ? 0.86 : 1.0;
+        themeLights.forEach(({ light, base }) => {
+          light.intensity = base * (dark ? 0.86 : 1);
+        });
+        if (scene.environment) scene.environmentIntensity = dark ? 0.65 : 1;
+      }
+      const themeObserver = new MutationObserver(applyTheme);
+      themeObserver.observe(document.documentElement,
+                            { attributes: true, attributeFilter: ["data-theme", "class"] });
 
       /* ── Entorno para reflejos ──
          Sin un mapa de entorno, un material físico no tiene nada que
@@ -186,14 +215,17 @@ export default function Odontogram3D({
       keyLight.shadow.normalBias = 0.02;
       keyLight.shadow.radius = 3;
       scene.add(keyLight);
+      themeLights.push({ light: keyLight, base: keyLight.intensity });
 
       const fillLight = new THREE.DirectionalLight(0xd6e6f6, 0.32);
       fillLight.position.set(-9, 3.5, 6);
       scene.add(fillLight);
+      themeLights.push({ light: fillLight, base: fillLight.intensity });
 
       const rimLight = new THREE.DirectionalLight(0xffffff, 0.55);
       rimLight.position.set(0, 4.5, -12);
       scene.add(rimLight);
+      themeLights.push({ light: rimLight, base: rimLight.intensity });
 
       const bounceLight = new THREE.DirectionalLight(0xffd9c0, 0.18);
       bounceLight.position.set(0, -9, 4);
@@ -336,15 +368,19 @@ export default function Odontogram3D({
         });
       }
 
-      /* Caché de geometría: las piezas con la misma familia, dentición y
-         número de raíces comparten malla (de 52 mallas únicas a unas
-         diez). Se libera una sola vez al desmontar. */
-      const geoCache = new Map();
+      /* Proveedor de mallas. El motor no sabe si el diente lo fabrica el
+         generador procedural o viene de un .glb dejado en
+         `public/models/teeth/`: pide la pieza por su número FDI y recibe
+         geometría, escala y medidas en el marco local canónico. Las
+         piezas equivalentes comparten malla, así que de 52 mallas únicas
+         se pasa a una docena. */
+      const meshProvider = await createMeshProvider(THREE);
       const gums = [];
 
       function buildArch(codes, shape, { upper, visible }) {
         const curve = createArchCurve(shape.rx, shape.rz, ARCH_FROM, ARCH_TO);
-        const metrics = codes.map((c) => toothMetrics(c));
+        const parts = codes.map((c) => meshProvider.getTooth(c));
+        const metrics = parts.map((p) => p.metrics);
         /* Sin holgura entre piezas: las secciones llevan convexidad
            proximal, así que a separación cero las coronas se tocan en su
            punto de contacto, como en una arcada real. Con holgura se
@@ -353,8 +389,8 @@ export default function Odontogram3D({
         const poses = codes.map((c) => toothPose(c));
 
         codes.forEach((code, i) => {
-          const geo = getToothGeometry(THREE, code, geoCache);
-          const mesh = new THREE.Mesh(geo, enamelMaterial());
+          const part = parts[i];
+          const mesh = new THREE.Mesh(part.geometry, enamelMaterial());
           mesh.castShadow = true;
           mesh.receiveShadow = true;
 
@@ -363,7 +399,9 @@ export default function Odontogram3D({
           /* Curva de Spee: los sectores posteriores se acercan al plano
              oclusal. Sin ella las muelas —de corona más baja— dejan un
              hueco creciente hacia atrás. */
-          const cervixY = shape.y + (upper ? -pose.rise : pose.rise);
+          const jit = toothJitter(code);
+          const cervixY = shape.y
+            + (upper ? -(pose.rise + jit.rise) : pose.rise + jit.rise);
           mesh.position.set(spot.x, cervixY, spot.z);
           /* Orientación explícita: el eje X local es mesio-distal y sigue
              la tangente de la arcada; el eje Z local es vestibular y
@@ -379,13 +417,17 @@ export default function Odontogram3D({
              ángulo fijo deja todas las coronas paralelas, que es el rasgo
              que delata un montaje a mano; cada familia tiene el suyo. */
           const side = i < codes.length / 2 ? -1 : 1;
-          mesh.rotateZ(side * pose.tip * (upper ? -1 : 1));
-          mesh.rotateX(upper ? -pose.torque : pose.torque);
+          mesh.rotateZ(side * (pose.tip + jit.tip) * (upper ? -1 : 1));
+          mesh.rotateX(upper ? -(pose.torque + jit.torque) : pose.torque + jit.torque);
+          // Pequeña rotación propia: ninguna pieza queda perfectamente alineada
+          mesh.rotateY(jit.rotY);
 
           // Ajuste de tamaño por pieza concreta (un lateral es más
           // estrecho que un central). Se guarda como escala base porque
           // la animación de selección la multiplica.
-          const [sx, sy, sz] = toothScale(code);
+          const sx = part.scale[0] * jit.scale[0];
+          const sy = part.scale[1] * jit.scale[1];
+          const sz = part.scale[2] * jit.scale[2];
           mesh.scale.set(sx, sy, sz);
           mesh.visible = visible;
           mesh.userData = { code, baseY: cervixY, baseScale: [sx, sy, sz] };
@@ -396,7 +438,9 @@ export default function Odontogram3D({
 
         // ── Encía de esta arcada ──
         const placements = spots.map((spot, i) => {
-          const cy = shape.y + (upper ? -poses[i].rise : poses[i].rise);
+          const jr = toothJitter(codes[i]).rise;
+          const cy = shape.y
+            + (upper ? -(poses[i].rise + jr) : poses[i].rise + jr);
           return {
             length: spot.length,
             halfDepth: metrics[i].blDepth / 2,
@@ -434,7 +478,7 @@ export default function Odontogram3D({
 
       /* ── Órbita, zoom y desplazamiento (implementación propia, para no
          depender de complementos externos al paquete) ── */
-      const state = { rotX: 0.38, rotY: 0, dist: 15, panX: 0, panY: 0 };
+      const state = { rotX: 0.30, rotY: 0, dist: 13.5, panX: 0, panY: 0 };
       let dragging = null, lastX = 0, lastY = 0;
 
       const el = renderer.domElement;
@@ -573,11 +617,13 @@ export default function Odontogram3D({
       };
       window.addEventListener("resize", onResize);
 
+      applyTheme();
       sceneRef.current = { THREE, scene, camera, renderer, teeth, state, composer };
       if (!cancelled) setReady(true);
 
       cleanup = () => {
         cancelAnimationFrame(raf);
+        themeObserver.disconnect();
         window.removeEventListener("resize", onResize);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
@@ -587,8 +633,7 @@ export default function Odontogram3D({
         teeth.forEach((t) => {
           t.material.dispose();   // la geometría es compartida: se libera aparte
         });
-        geoCache.forEach((g) => g.dispose());
-        geoCache.clear();
+        meshProvider.dispose();
         gums.forEach((g) => { g.geometry.dispose(); g.material.dispose(); });
         textures.forEach((t) => t.dispose());
         floorGeo.dispose();
@@ -705,7 +750,7 @@ export default function Odontogram3D({
   const resetView = useCallback(() => {
     const s = sceneRef.current;
     if (!s) return;
-    Object.assign(s.state, { rotX: 0.38, rotY: 0, dist: 15, panX: 0, panY: 0 });
+    Object.assign(s.state, { rotX: 0.30, rotY: 0, dist: 13.5, panX: 0, panY: 0 });
   }, []);
 
   const selSurfaces = selectedTooth ? surfacesByTooth[selectedTooth] : null;

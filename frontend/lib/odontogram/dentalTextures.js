@@ -106,60 +106,6 @@ export function enamelRoughnessTexture(THREE) {
 }
 
 /**
- * Microrrelieve del diente: perikimatíes —las finas ondas horizontales
- * del esmalte— en la corona y grano irregular en la raíz.
- */
-export function enamelBumpTexture(THREE) {
-  const noise = makeNoise(7717);
-  return canvasTexture(THREE, (d) => {
-    for (let y = 0; y < SIZE; y++) {
-      const v = 1 - y / (SIZE - 1);
-      const isCrown = Math.min(1, Math.max(0, (v - 0.30) / 0.12));
-      for (let x = 0; x < SIZE; x++) {
-        const n = fbm(noise, (x / SIZE) * 11, (y / SIZE) * 11, 3);
-        // Ondas horizontales moduladas por ruido: nunca líneas perfectas
-        const waves = Math.sin(v * 150 + n * 5) * 0.5 + 0.5;
-        const val = isCrown
-          ? 0.5 + (waves - 0.5) * 0.16 + (n - 0.5) * 0.10
-          : 0.5 + (n - 0.5) * 0.55;
-        const c = Math.round(Math.min(1, Math.max(0, val)) * 255);
-        const i = (y * SIZE + x) * 4;
-        d[i] = d[i + 1] = d[i + 2] = c;
-        d[i + 3] = 255;
-      }
-    }
-  });
-}
-
-/**
- * Punteado gingival ("cáscara de naranja"): el rasgo que identifica una
- * encía adherida sana. Se concentra en las vertientes adheridas y se
- * desvanece hacia el margen y hacia la mucosa alveolar, que son lisas.
- */
-export function gingivaBumpTexture(THREE) {
-  const noise = makeNoise(31337);
-  return canvasTexture(THREE, (d) => {
-    for (let y = 0; y < SIZE; y++) {
-      const v = y / (SIZE - 1);
-      // Dos franjas adheridas: vestibular y lingual
-      const band = Math.max(
-        Math.exp(-((v - 0.18) ** 2) / 0.006),
-        Math.exp(-((v - 0.84) ** 2) / 0.006),
-      );
-      for (let x = 0; x < SIZE; x++) {
-        const stipple = fbm(noise, (x / SIZE) * 30, (y / SIZE) * 30, 2);
-        const grain = fbm(noise, (x / SIZE) * 6, (y / SIZE) * 6, 3);
-        const val = 0.5 + (stipple - 0.5) * 0.75 * band + (grain - 0.5) * 0.12;
-        const c = Math.round(Math.min(1, Math.max(0, val)) * 255);
-        const i = (y * SIZE + x) * 4;
-        d[i] = d[i + 1] = d[i + 2] = c;
-        d[i + 3] = 255;
-      }
-    }
-  });
-}
-
-/**
  * Rugosidad gingival: el margen libre está húmedo y brilla; la encía
  * adherida es mate. Esa diferencia de acabado es la que hace que el
  * tejido parezca mucosa y no goma.
