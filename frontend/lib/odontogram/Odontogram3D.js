@@ -34,7 +34,13 @@ import {
   dominantState, hasRecords,
 } from "./contract";
 import { toothFamily, isUpper } from "./ToothArt";
-import { buildToothGeometry } from "./toothGeometry";
+import { getToothGeometry, toothMetrics, toothScale } from "./toothGeometry";
+import { createArchCurve, distributeAlongArch } from "./archCurve";
+import { buildGingivaGeometry } from "./gingivaGeometry";
+import {
+  enamelBumpTexture, enamelRoughnessTexture,
+  gingivaBumpTexture, gingivaRoughnessTexture,
+} from "./dentalTextures";
 
 /** Filtros clínicos: resaltan solo las piezas cuyo estado coincide. */
 const FILTERS = [
@@ -59,18 +65,25 @@ const ARCHES = {
   permLower: [...PERM_LOWER_R, ...PERM_LOWER_L],
 };
 
-/** Dimensiones por familia dental (ancho, alto de corona, profundidad). */
-function toothDims(code) {
+/* Geometría de las arcadas. Los semiejes se eligen para que la suma de
+   los anchos mesio-distales reales quepa sin comprimir las piezas: la
+   curva reparte por longitud de arco, no por ángulo. */
+const ARCH_SHAPE = {
+  permUpper: { rx: 5.50, rz: 4.20, y: 1.12 },
+  permLower: { rx: 5.15, rz: 3.95, y: -1.12 },
+  tempUpper: { rx: 3.05, rz: 2.35, y: 1.12 },
+  tempLower: { rx: 2.85, rz: 2.20, y: -1.12 },
+};
+const ARCH_FROM = Math.PI * 0.06;
+const ARCH_TO = Math.PI * 0.94;
+
+/** Relieve que deja la raíz sobre la tabla vestibular; el canino es el mayor. */
+function rootEminence(code) {
   const fam = toothFamily(code);
-  const dec = ["5", "6", "7", "8"].includes(String(code)[0]);
-  const s = dec ? 0.78 : 1;
-  const base = {
-    incisivo: [0.62, 1.15, 0.42],
-    canino: [0.66, 1.35, 0.6],
-    premolar: [0.76, 1.0, 0.78],
-    molar: [1.02, 0.95, 0.95],
-  }[fam];
-  return base.map((v) => v * s);
+  if (fam === "canino") return 0.17;
+  if (fam === "incisivo") return 0.09;
+  if (fam === "premolar") return 0.07;
+  return 0.05;
 }
 
 export default function Odontogram3D({
@@ -113,7 +126,7 @@ export default function Odontogram3D({
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 200);
-      camera.position.set(0, 6.5, 13);
+      camera.position.set(0, 7, 15);
 
       const renderer = new THREE.WebGLRenderer({
         antialias: true, alpha: true, preserveDrawingBuffer: true, // permite capturar la imagen
@@ -122,7 +135,7 @@ export default function Odontogram3D({
       renderer.setSize(width, height);
       // Tono cinematográfico: evita que los blancos del esmalte se quemen
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.05;
+      renderer.toneMappingExposure = 0.98;
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -144,43 +157,60 @@ export default function Odontogram3D({
         // Sin entorno la escena sigue siendo válida, solo menos reflectante
       }
 
-      /* ── Iluminación de tres puntos ──
-         Principal cenital (modela el volumen y proyecta la sombra),
-         relleno frío lateral (abre las zonas oscuras sin aplanar) y
-         contraluz posterior (separa las piezas del fondo). */
-      scene.add(new THREE.HemisphereLight(0xffffff, 0xb9c6d2, 0.42));
+      /* ── Iluminación de estudio clínico ──
+         Principal cálida y alta (modela el volumen y proyecta la sombra),
+         relleno frío lateral (abre las zonas oscuras sin aplanar),
+         contraluz posterior (separa las piezas del fondo) y un rebote
+         tenue desde abajo para que las caras inferiores no se cierren en
+         negro, que es lo que delata una escena con una sola luz. */
+      scene.add(new THREE.HemisphereLight(0xfff6ee, 0xa9b8c6, 0.38));
 
-      const keyLight = new THREE.DirectionalLight(0xfff4e8, 1.5);
-      keyLight.position.set(5, 14, 9);
+      const keyLight = new THREE.DirectionalLight(0xfff2e4, 1.5);
+      keyLight.position.set(5.5, 13, 9);
       keyLight.castShadow = true;
       keyLight.shadow.mapSize.set(1024, 1024);
       keyLight.shadow.camera.near = 1;
-      keyLight.shadow.camera.far = 40;
-      keyLight.shadow.camera.left = -12;
-      keyLight.shadow.camera.right = 12;
-      keyLight.shadow.camera.top = 12;
-      keyLight.shadow.camera.bottom = -12;
-      keyLight.shadow.bias = -0.0012;
-      keyLight.shadow.radius = 4;
+      keyLight.shadow.camera.far = 34;
+      // Encuadre ajustado a las arcadas: más texels de sombra sobre lo
+      // que de verdad se ve, con el mismo coste de mapa.
+      keyLight.shadow.camera.left = -8;
+      keyLight.shadow.camera.right = 8;
+      keyLight.shadow.camera.top = 8;
+      keyLight.shadow.camera.bottom = -8;
+      keyLight.shadow.bias = -0.0009;
+      keyLight.shadow.normalBias = 0.02;
+      keyLight.shadow.radius = 3;
       scene.add(keyLight);
 
-      const fillLight = new THREE.DirectionalLight(0xd8e8f6, 0.55);
-      fillLight.position.set(-8, 3, 6);
+      const fillLight = new THREE.DirectionalLight(0xd6e6f6, 0.5);
+      fillLight.position.set(-9, 3.5, 6);
       scene.add(fillLight);
 
-      const rimLight = new THREE.DirectionalLight(0xffffff, 0.7);
-      rimLight.position.set(0, 4, -12);
+      const rimLight = new THREE.DirectionalLight(0xffffff, 0.85);
+      rimLight.position.set(0, 4.5, -12);
       scene.add(rimLight);
 
+      const bounceLight = new THREE.DirectionalLight(0xffd9c0, 0.28);
+      bounceLight.position.set(0, -9, 4);
+      scene.add(bounceLight);
+
       // Suelo receptor de sombra: da asiento a las arcadas sin verse
-      const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(60, 60),
-        new THREE.ShadowMaterial({ opacity: 0.16 }),
-      );
+      const floorGeo = new THREE.PlaneGeometry(60, 60);
+      const floorMat = new THREE.ShadowMaterial({ opacity: 0.2 });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
       floor.rotation.x = -Math.PI / 2;
-      floor.position.y = -4.6;
+      floor.position.y = -3.7;
       floor.receiveShadow = true;
       scene.add(floor);
+
+      /* ── Texturas procedurales ──
+         Se generan una vez y las comparten todas las piezas: es lo que
+         rompe el brillo uniforme del plástico sin coste por objeto. */
+      const texRoughEnamel = enamelRoughnessTexture(THREE);
+      const texBumpEnamel = enamelBumpTexture(THREE);
+      const texRoughGum = gingivaRoughnessTexture(THREE);
+      const texBumpGum = gingivaBumpTexture(THREE);
+      const textures = [texRoughEnamel, texBumpEnamel, texRoughGum, texBumpGum];
 
       // ── Arcadas ──
       const teeth = [];
@@ -191,93 +221,158 @@ export default function Odontogram3D({
          transmisión: el esmalte real es translúcido y deja pasar luz
          hacia la dentina, que es lo que impide que un diente se vea
          como plástico blanco. Cada pieza recibe su propia instancia
-         porque el color y el resaltado se animan por separado. */
+         porque el color y el resaltado se animan por separado.
+
+         El marfil no va en `color` sino en el color de vértice de la
+         geometría (esmalte translúcido en el borde, dentina en el cuello,
+         cemento en la raíz), de modo que `color` queda libre para llevar
+         el estado clínico sin perder ese degradado natural.
+
+         `roughness` es un MULTIPLICADOR del mapa de rugosidad: 1 = tal
+         cual lo dibuja la textura (corona pulida, raíz mate). Los
+         materiales restauradores lo suben o lo bajan más abajo. */
       function enamelMaterial() {
         return new THREE.MeshPhysicalMaterial({
-          color: 0xf6f4ef,
-          roughness: 0.28,
+          color: 0xfdf7ec,
+          vertexColors: true,
+          roughness: 1,
+          roughnessMap: texRoughEnamel,
+          bumpMap: texBumpEnamel,
+          bumpScale: 0.018,
           metalness: 0.0,
-          clearcoat: 0.85,
-          clearcoatRoughness: 0.16,
-          transmission: 0.18,       // translucidez sutil
-          thickness: 0.6,
+          /* Barniz suave y amplio. Con clearcoat casi 1 y muy liso, el
+             reflejo se concentra en un punto blanco durísimo y la pieza
+             pasa de esmalte a porcelana de baño. */
+          clearcoat: 0.55,
+          clearcoatRoughness: 0.22,
+          transmission: 0.16,       // translucidez sutil
+          thickness: 0.55,
           ior: 1.63,                // índice de refracción del esmalte
-          attenuationColor: new THREE.Color(0xffe9cf),
-          attenuationDistance: 1.4,
+          attenuationColor: new THREE.Color(0xffe6c8),
+          attenuationDistance: 1.2,
           emissive: new THREE.Color(0x000000),
           transparent: true,
           opacity: 1,
         });
       }
 
-      // Contorno luminoso: copia ampliada dibujada por su cara interna.
-      // Resalta la pieza sin alterar su color, que es lo que pedía el
-      // criterio clínico de no falsear el aspecto del diente.
-      const outlineMat = new THREE.MeshBasicMaterial({
-        color: 0x2e9bdc, side: THREE.BackSide,
-        transparent: true, opacity: 0, depthWrite: false,
-      });
+      /* Realce de selección.
+         Antes era una copia ampliada de la pieza dibujada por su cara
+         interna. Con el esmalte translúcido esa copia se compone en la
+         pasada de transmisión y deja de quedar oculta tras el diente: la
+         pieza seleccionada se pintaba entera de azul. Ahora el realce es
+         una emisión sobre el propio material, que no puede taparlo, no
+         añade 52 mallas a la escena y sigue sin falsear el color base
+         (la emisión ilumina, no repinta). */
+      const SELECT_GLOW = new THREE.Color(0x2e9bdc);
 
-      function buildArch(codes, { radiusX, radiusZ, y, upper, visible }) {
-        const n = codes.length;
+      /* ── Material gingival ──
+         Opaco a propósito: la encía anterior era semitransparente y
+         dejaba ver las raíces por dentro, que es justo lo que delataba
+         el modelo. La sensación de tejido vivo la dan el brillo de
+         terciopelo (`sheen`), la película húmeda del margen (`clearcoat`)
+         y el punteado de la textura, no la transparencia. */
+      function gingivaMaterial() {
+        return new THREE.MeshPhysicalMaterial({
+          color: 0xc9847d,
+          vertexColors: true,
+          roughness: 1,
+          roughnessMap: texRoughGum,
+          bumpMap: texBumpGum,
+          bumpScale: 0.022,
+          metalness: 0,
+          /* Sin capa de barniz: en la encía el brillo húmedo lo da ya el
+             mapa de rugosidad (margen brillante, encía adherida mate), y
+             el barniz es un coste de sombreado que aquí no se nota. */
+          sheen: 0.65,
+          sheenColor: new THREE.Color(0xff9d92),
+          sheenRoughness: 0.85,
+        });
+      }
+
+      /* Caché de geometría: las piezas con la misma familia, dentición y
+         número de raíces comparten malla (de 52 mallas únicas a unas
+         diez). Se libera una sola vez al desmontar. */
+      const geoCache = new Map();
+      const gums = [];
+
+      function buildArch(codes, shape, { upper, visible }) {
+        const curve = createArchCurve(shape.rx, shape.rz, ARCH_FROM, ARCH_TO);
+        const metrics = codes.map((c) => toothMetrics(c));
+        const spots = distributeAlongArch(curve, metrics.map((m) => m.mdWidth), 0.02);
+
         codes.forEach((code, i) => {
-          // Distribución sobre una elipse: forma real de la arcada
-          const t = n === 1 ? 0.5 : i / (n - 1);
-          const ang = Math.PI * (0.06 + 0.88 * t);
-          const x = -Math.cos(ang) * radiusX;
-          const z = Math.sin(ang) * radiusZ;
-
-          const geo = buildToothGeometry(THREE, code);
+          const geo = getToothGeometry(THREE, code, geoCache);
           const mesh = new THREE.Mesh(geo, enamelMaterial());
           mesh.castShadow = true;
           mesh.receiveShadow = true;
-          mesh.position.set(x, y, z);
-          mesh.lookAt(0, y, 0);
-          mesh.rotateY(Math.PI);
-          // Ligera inclinación vestibular, como en una arcada real
-          mesh.rotateX((upper ? 1 : -1) * 0.06);
-          mesh.visible = visible;
-          mesh.userData = { code, baseY: y };
 
-          // Contorno como hijo: hereda transformaciones sin duplicar lógica
-          const outline = new THREE.Mesh(geo, outlineMat.clone());
-          outline.scale.setScalar(1.055);
-          outline.renderOrder = -1;
-          mesh.add(outline);
-          mesh.userData.outline = outline;
+          const spot = spots[i];
+          mesh.position.set(spot.x, shape.y, spot.z);
+          /* Orientación explícita: el eje X local es mesio-distal y sigue
+             la tangente de la arcada; el eje Z local es vestibular y
+             apunta hacia fuera. La versión anterior usaba `lookAt`, que
+             alineaba el eje equivocado y dejaba las piezas giradas 90°
+             —de ahí que los incisivos se vieran como agujas y las
+             coronas se solaparan entre sí. */
+          mesh.rotation.set(0, Math.atan2(spot.nx, spot.nz), 0);
+          // La arcada superior es la misma malla girada sobre su eje
+          // vestíbulo-lingual: corona hacia abajo, vestibular intacto.
+          if (upper) mesh.rotateZ(Math.PI);
+          // Ligera inclinación vestibular, como en una arcada real
+          mesh.rotateX((upper ? 1 : -1) * 0.05);
+
+          // Ajuste de tamaño por pieza concreta (un lateral es más
+          // estrecho que un central). Se guarda como escala base porque
+          // la animación de selección la multiplica.
+          const [sx, sy, sz] = toothScale(code);
+          mesh.scale.set(sx, sy, sz);
+          mesh.visible = visible;
+          mesh.userData = { code, baseY: shape.y, baseScale: [sx, sy, sz] };
 
           group.add(mesh);
           teeth.push(mesh);
         });
+
+        // ── Encía de esta arcada ──
+        const placements = spots.map((spot, i) => ({
+          length: spot.length,
+          halfDepth: metrics[i].blDepth / 2,
+          eminence: rootEminence(codes[i]),
+        }));
+        const gumGeo = buildGingivaGeometry(THREE, curve, placements, {
+          upper,
+          /* El margen se sitúa sobre la corona, no sobre el cuello: como
+             el collar del perfil va por dentro de la pieza, la encía
+             emerge algo más abajo que el plano del margen. Con solo 0.10
+             el borde visible caía justo en la unión amelocementaria y
+             dejaba ver el resalte cervical como una línea brillante
+             cruzando todas las piezas. */
+          marginY: shape.y + (upper ? -0.22 : 0.22),
+          papilla: 0.26,
+        });
+        const gum = new THREE.Mesh(gumGeo, gingivaMaterial());
+        /* La encía recibe sombra (la de las piezas sobre el tejido es la
+           que da profundidad) pero no la proyecta: su silueta apenas
+           aporta y así no entra en el paso de sombras, que recorre la
+           escena entera en cada fotograma. */
+        gum.castShadow = false;
+        gum.receiveShadow = true;
+        gum.visible = visible;
+        group.add(gum);
+        gums.push(gum);
       }
 
-      buildArch(ARCHES.permUpper, { radiusX: 4.6, radiusZ: 3.5, y: 1.1, upper: true, visible: true });
-      buildArch(ARCHES.permLower, { radiusX: 4.2, radiusZ: 3.2, y: -1.1, upper: false, visible: true });
-      buildArch(ARCHES.tempUpper, { radiusX: 3.0, radiusZ: 2.3, y: 1.1, upper: true, visible: false });
-      buildArch(ARCHES.tempLower, { radiusX: 2.8, radiusZ: 2.1, y: -1.1, upper: false, visible: false });
-
-      // Encías: dos toros achatados que enmarcan las arcadas
-      [1.85, -1.85].forEach((gy) => {
-        const g = new THREE.Mesh(
-          new THREE.TorusGeometry(4.3, 0.55, 12, 48, Math.PI * 1.05),
-          new THREE.MeshPhysicalMaterial({
-            color: 0xd99a95, roughness: 0.72, clearcoat: 0.25,
-            transmission: 0.12, thickness: 0.4,
-            transparent: true, opacity: 0.55,
-          }),
-        );
-        g.rotation.x = Math.PI / 2;
-        g.rotation.z = -Math.PI * 0.02;
-        g.position.y = gy;
-        g.scale.set(1, 0.82, 1);
-        group.add(g);
-      });
+      buildArch(ARCHES.permUpper, ARCH_SHAPE.permUpper, { upper: true, visible: true });
+      buildArch(ARCHES.permLower, ARCH_SHAPE.permLower, { upper: false, visible: true });
+      buildArch(ARCHES.tempUpper, ARCH_SHAPE.tempUpper, { upper: true, visible: false });
+      buildArch(ARCHES.tempLower, ARCH_SHAPE.tempLower, { upper: false, visible: false });
 
       scene.add(group);
 
       /* ── Órbita, zoom y desplazamiento (implementación propia, para no
          depender de complementos externos al paquete) ── */
-      const state = { rotX: 0.38, rotY: 0, dist: 13, panX: 0, panY: 0 };
+      const state = { rotX: 0.38, rotY: 0, dist: 15, panX: 0, panY: 0 };
       let dragging = null, lastX = 0, lastY = 0;
 
       const el = renderer.domElement;
@@ -367,14 +462,24 @@ export default function Odontogram3D({
           t.position.y += (target - t.position.y) * Math.min(1, dt * 9);
           const so = t.userData.targetOpacity ?? 1;
           t.material.opacity += (so - t.material.opacity) * Math.min(1, dt * 9);
+          // El realce multiplica la escala propia de la pieza, que ya
+          // distingue un incisivo lateral de un central.
           const sc = t.userData.targetScale ?? 1;
-          t.scale.lerp(new THREE.Vector3(sc, sc, sc), Math.min(1, dt * 9));
-          // Contorno luminoso: aparece y desaparece con suavidad
-          const ol = t.userData.outline;
-          if (ol) {
-            const to = (t.userData.targetOutline ?? 0) * (t.userData.targetOpacity ?? 1);
-            ol.material.opacity += (to - ol.material.opacity) * Math.min(1, dt * 10);
-            ol.visible = ol.material.opacity > 0.01;
+          const [bx, by, bz] = t.userData.baseScale || [1, 1, 1];
+          t.scale.lerp(new THREE.Vector3(bx * sc, by * sc, bz * sc), Math.min(1, dt * 9));
+          /* Realce luminoso: aparece y desaparece con suavidad sobre la
+             emisión que ya lleva la pieza por su estado clínico. */
+          const to = (t.userData.targetOutline ?? 0) * (t.userData.targetOpacity ?? 1);
+          const cur = t.userData.glow ?? 0;
+          const next = cur + (to - cur) * Math.min(1, dt * 10);
+          t.userData.glow = next;
+          const base = t.userData.baseEmissive;
+          if (base) {
+            t.material.emissive.setRGB(
+              base[0] + SELECT_GLOW.r * next * 0.42,
+              base[1] + SELECT_GLOW.g * next * 0.42,
+              base[2] + SELECT_GLOW.b * next * 0.42,
+            );
           }
         }
         renderer.render(scene, camera);
@@ -401,10 +506,14 @@ export default function Odontogram3D({
         el.removeEventListener("wheel", onWheel);
         el.removeEventListener("click", onClick);
         teeth.forEach((t) => {
-          t.userData.outline?.material.dispose();
-          t.geometry.dispose();
-          t.material.dispose();
+          t.material.dispose();   // la geometría es compartida: se libera aparte
         });
+        geoCache.forEach((g) => g.dispose());
+        geoCache.clear();
+        gums.forEach((g) => { g.geometry.dispose(); g.material.dispose(); });
+        textures.forEach((t) => t.dispose());
+        floorGeo.dispose();
+        floorMat.dispose();
         envRT?.dispose();
         renderer.dispose();
         if (el.parentNode) el.parentNode.removeChild(el);
@@ -425,7 +534,10 @@ export default function Odontogram3D({
     const { THREE, teeth } = s;
     const f = FILTERS.find((x) => x.key === filter);
 
-    const ENAMEL = new THREE.Color(0xf6f4ef);
+    /* Base casi blanca: el marfil, la dentina cervical y el cemento de
+       la raíz los aporta el color de vértice de la geometría, así que
+       este color queda libre para llevar el estado clínico. */
+    const ENAMEL = new THREE.Color(0xfdf7ec);
 
     for (const t of teeth) {
       const code = t.userData.code;
@@ -448,22 +560,28 @@ export default function Odontogram3D({
         m.color.copy(ENAMEL);
         m.emissive.setHex(0x000000);
       }
+      // Emisión de partida: el realce de selección se suma a ella
+      t.userData.baseEmissive = [m.emissive.r, m.emissive.g, m.emissive.b];
 
       /* Materiales restauradores: coronas e implantes son metálicos y
          pulidos; las prótesis, cerámicas mates. La diferencia de
-         acabado se percibe antes que la de color. */
+         acabado se percibe antes que la de color.
+
+         `roughness` MULTIPLICA al mapa de rugosidad del esmalte (corona
+         pulida, raíz mate): 1 deja la textura tal cual, por debajo pule
+         y por encima matea. */
       if (/implante/.test(label)) {
-        m.metalness = 0.92; m.roughness = 0.24; m.transmission = 0;
+        m.metalness = 0.92; m.roughness = 0.55; m.transmission = 0;
         m.clearcoat = 0.4;
       } else if (/corona/.test(label)) {
-        m.metalness = 0.45; m.roughness = 0.18; m.transmission = 0.05;
+        m.metalness = 0.45; m.roughness = 0.45; m.transmission = 0.05;
         m.clearcoat = 1.0;
       } else if (/pr[óo]tesis/.test(label)) {
-        m.metalness = 0.05; m.roughness = 0.5; m.transmission = 0.06;
+        m.metalness = 0.05; m.roughness = 1.25; m.transmission = 0.06;
         m.clearcoat = 0.5;
       } else {
-        m.metalness = 0.0; m.roughness = 0.28; m.transmission = 0.18;
-        m.clearcoat = 0.85;
+        m.metalness = 0.0; m.roughness = 1.0; m.transmission = 0.16;
+        m.clearcoat = 0.55;
       }
 
       // Filtro: lo no coincidente se atenúa, nunca se oculta, para no
@@ -502,7 +620,7 @@ export default function Odontogram3D({
   const resetView = useCallback(() => {
     const s = sceneRef.current;
     if (!s) return;
-    Object.assign(s.state, { rotX: 0.38, rotY: 0, dist: 13, panX: 0, panY: 0 });
+    Object.assign(s.state, { rotX: 0.38, rotY: 0, dist: 15, panX: 0, panY: 0 });
   }, []);
 
   const selSurfaces = selectedTooth ? surfacesByTooth[selectedTooth] : null;

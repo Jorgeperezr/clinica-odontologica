@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 52 completado — ficha periodontal completa
+## Estado actual: Sprint 53 completado — realismo visual del odontograma 3D
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -439,6 +439,62 @@ Sustituye la implementación del Sprint 51. Con la autorización explícita para
 - **Guardado diferido y optimista:** los cambios se acumulan por pieza y se envían 450 ms después de la última edición (escribir seis sondajes produce una petición, no seis), con actualización inmediata en pantalla y recarga posterior para traer derivados e índices.
 - **Nota de arquitectura documentada en el propio archivo:** este modelo es un híbrido deliberado y el único de los cuatro que no es renderizador puro. Los estados por superficie siguen llegando por props desde `OdontogramTab` —así que registrar aquí se refleja al instante en el clásico y en el 3D—, mientras las mediciones periodontales, que ningún otro modelo posee, las gestiona este componente contra sus propios endpoints. Verificado que los otros tres modelos siguen sin escrituras. El formulario MSP 033 continúa usando el odontograma clásico, como se acordó.
 - La separación en tablas propias deja la arquitectura preparada para ortodoncia e implantología como capas adicionales sobre las mismas piezas.
+
+### Sprint 53 — Realismo visual del odontograma 3D (hecho)
+100% presentación: no cambian los datos, ni la lógica clínica, ni la
+interacción (rotación, zoom, selección y gestos táctiles siguen igual).
+Se corrigieron además tres defectos de malla que deformaban el modelo.
+
+- **Tres errores de fondo corregidos:**
+  1. *Piezas giradas 90°.* La geometría define vestibular en el eje X local,
+     pero la colocación usaba `lookAt`, que alinea el eje Z. Los incisivos se
+     veían como agujas y las coronas se solapaban entre sí. Ahora la
+     orientación es explícita (X mesio-distal siguiendo la tangente de la
+     arcada, Z vestibular hacia fuera).
+  2. *Caras de la raíz invertidas.* Corona y raíz se cosían con el mismo
+     orden de vértices pese a recorrerse en sentidos opuestos, así que las
+     caras de la raíz miraban hacia dentro, el descarte de caras traseras se
+     las comía y se abría un hueco negro en el cuello de cada pieza.
+  3. *Normales corruptas.* El arreglo de la costura UV recorría los vértices
+     a saltos fijos, pero entre anillo y anillo hay vértices sueltos (fosa
+     central, ápices, tapas de la furca); a partir del primero, promediaba
+     normales de vértices sin relación.
+- **Anatomía dental real** (`toothGeometry.js`): sección transversal por
+  familia mediante superelipse (el molar tiende al cuadrado redondeado, el
+  incisivo a una lámina), achatamiento vestíbulo-lingual progresivo que
+  convierte el borde incisal en un cincel, y **cara oclusal resuelta como
+  campo de altura** —cúspides con su número y posición por pieza, fosa
+  central, surcos de desarrollo en cruz, rebordes marginales y cresta
+  oblicua del molar superior— en vez de una tapa plana. Proporciones
+  ajustadas a las medias reales de cada pieza.
+- **Encía nueva** (`gingivaGeometry.js`): sustituye los dos toros achatados,
+  que al ser circunferencias sobre arcadas elípticas atravesaban unas piezas
+  y dejaban otras al aire. Se genera sobre la MISMA curva que coloca los
+  dientes, con margen festoneado (cénit sobre cada pieza y papila en cada
+  tronera), eminencias radiculares, encía adherida, unión mucogingival y
+  fondo de vestíbulo. El borde visible es la intersección con la pieza, de
+  modo que sigue su contorno y no puede dejar huecos.
+- **Reparto por longitud de arco** (`archCurve.js`): las piezas se distribuyen
+  según su ancho mesio-distal real. En una elipse, pasos angulares iguales dan
+  separaciones desiguales, que es lo que amontonaba los molares.
+- **Texturas procedurales** (`dentalTextures.js`), dibujadas en canvas y
+  compartidas: rugosidad y microrrelieve del esmalte (perikimatíes en la
+  corona, cemento mate en la raíz) y punteado de cáscara de naranja de la
+  encía adherida. Un material de rugosidad constante da un brillo uniforme,
+  que es el rasgo que delata el plástico.
+- **Color por vértice** de esmalte translúcido a dentina cervical y cemento,
+  dejando el color del material libre para el estado clínico.
+- **Luz y sombra:** cuatro focos (principal cálida con sombra, relleno frío,
+  contraluz y rebote inferior), encuadre del mapa de sombras ajustado a las
+  arcadas y brillo especular más amplio y suave.
+- **Rendimiento:** malla **indexada** (un tercio de la memoria de vértices) y
+  **compartida** entre piezas equivalentes — de 52 mallas únicas a diez—,
+  la encía no entra en el paso de sombras y desaparecen las 52 mallas de
+  contorno: el realce de selección pasa a ser una emisión sobre el propio
+  material. Medido en el rasterizador por software del entorno de pruebas,
+  el coste queda ~12 % por encima del anterior con mucha más superficie en
+  pantalla; en GPU real la diferencia es menor.
+
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 
