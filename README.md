@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 54 completado — anatomía y acabado del odontograma 3D
+## Estado actual: Sprint 55 completado — oclusión ambiental y normales en el odontograma 3D
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -540,6 +540,52 @@ cambian los datos, la lógica clínica ni la interacción.
 - **Iluminación contrastada:** el reparto de intensidades entre los cuatro
   focos era demasiado plano; repartir la luz por igual ilumina todas las
   caras y anula el volumen.
+
+
+### Sprint 55 — Oclusión ambiental en pantalla y mapas de normales (hecho)
+
+**Nota de alcance, importante.** El objetivo de este sprint era sustituir
+la geometría procedural por mallas dentales escaneadas de alta calidad.
+No fue posible en este entorno: ninguna de las fuentes con licencia
+utilizable resultó accesible (NIH 3D devuelve 404 en su API, BodyParts3D
+y Smithsonian responden 403, la API de GitHub está limitada a los
+repositorios de la sesión y los paquetes dentales de npm resultaron ser
+también procedurales, sin mallas). Además, las fuentes anatómicas
+realistas que existen suelen estar bajo CC BY-SA —licencia vírica— lo que
+para un producto clínico comercial es una decisión que corresponde
+tomar al responsable del proyecto, no darla por hecha.
+
+Ante eso, este sprint ataca la otra mitad del problema: **el motor de
+render**, que es donde se juega buena parte del acabado profesional.
+
+- **Oclusión ambiental en espacio de pantalla (GTAO):** cadena de
+  post-proceso con `EffectComposer`. Los rincones donde dos superficies
+  se acercan —tronera interdental, surco gingival, fondo de fisura,
+  encuentro de corona y encía— reciben menos luz del entorno; ninguna luz
+  direccional reproduce eso, hay que calcularlo desde la profundidad y
+  las normales de la escena. Es lo que más acerca el resultado al aspecto
+  de un render clínico.
+- **Repliegue seguro:** si el paso no está disponible o falla al
+  compilar, se dibuja directo como antes. La escena nunca depende del
+  post-proceso.
+- **Salvaguarda de rendimiento:** se mide el coste real durante los
+  primeros 40 fotogramas y, si el equipo no sostiene 35 fps, el
+  post-proceso se desactiva solo. Antes fluidez que oclusión.
+- **Mapas de normales** en sustitución de los de relieve: la pendiente va
+  precalculada en la textura en vez de derivarse por píxel, así que el
+  microrrelieve se ve firme y cuesta menos. Se generan por Sobel desde el
+  mismo campo de altura, de modo que relieve y normales no discrepan.
+- La captura de imagen para informes pasa por la MISMA cadena que la
+  pantalla; si no, saldría sin oclusión y no coincidiría con lo que ve el
+  profesional.
+
+**Lo que sigue pendiente para el salto de realismo:** mallas por pieza de
+origen escaneado. Requiere decidir la licencia (CC BY-SA obliga a
+compartir en las mismas condiciones), un pipeline de conversión a glTF
+con compresión, y normalizar orientación y escala de cada pieza al marco
+local que ya usa el sistema (`+X` mesio-distal, `+Z` vestibular, cuello
+en el origen). La capa de colocación, la encía, el raycasting y la
+sincronización clínica están preparadas para recibirlas sin cambios.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.

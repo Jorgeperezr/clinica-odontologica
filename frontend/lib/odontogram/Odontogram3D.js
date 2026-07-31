@@ -38,8 +38,8 @@ import { getToothGeometry, toothMetrics, toothPose, toothScale } from "./toothGe
 import { createArchCurve, distributeAlongArch } from "./archCurve";
 import { buildGingivaGeometry } from "./gingivaGeometry";
 import {
-  enamelBumpTexture, enamelRoughnessTexture,
-  gingivaBumpTexture, gingivaRoughnessTexture,
+  enamelNormalTexture, enamelRoughnessTexture,
+  gingivaNormalTexture, gingivaRoughnessTexture,
 } from "./dentalTextures";
 
 /** Filtros clínicos: resaltan solo las piezas cuyo estado coincide. */
@@ -212,10 +212,51 @@ export default function Odontogram3D({
          Se generan una vez y las comparten todas las piezas: es lo que
          rompe el brillo uniforme del plástico sin coste por objeto. */
       const texRoughEnamel = enamelRoughnessTexture(THREE);
-      const texBumpEnamel = enamelBumpTexture(THREE);
+      const texNormEnamel = enamelNormalTexture(THREE);
       const texRoughGum = gingivaRoughnessTexture(THREE);
-      const texBumpGum = gingivaBumpTexture(THREE);
-      const textures = [texRoughEnamel, texBumpEnamel, texRoughGum, texBumpGum];
+      const texNormGum = gingivaNormalTexture(THREE);
+      const textures = [texRoughEnamel, texNormEnamel, texRoughGum, texNormGum];
+
+      /* ── Oclusión ambiental en espacio de pantalla (GTAO) ──
+         El salto de acabado que separa un render clínico de uno plano no
+         está en la malla sino en la luz de contacto: los rincones donde
+         dos superficies se acercan —tronera interdental, surco gingival,
+         fondo de fisura, encuentro entre corona y encía— reciben menos
+         luz del entorno. Ninguna luz direccional reproduce eso; hay que
+         calcularlo a partir de la profundidad y las normales de la
+         escena, que es justo lo que hace GTAO.
+
+         Se monta con repliegue: si el paso no está disponible o falla al
+         compilar, se dibuja directo como hasta ahora. La escena nunca
+         depende de que el post-proceso exista. */
+      let composer = null;
+      let gtao = null;
+      try {
+        const [{ EffectComposer }, { RenderPass }, { GTAOPass }, { OutputPass }] =
+          await Promise.all([
+            import("three/examples/jsm/postprocessing/EffectComposer.js"),
+            import("three/examples/jsm/postprocessing/RenderPass.js"),
+            import("three/examples/jsm/postprocessing/GTAOPass.js"),
+            import("three/examples/jsm/postprocessing/OutputPass.js"),
+          ]);
+        composer = new EffectComposer(renderer);
+        composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        composer.setSize(width, height);
+        composer.addPass(new RenderPass(scene, camera));
+        gtao = new GTAOPass(scene, camera, width, height);
+        // Radio en unidades de escena: las arcadas miden ~11, así que un
+        // radio corto mantiene la sombra pegada a los contactos en vez de
+        // ensuciar toda la pieza.
+        gtao.updateGtaoMaterial({
+          radius: 0.32, distanceExponent: 1.4, thickness: 0.5,
+          scale: 1.0, samples: 12, distanceFallOff: 1.0, screenSpaceRadius: false,
+        });
+        gtao.blendIntensity = 0.9;
+        composer.addPass(gtao);
+        composer.addPass(new OutputPass());
+      } catch {
+        composer = null;   // se dibuja sin post-proceso
+      }
 
       // ── Arcadas ──
       const teeth = [];
@@ -242,8 +283,8 @@ export default function Odontogram3D({
           vertexColors: true,
           roughness: 1,
           roughnessMap: texRoughEnamel,
-          bumpMap: texBumpEnamel,
-          bumpScale: 0.018,
+          normalMap: texNormEnamel,
+          normalScale: new THREE.Vector2(0.16, 0.16),
           metalness: 0.0,
           /* Barniz suave y amplio. Con clearcoat casi 1 y muy liso, el
              reflejo se concentra en un punto blanco durísimo y la pieza
@@ -283,8 +324,8 @@ export default function Odontogram3D({
           vertexColors: true,
           roughness: 1,
           roughnessMap: texRoughGum,
-          bumpMap: texBumpGum,
-          bumpScale: 0.036,
+          normalMap: texNormGum,
+          normalScale: new THREE.Vector2(0.45, 0.45),
           metalness: 0,
           /* Sin capa de barniz: en la encía el brillo húmedo lo da ya el
              mapa de rugosidad (margen brillante, encía adherida mate), y
@@ -466,9 +507,23 @@ export default function Odontogram3D({
       // ── Bucle de render con transiciones suaves ──
       let raf;
       const clock = new THREE.Clock();
+      /* Salvaguarda de rendimiento. El post-proceso de oclusión ambiental
+         mejora mucho el acabado pero cuesta una pasada extra por
+         fotograma, y el abanico de tabletas es demasiado amplio para
+         decidirlo a priori. Se mide el coste real durante el primer
+         medio segundo y, si el equipo no lo sostiene con holgura, se
+         desactiva solo: antes fluidez que oclusión. */
+      let probeFrames = 0, probeTime = 0;
       function loop() {
         raf = requestAnimationFrame(loop);
         const dt = Math.min(clock.getDelta(), 0.05);
+        if (composer && probeFrames < 40) {
+          probeFrames++;
+          probeTime += dt;
+          if (probeFrames === 40 && probeTime / 40 > 0.028) {   // < 35 fps
+            composer = null;
+          }
+        }
 
         // Cámara orbital interpolada
         const cx = Math.sin(state.rotY) * Math.cos(state.rotX) * state.dist;
@@ -503,7 +558,8 @@ export default function Odontogram3D({
             );
           }
         }
-        renderer.render(scene, camera);
+        if (composer) composer.render();
+        else renderer.render(scene, camera);
       }
       loop();
 
@@ -512,10 +568,12 @@ export default function Odontogram3D({
         camera.aspect = w / height;
         camera.updateProjectionMatrix();
         renderer.setSize(w, height);
+        composer?.setSize(w, height);
+        gtao?.setSize(w, height);
       };
       window.addEventListener("resize", onResize);
 
-      sceneRef.current = { THREE, scene, camera, renderer, teeth, state };
+      sceneRef.current = { THREE, scene, camera, renderer, teeth, state, composer };
       if (!cancelled) setReady(true);
 
       cleanup = () => {
@@ -535,6 +593,8 @@ export default function Odontogram3D({
         textures.forEach((t) => t.dispose());
         floorGeo.dispose();
         floorMat.dispose();
+        gtao?.dispose?.();
+        composer?.dispose?.();
         envRT?.dispose();
         renderer.dispose();
         if (el.parentNode) el.parentNode.removeChild(el);
@@ -626,7 +686,11 @@ export default function Odontogram3D({
   const capture = useCallback(() => {
     const s = sceneRef.current;
     if (!s) return;
-    s.renderer.render(s.scene, s.camera);
+    // Se redibuja por la MISMA cadena que la pantalla: si se llamara a
+    // renderer.render directamente, la imagen del informe saldría sin la
+    // oclusión ambiental y no coincidiría con lo que ve el profesional.
+    if (s.composer) s.composer.render();
+    else s.renderer.render(s.scene, s.camera);
     s.renderer.domElement.toBlob((blob) => {
       if (!blob) return;
       const url = URL.createObjectURL(blob);
