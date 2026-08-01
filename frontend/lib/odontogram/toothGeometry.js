@@ -387,7 +387,13 @@ function occlusalVariant(code) {
   const fam = toothFamily(code);
   const n = Number(String(code).slice(-1));
   if (fam === "molar") return isUpper(code) ? "mu" : (n === 6 ? "m5" : "m4");
-  if (fam === "premolar") return isUpper(code) ? "pu" : "pl";
+  /* Primero y segundo premolar tienen cara oclusal distinta, así que son
+     mallas distintas. En los superiores se separaban por casualidad (el
+     primero tiene dos raíces y el segundo una), pero los INFERIORES
+     tienen una raíz los dos y compartían malla: ganaba el que se
+     construyera primero. Mismo fallo que ya apareció en molares e
+     incisivos. */
+  if (fam === "premolar") return `${isUpper(code) ? "pu" : "pl"}${n === 4 ? "1" : "2"}`;
   // El lateral redondea más sus ángulos incisales que el central: es otra
   // cara oclusal y por tanto otra malla.
   if (fam === "incisivo") return n === 2 ? "i2" : "i1";
@@ -404,22 +410,40 @@ function occlusalField(fam, code) {
        distal —son las cinco del patrón "Y5"— y el superior tiene la
        mesiolingual dominante unida a la distovestibular por la cresta
        oblicua. */
+    /* Cúspides FUNCIONALES (las que ocluyen contra la fosa antagonista)
+       frente a las no funcionales: en el maxilar las palatinas soportan
+       la oclusión y son más altas y romas; en la mandíbula lo son las
+       vestibulares. La diferencia de altura entre unas y otras es un
+       rasgo clínico, no un adorno. */
     const cusps = up
-      ? [{ u: -0.54, w: 0.54, a: 1.00 }, { u: 0.50, w: 0.50, a: 0.92 },
-         { u: -0.52, w: -0.54, a: 1.04 }, { u: 0.52, w: -0.48, a: 0.84 }]
-      : [{ u: -0.54, w: 0.52, a: 1.00 }, { u: 0.46, w: 0.54, a: 0.96 },
-         { u: -0.52, w: -0.52, a: 0.94 }, { u: 0.50, w: -0.50, a: 0.88 }];
+      ? [{ u: -0.54, w: 0.54, a: 0.90 }, { u: 0.50, w: 0.50, a: 0.84 },
+         { u: -0.52, w: -0.54, a: 1.08 }, { u: 0.52, w: -0.48, a: 0.96 }]
+      : [{ u: -0.54, w: 0.52, a: 1.06 }, { u: 0.46, w: 0.54, a: 1.00 },
+         { u: -0.52, w: -0.52, a: 0.88 }, { u: 0.50, w: -0.50, a: 0.82 }];
     if (!up && n === 6) cusps.push({ u: 0.84, w: 0.10, a: 0.82 });
     return (u, w) => {
       let h = 0;
-      for (const c of cusps) h += c.a * gauss((u - c.u) ** 2 + (w - c.w) ** 2, 0.26);
+      for (const c of cusps) h += c.a * gauss((u - c.u) ** 2 + (w - c.w) ** 2, 0.24);
+
       // Rebordes marginales mesial y distal
-      h += 0.44 * gauss((Math.abs(u) - 0.88) ** 2, 0.040) * (1 - 0.5 * w * w);
-      // Surcos de desarrollo en cruz
-      h -= 0.34 * gauss(u * u, 0.014);
-      h -= 0.30 * gauss(w * w, 0.014);
+      h += 0.46 * gauss((Math.abs(u) - 0.88) ** 2, 0.038) * (1 - 0.5 * w * w);
+
+      // Surcos de desarrollo principales, en cruz
+      h -= 0.34 * gauss(u * u, 0.013);
+      h -= 0.30 * gauss(w * w, 0.013);
+
+      /* NOTA (Sprint 59). Se intentó ampliar el relieve molar con crestas
+         triangulares, surco vestibular, fositas accesorias y fisuras
+         secundarias. El conjunto RESTA legibilidad en vez de sumarla: las
+         crestas rellenan los valles entre cúspides y el resultado es una
+         mesa oclusal más plana que la de partida, comprobado en la vista
+         oclusal. Se vuelve al relieve anterior —cúspides, fosa central,
+         surcos en cruz, rebordes marginales y cresta oblicua—, que sí se
+         lee. Queda pendiente rehacerlo midiendo el efecto de cada término
+         por separado en vez de sumarlos todos a la vez. */
+
       // Cresta oblicua del molar superior: une la mesiolingual con la distovestibular
-      if (up) h += 0.24 * gauss((u * 0.7 + w * 0.7) ** 2, 0.045);
+      if (up) h += 0.26 * gauss((u * 0.7 + w * 0.7) ** 2, 0.042);
       return h;
     };
   }
@@ -433,15 +457,25 @@ function occlusalField(fam, code) {
        recto; en el segundo las cúspides se equilibran y el surco es más
        corto y sinuoso. */
     const first = n === 4;
-    const ling = up ? (first ? 0.80 : 0.92) : (first ? 0.56 : 0.76);
+    const ling = up ? (first ? 0.78 : 0.93) : (first ? 0.54 : 0.78);
     return (u, w) => {
-      let h = 1.00 * gauss(u * u * (first ? 0.44 : 0.56) + (w - 0.56) ** 2, 0.30);
-      h += ling * gauss(u * u * 0.55 + (w + 0.54) ** 2, 0.26);
+      // Cúspides vestibular y lingual
+      let h = 1.00 * gauss(u * u * (first ? 0.42 : 0.60) + (w - 0.56) ** 2, 0.28);
+      h += ling * gauss(u * u * (first ? 0.55 : 0.60) + (w + 0.54) ** 2, 0.25);
       // Crestas triangulares que bajan de cada cúspide hacia el surco
-      h += 0.20 * gauss(u * u, 0.05) * gauss((Math.abs(w) - 0.34) ** 2, 0.06);
-      h += 0.42 * gauss((Math.abs(u) - 0.84) ** 2, 0.034) * (1 - 0.6 * w * w);
-      const groove = first ? 0.40 : 0.32;
-      h -= groove * gauss((w + (first ? 0 : 0.06 * Math.cos(2 * u))) ** 2, 0.016);
+      h += 0.22 * gauss(u * u, 0.05) * gauss((Math.abs(w) - 0.32) ** 2, 0.055);
+      // Rebordes marginales mesial y distal
+      h += 0.44 * gauss((Math.abs(u) - 0.84) ** 2, 0.032) * (1 - 0.6 * w * w);
+      /* Surco central. En el primero es largo y recto; en el segundo es
+         más corto y se interrumpe en el centro, dejando dos fositas
+         —mesial y distal— en vez de un canal continuo. Esa interrupción
+         es lo que los distingue en la vista oclusal. */
+      if (first) {
+        h -= 0.42 * gauss(w * w, 0.015);
+      } else {
+        h -= 0.40 * gauss(w * w, 0.015) * (0.45 + 0.55 * gauss(u * u, 0.30));
+        h -= 0.16 * gauss((Math.abs(u) - 0.42) ** 2, 0.020) * gauss(w * w, 0.05);
+      }
       return h;
     };
   }
@@ -530,6 +564,7 @@ export function buildToothGeometry(THREE, code) {
   const fam = toothFamily(code);
   const [mw, bl, ch, rh] = dims(code);
   const nRoots = rootCount(code);
+  const ms = mesialSign(code);
   const H = occlusalField(fam, code);
   const relief = (fam === "incisivo" ? 0.12 : 0.21) * ch;
 
@@ -712,12 +747,25 @@ export function buildToothGeometry(THREE, code) {
   }
   const grooveDepth = fam === "premolar" ? 0.20 : fam === "molar" ? 0.16 : 0.10;
 
+  /* Torsión radicular: la sección gira poco a poco alrededor del eje al
+     descender. Es sutil pero rompe el aspecto de extrusión recta, que es
+     lo que hace que una raíz parezca torneada a máquina. */
+  const rootTwist = { incisivo: 0.16, canino: 0.20, premolar: 0.26, molar: 0.30 }[fam];
+
+  /* La sección cambia de forma con la profundidad: ovalada en el cuello
+     y progresivamente más aplanada en sentido mesio-distal hacia el
+     ápice, sobre todo en premolares y raíces de molares. */
+  const rootFlatten = { incisivo: 0.10, canino: 0.14, premolar: 0.26, molar: 0.22 }[fam];
+
   function rootRing(v, ox, oz, thick, len) {
     return (theta) => {
       const taper = rootProfile(v);
-      const r = cervical(theta) * taper * thick * rootGroove(theta, v, grooveDepth);
+      // Torsión y aplanamiento progresivos de la sección
+      const th = theta + rootTwist * v * v * ms;
+      const flat = 1 - rootFlatten * v * Math.pow(Math.abs(Math.cos(th)), 2);
+      const r = cervical(th) * taper * thick * flat * rootGroove(th, v, grooveDepth);
       // La curvatura se acelera hacia el ápice, no crece de forma lineal
-      const bend = rootCurve * mw * Math.pow(v, 1.8);
+      const bend = rootCurve * mw * Math.pow(v, 1.8) * ms;
       return [
         Math.cos(theta) * r + ox * v + bend,
         -v * len + cejScallop(theta, ch) * (1 - Math.min(1, v * 3)),
@@ -767,12 +815,16 @@ export function buildToothGeometry(THREE, code) {
       nor.push(0, -1, 0); uvs.push(0.5, 0); col.push(s[0], s[1], s[2]);
       for (let i = 0; i < RADIAL; i++) idx.push(prev + i + 1, prev + i, c);
     }
+    /* Divergencia real entre raíces: no son dos copias simétricas. En el
+       molar inferior la mesial es más ancha, más larga y se curva más que
+       la distal; en el superior la palatina es la mayor y las
+       vestibulares divergen menos entre sí. */
     const specs = nRoots === 2
-      ? [{ ox: -mw * 0.34, oz: 0, thick: 0.60, len: rh },
-         { ox: mw * 0.34, oz: 0, thick: 0.60, len: rh }]
-      : [{ ox: -mw * 0.30, oz: bl * 0.26, thick: 0.52, len: rh * 0.90 },
-         { ox: mw * 0.30, oz: bl * 0.26, thick: 0.52, len: rh * 0.90 },
-         { ox: 0, oz: -bl * 0.30, thick: 0.60, len: rh }];
+      ? [{ ox: -mw * 0.38 * ms, oz: 0, thick: 0.66, len: rh * 1.04 },   // mesial
+         { ox: mw * 0.30 * ms, oz: 0, thick: 0.56, len: rh * 0.94 }]    // distal
+      : [{ ox: -mw * 0.34 * ms, oz: bl * 0.28, thick: 0.54, len: rh * 0.92 },
+         { ox: mw * 0.26 * ms, oz: bl * 0.24, thick: 0.48, len: rh * 0.86 },
+         { ox: 0.04 * mw * ms, oz: -bl * 0.32, thick: 0.64, len: rh * 1.06 }];
     for (const sp of specs) {
       const startRing = addRing(rootRing(furca, sp.ox, sp.oz, sp.thick, sp.len),
                                 0.35 * (1 - furca), rootShade(furca));

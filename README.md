@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 58 completado — asimetría mesio-distal y encía por zonas
+## Estado actual: Sprint 59 — anatomía radicular y premolares (molares pendientes)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -694,6 +694,43 @@ Sin tocar `meshProvider.js`, el odontograma clásico, el compacto,
   y la izquierda del mismo número son mallas distintas. Pasa de unas doce
   mallas únicas a unas veinticuatro, cifra irrelevante frente a las 52
   piezas de la boca.
+
+
+### Sprint 59 — Anatomía radicular, premolares y una incidencia descartada (parcial)
+
+- **Bug corregido en el caché:** el primer y el segundo premolar
+  INFERIORES compartían malla pese a tener cara oclusal distinta (los dos
+  tienen una sola raíz, así que la clave no los separaba; en los
+  superiores se separaban por casualidad porque el primero tiene dos).
+  Ganaba el que se construyera primero. Es el mismo fallo que ya apareció
+  en molares inferiores e incisivos: ahora la clave incluye el ordinal.
+- **Segundo premolar diferenciado:** su surco central se interrumpe en el
+  centro y deja dos fositas —mesial y distal— en vez del canal continuo
+  del primero, que es lo que los distingue en la vista oclusal. Se
+  añadieron además las crestas triangulares que bajan de cada cúspide.
+- **Raíces:** torsión progresiva de la sección al descender (rompe el
+  aspecto de extrusión recta), aplanamiento mesio-distal creciente hacia
+  el ápice, y divergencia real entre raíces —en el molar inferior la
+  mesial es más ancha, más larga y se curva más que la distal; en el
+  superior la palatina es la mayor—. Antes eran copias simétricas.
+- **Cúspides funcionales frente a no funcionales:** en el maxilar las
+  palatinas soportan la oclusión y son más altas y romas; en la mandíbula
+  lo son las vestibulares.
+
+**Incidencia descartada — caras oclusales oscuras.** No era un defecto del
+modelo: el banco de pruebas con el que se revisaba la anatomía no montaba
+el mapa de entorno que la escena real sí usa, de modo que las caras
+orientadas hacia arriba no tenían nada que reflejar. Añadido el entorno al
+banco, el oscurecimiento desaparece. La oclusión ambiental horneada y las
+normales están correctas.
+
+**Pendiente — relieve molar.** Se intentó ampliarlo con crestas
+triangulares, surco vestibular, fositas accesorias y fisuras secundarias.
+El conjunto resta legibilidad en vez de sumarla: las crestas rellenan los
+valles entre cúspides y la mesa oclusal queda más plana que la de
+partida. Se ha vuelto al relieve anterior, que sí se lee, y queda anotado
+en el propio archivo. Hay que rehacerlo midiendo el efecto de cada
+término por separado, no sumándolos todos a la vez.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
