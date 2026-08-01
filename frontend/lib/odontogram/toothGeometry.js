@@ -69,6 +69,18 @@ function clustered(k, n) {
    es lo que permite subir el detalle de la cara oclusal sin disparar el
    número de triángulos. */
 
+/**
+ * Hacia dónde cae MESIAL en el eje X local. Las piezas se reparten sobre
+ * la curva de derecha a izquierda, así que en los cuadrantes del lado
+ * derecho del paciente (1, 4 y sus temporales 5 y 8) mesial queda en +X,
+ * y en los del izquierdo en −X. Hace falta porque una corona NO es
+ * simétrica: el ángulo mesioincisal es casi recto y el distoincisal
+ * claramente redondeado, y el cíngulo se desplaza a distal.
+ */
+function mesialSign(code) {
+  return ["1", "4", "5", "8"].includes(String(code)[0]) ? 1 : -1;
+}
+
 /** ¿Pieza temporal? (cuadrantes 5 a 8) */
 function isDeciduous(code) {
   return ["5", "6", "7", "8"].includes(String(code)[0]);
@@ -385,6 +397,7 @@ function occlusalVariant(code) {
 function occlusalField(fam, code) {
   const n = Number(String(code).slice(-1));
   const up = isUpper(code);
+  const ms = mesialSign(code);
 
   if (fam === "molar") {
     /* Cuatro cúspides (MV, DV, ML, DL). El primer molar inferior suma la
@@ -415,12 +428,20 @@ function occlusalField(fam, code) {
     /* Dos cúspides enfrentadas con surco central mesio-distal. En los
        superiores la vestibular domina; en los inferiores la lingual es
        claramente menor, sobre todo en el primero. */
-    const ling = up ? 0.88 : (n === 4 ? 0.58 : 0.74);
+    /* Primero y segundo premolar NO comparten cara oclusal: en el
+       primero la cúspide vestibular domina y el surco central es largo y
+       recto; en el segundo las cúspides se equilibran y el surco es más
+       corto y sinuoso. */
+    const first = n === 4;
+    const ling = up ? (first ? 0.80 : 0.92) : (first ? 0.56 : 0.76);
     return (u, w) => {
-      let h = 1.00 * gauss(u * u * 0.5 + (w - 0.56) ** 2, 0.30);
-      h += ling * gauss(u * u * 0.5 + (w + 0.54) ** 2, 0.26);
+      let h = 1.00 * gauss(u * u * (first ? 0.44 : 0.56) + (w - 0.56) ** 2, 0.30);
+      h += ling * gauss(u * u * 0.55 + (w + 0.54) ** 2, 0.26);
+      // Crestas triangulares que bajan de cada cúspide hacia el surco
+      h += 0.20 * gauss(u * u, 0.05) * gauss((Math.abs(w) - 0.34) ** 2, 0.06);
       h += 0.42 * gauss((Math.abs(u) - 0.84) ** 2, 0.034) * (1 - 0.6 * w * w);
-      h -= 0.38 * gauss(w * w, 0.016);                      // surco central
+      const groove = first ? 0.40 : 0.32;
+      h -= groove * gauss((w + (first ? 0 : 0.06 * Math.cos(2 * u))) ** 2, 0.016);
       return h;
     };
   }
@@ -428,10 +449,16 @@ function occlusalField(fam, code) {
   if (fam === "canino") {
     /* Cúspide única desplazada a mesial, con sus dos vertientes, las
        crestas marginales y el cíngulo lingual. */
+    /* La punta cae ligeramente hacia DISTAL, así que la vertiente mesial
+       es corta y empinada y la distal larga y tendida. Es lo que da al
+       canino su asimetría característica. */
     return (u, w) => {
-      let h = 1.06 * gauss((u + 0.07) ** 2 * 0.85 + (w - 0.06) ** 2 * 0.65, 0.30);
-      h += 0.22 * gauss((Math.abs(u) - 0.80) ** 2, 0.05) * gauss((w + 0.2) ** 2, 0.4);
-      h += 0.32 * gauss((w + 0.74) ** 2, 0.09) * (1 - 0.7 * u * u);  // cíngulo
+      const tip = -0.12 * ms;   // desplazamiento distal de la cúspide
+      let h = 1.08 * gauss((u - tip) ** 2 * 0.85 + (w - 0.06) ** 2 * 0.65, 0.28);
+      // Reborde mesial más corto y marcado que el distal
+      h += 0.26 * gauss((u - 0.78 * ms) ** 2, 0.045) * gauss((w + 0.2) ** 2, 0.4);
+      h += 0.17 * gauss((u + 0.84 * ms) ** 2, 0.075) * gauss((w + 0.2) ** 2, 0.45);
+      h += 0.34 * gauss((w + 0.74) ** 2, 0.09) * (1 - 0.7 * (u + 0.15 * ms) ** 2);
       h -= 0.20 * gauss((w + 0.36) ** 2, 0.05);                      // fosa lingual
       return Math.max(h, 0.04);
     };
@@ -443,12 +470,21 @@ function occlusalField(fam, code) {
      y lingual, lo que produce una arista recta —un cincel— en vez de una
      cúpula. Los mamelones se insinúan apenas, como en un diente joven, y
      los ángulos incisales se redondean algo en el lateral. */
-  const round = n === 2 ? 0.26 : 0.16;
+  /* El lateral redondea bastante más sus ángulos que el central. Y en
+     ambos, el ángulo MESIOINCISAL es casi recto mientras el DISTOINCISAL
+     se redondea: es el rasgo que permite identificar de un vistazo si un
+     incisivo es del lado derecho o del izquierdo, y sin él las dos
+     hemiarcadas se ven como una imagen especular perfecta. */
+  const base = n === 2 ? 0.30 : 0.18;
+  const roundM = base * 0.5, roundD = base * 1.9;
   return (u, w) => {
-    let h = 1.0 * gauss((w - 0.10) ** 2, 0.10) * (1 - round * Math.pow(u, 6));
+    const mesialSide = u * ms > 0;
+    const rr = mesialSide ? roundM : roundD;
+    let h = 1.0 * gauss((w - 0.10) ** 2, 0.10) * (1 - rr * Math.pow(Math.abs(u), 5.5));
     h += 0.05 * Math.cos(3 * Math.PI * u) * gauss((w - 0.10) ** 2, 0.055);
     h -= 0.28 * gauss((w + 0.45) ** 2, 0.15);                        // fosa lingual
-    h += 0.32 * gauss((w + 0.82) ** 2, 0.065) * (1 - 0.6 * u * u);   // cíngulo
+    // Cíngulo desplazado hacia distal, como en el diente real
+    h += 0.32 * gauss((w + 0.82) ** 2, 0.065) * (1 - 0.6 * (u + 0.18 * ms) ** 2);
     return Math.max(h, 0.02);
   };
 }
@@ -784,8 +820,13 @@ export function buildToothGeometry(THREE, code) {
  * aporta y lo libera quien construye la escena.
  */
 export function toothGeometryKey(code) {
+  /* El lado entra en la clave: las coronas son asimétricas en sentido
+     mesio-distal, así que la pieza derecha y la izquierda del mismo
+     número son mallas distintas (imágenes especulares). Pasa de unas
+     doce mallas únicas a unas veinticuatro, cifra que sigue siendo
+     irrelevante frente a las 52 piezas de la boca. */
   return `${toothFamily(code)}|${isDeciduous(code) ? "d" : "p"}`
-       + `|${rootCount(code)}|${occlusalVariant(code)}`;
+       + `|${rootCount(code)}|${occlusalVariant(code)}|${mesialSign(code)}`;
 }
 
 export function getToothGeometry(THREE, code, cache) {

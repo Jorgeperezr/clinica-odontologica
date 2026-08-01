@@ -104,7 +104,7 @@ function sampleProfile() {
  * @param opts        { upper, papilla }
  */
 export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
-  const { upper = false, papilla = 0.22 } = opts;
+  const { upper = false } = opts;
   const dir = upper ? -1 : 1;              // hacia dónde "crece" la encía
   const prof = sampleProfile();
   const ring = prof.length;
@@ -156,13 +156,24 @@ export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
     return Math.pow(t, 2.2);
   }
 
-  /** Eminencia radicular: relieve que deja la raíz en la tabla vestibular. */
+  /**
+   * Relieve de la tabla vestibular: eminencia sobre cada raíz y DEPRESIÓN
+   * entre raíces contiguas. Sin las depresiones el conjunto de
+   * eminencias se funde en una superficie continua y la encía vuelve a
+   * leerse como un bloque; el hueso alveolar real se hunde entre raíz y
+   * raíz, y eso es lo que dibuja el relieve característico.
+   */
   function eminenceAt(l) {
     let e = 0;
     placements.forEach((p) => {
-      const d = (l - p.length) / 0.42;
+      const d = (l - p.length) / 0.40;
       e += (p.eminence || 0) * Math.exp(-d * d);
     });
+    for (let i = 0; i < centers.length - 1; i++) {
+      const mid = (centers[i] + centers[i + 1]) / 2;
+      const d = (l - mid) / 0.26;
+      e -= 0.055 * Math.exp(-d * d);
+    }
     return e;
   }
 
@@ -189,6 +200,12 @@ export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
     const fr = curve.frameAtLength(l);
     const hd = lerpAt(l, "halfDepth");
     const my = lerpAt(l, "marginY");
+    /* La papila y el grosor del tejido cambian a lo largo de la arcada:
+       entre incisivos es alta y estrecha, entre molares baja y ancha, y
+       la encía posterior es sensiblemente más gruesa. Con un valor único
+       para toda la arcada el tejido se lee como una pieza extruida. */
+    const pap = lerpAt(l, "papillaH");
+    const thick = lerpAt(l, "thickness");
     const scal = scallopAt(l);
     const emin = eminenceAt(l);
     const taper = endTaper(l);
@@ -196,10 +213,10 @@ export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
     for (let r = 0; r <= ring; r++) {
       const p = prof[r % ring];
       // La eminencia solo abulta la vertiente vestibular (n > 0)
-      const nOff = (p.n * hd + (p.n > 0.5 ? emin * Math.min(1, p.n) : 0)) * taper;
+      const nOff = (p.n * hd * thick + (p.n > 0.5 ? emin * Math.min(1, p.n) : 0)) * taper;
       pos.push(
         fr.x + fr.nx * nOff,
-        my + dir * (p.y * taper + papilla * scal * p.lift),
+        my + dir * (p.y * taper * (0.85 + 0.15 * thick) + pap * scal * p.lift),
         fr.z + fr.nz * nOff,
       );
       uvs.push((l / curve.total) * 6, r / ring);

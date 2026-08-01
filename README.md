@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 57 completado — lóbulos de desarrollo y anatomía radicular
+## Estado actual: Sprint 58 completado — asimetría mesio-distal y encía por zonas
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -654,6 +654,46 @@ sincronización, el raycasting ni la arquitectura `MeshProvider`.
 - **Oclusión ambiental horneada, moderada:** llevada al extremo apagaba
   toda la mesa oclusal —que está llena de valles— y la cara masticatoria
   se leía como un agujero negro en vez de como un relieve.
+
+
+### Sprint 58 — Asimetría mesio-distal y encía por zonas (hecho)
+Refinamiento incremental sobre la arquitectura de lóbulos del Sprint 57.
+Sin tocar `meshProvider.js`, el odontograma clásico, el compacto,
+`contract.js`, `registry.js` ni `ClinicalTabs.js` (diffs vacíos).
+
+**Encía — la prioridad de este sprint.**
+- **Papila propia de cada tramo:** alta y afilada entre incisivos, baja y
+  ancha entre molares, donde el espacio interdental es un nicho aplanado
+  y no un pico. Antes era un valor único para toda la arcada, y eso hacía
+  que el tejido se leyera como una pieza extruida.
+- **Grosor por zona:** la encía posterior es sensiblemente más gruesa que
+  la del frente, y el margen se sitúa más apical en los sectores
+  posteriores.
+- **Depresiones interradiculares:** el hueso alveolar se hunde entre raíz
+  y raíz. Sin ellas, el conjunto de eminencias radiculares se fundía en
+  una superficie continua y la encía volvía a leerse como un bloque; son
+  las que dibujan el relieve característico de la tabla vestibular.
+- **Altura de margen individual por pieza**, con la misma semilla
+  determinista del resto: un festón regular delata el trazado automático
+  tanto como una arcada de piezas idénticas.
+
+**Coronas — asimetría mesio-distal.**
+- **Ángulo mesioincisal casi recto y distoincisal redondeado** en los
+  incisivos, con el cíngulo desplazado a distal. Es el rasgo que permite
+  identificar de un vistazo si un incisivo es del lado derecho o del
+  izquierdo; sin él, las dos hemiarcadas eran una imagen especular
+  perfecta.
+- **Canino:** punta cuspídea desplazada a distal, de modo que la
+  vertiente mesial queda corta y empinada y la distal larga y tendida, y
+  rebordes mesial y distal diferenciados.
+- **Primer y segundo premolar con cara oclusal distinta:** en el primero
+  domina la cúspide vestibular y el surco central es largo y recto; en el
+  segundo las cúspides se equilibran y el surco es más corto y sinuoso.
+  Se añadieron las crestas triangulares que bajan de cada cúspide.
+- **El lado entra en la clave del caché de geometría:** la pieza derecha
+  y la izquierda del mismo número son mallas distintas. Pasa de unas doce
+  mallas únicas a unas veinticuatro, cifra irrelevante frente a las 52
+  piezas de la boca.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.

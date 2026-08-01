@@ -87,6 +87,25 @@ function rootEminence(code) {
   return 0.05;
 }
 
+/**
+ * Perfil gingival propio de cada zona de la arcada.
+ *
+ *   papillaH  altura de la papila: alta y afilada entre incisivos, baja
+ *             y ancha entre molares, donde el espacio interdental es un
+ *             nicho aplanado y no un pico.
+ *   thickness grosor del tejido: la encía posterior es sensiblemente más
+ *             gruesa que la del frente.
+ *   margin    cuánto cubre el margen de la corona. En los posteriores se
+ *             sitúa más apical, así que descubre algo menos de diente.
+ */
+function gingivaProfile(code) {
+  const fam = toothFamily(code);
+  if (fam === "incisivo") return { papillaH: 0.30, thickness: 0.92, margin: 0.22 };
+  if (fam === "canino") return { papillaH: 0.26, thickness: 1.00, margin: 0.24 };
+  if (fam === "premolar") return { papillaH: 0.20, thickness: 1.08, margin: 0.20 };
+  return { papillaH: 0.15, thickness: 1.16, margin: 0.18 };
+}
+
 export default function Odontogram3D({
   surfacesByTooth = {},
   selectedTooth,
@@ -441,22 +460,26 @@ export default function Odontogram3D({
           const jr = toothJitter(codes[i]).rise;
           const cy = shape.y
             + (upper ? -(poses[i].rise + jr) : poses[i].rise + jr);
+          const gp = gingivaProfile(codes[i]);
+          // Cada margen tiene su propia altura: un festón regular delata
+          // el trazado automático tanto como una arcada de piezas iguales
+          const jm = (toothJitter(codes[i]).scale[1] - 1) * 0.5;
           return {
             length: spot.length,
             halfDepth: metrics[i].blDepth / 2,
             eminence: rootEminence(codes[i]),
+            papillaH: gp.papillaH,
+            thickness: gp.thickness,
             /* El margen se sitúa sobre la corona, no sobre el cuello: como
                el collar del perfil va por dentro de la pieza, la encía
                emerge algo más abajo que el plano del margen. Y va ligado
                al cuello REAL de cada pieza, que la curva de Spee desplaza:
                con un margen a altura constante, el tejido se despegaba del
                cuello en unas piezas y montaba sobre la corona en otras. */
-            marginY: cy + (upper ? -0.22 : 0.22),
+            marginY: cy + (upper ? -(gp.margin + jm) : gp.margin + jm),
           };
         });
-        const gumGeo = buildGingivaGeometry(THREE, curve, placements, {
-          upper, papilla: 0.24,
-        });
+        const gumGeo = buildGingivaGeometry(THREE, curve, placements, { upper });
         const gum = new THREE.Mesh(gumGeo, gingivaMaterial());
         /* La encía recibe sombra (la de las piezas sobre el tejido es la
            que da profundidad) pero no la proyecta: su silueta apenas
