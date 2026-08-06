@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.configuration.models import Agreement, SystemParameter, Tariff, Treatment
+from apps.configuration.models import Agreement, SystemParameter, Tariff, Treatment, DocumentAppearance
 
 
 class TreatmentSerializer(serializers.ModelSerializer):
@@ -62,3 +62,42 @@ class ClinicBrandingSerializer(serializers.ModelSerializer):
         if not obj.logo:
             return None
         return obj.logo.url
+
+
+class DocumentAppearanceSerializer(serializers.ModelSerializer):
+    """
+    Apariencia de documentos. Devuelve SIEMPRE los ajustes resueltos (con
+    los valores por defecto rellenados), de modo que el panel puede pintar
+    todos los controles aunque el registro se guardara antes de que
+    existiera un ajuste nuevo.
+
+    Al escribir se FUSIONA con lo guardado en vez de sustituirlo: así el
+    panel puede enviar solo el grupo que el usuario ha tocado y no borra
+    sin querer el resto de la configuración.
+    """
+
+    class Meta:
+        model = DocumentAppearance
+        fields = ("id",) + DocumentAppearance.GROUPS
+        read_only_fields = ("id",)
+
+    def to_representation(self, instance):
+        data = {"id": str(instance.id)}
+        data.update(instance.resolved())
+        return data
+
+    def validate(self, attrs):
+        for group, value in attrs.items():
+            if value is not None and not isinstance(value, dict):
+                raise serializers.ValidationError(
+                    {group: "Debe ser un objeto con los ajustes de ese grupo."}
+                )
+        return attrs
+
+    def update(self, instance, validated_data):
+        for group, value in validated_data.items():
+            merged = dict(getattr(instance, group) or {})
+            merged.update(value or {})
+            setattr(instance, group, merged)
+        instance.save()
+        return instance

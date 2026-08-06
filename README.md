@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 59 — anatomía radicular y premolares (molares pendientes)
+## Estado actual: Sprint 60 — motor global de estilos de documentos (base)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -731,6 +731,47 @@ valles entre cúspides y la mesa oclusal queda más plana que la de
 partida. Se ha vuelto al relieve anterior, que sí se lee, y queda anotado
 en el propio archivo. Hay que rehacerlo midiendo el efecto de cada
 término por separado, no sumándolos todos a la vez.
+
+
+### Sprint 60 — Motor global de estilos de documentos · base (hecho)
+Primer sprint de una línea nueva, independiente del odontograma. Objetivo:
+que ningún documento lleve colores, tipografías ni márgenes escritos a
+mano, y que la apariencia se configure una sola vez por clínica.
+
+- **Modelo `DocumentAppearance`** (migración `configuration/0008`), uno por
+  clínica, con nueve grupos de ajustes: encabezado, pie, tipografía,
+  paleta, tablas, página, logotipo, firma y marca de agua. Se guardan
+  **agrupados en JSON, no en sesenta columnas**: así la tabla no crece con
+  cada preferencia y —lo que de verdad importa— un documento futuro puede
+  añadir sus propios ajustes sin migración, que es el requisito de que el
+  sistema absorba documentos nuevos automáticamente.
+- **Compatibilidad hacia atrás por diseño:** `resolved()` rellena con los
+  valores por defecto las claves ausentes, de modo que un registro
+  guardado antes de que existiera un ajuste nuevo sigue siendo válido y el
+  ajuste aparece con su valor por defecto, sin migración de datos.
+- **Módulo central `apps/common/document_style.py`:** punto ÚNICO por el
+  que un generador obtiene la apariencia. Resuelve tamaño de hoja,
+  orientación, márgenes, tipografía, paleta y estilo de tabla, y dibuja
+  encabezado, pie y marca de agua. El color primario vacío **hereda la
+  marca de la clínica**, de modo que la identidad visual se define en un
+  solo sitio.
+- **Endpoint `config/document-appearance/`** (GET para todo el personal
+  —los generadores y la vista previa lo necesitan—, PATCH y DELETE solo
+  admin). El PATCH **fusiona** en vez de sustituir: el panel puede enviar
+  solo el grupo tocado sin borrar el resto.
+- **Primer generador conectado:** la solicitud de examen complementario ya
+  no dibuja su propio encabezado ni usa colores propios; los pide al
+  motor. Sirve de patrón para los demás.
+- **Excepción documentada:** el formulario MSP HCU-033/2021 NO usa este
+  motor. Es un formato oficial del Ministerio con diseño legalmente
+  fijado; personalizarlo lo invalidaría.
+- **Tests:** 7 nuevos (168 en total), incluyendo el aislamiento entre
+  clínicas, la fusión parcial y una prueba de punta a punta que cambia la
+  orientación de la hoja y comprueba que el PDF emitido cambia.
+
+**Pendiente de esta línea:** conectar el resto de generadores
+(consentimientos, recetas, historia clínica, presupuestos, reportes) y la
+pantalla Configuración → Apariencia de documentos con vista previa.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.

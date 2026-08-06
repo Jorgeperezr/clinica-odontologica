@@ -17,10 +17,12 @@ import io
 from datetime import date
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
+# Colores de reserva. Se usan solo si no llega un estilo de documento;
+# la apariencia real la aporta `apps.common.document_style` (Sprint 60),
+# que es el único punto donde se configura el aspecto de los documentos.
 PETROL = colors.HexColor("#0e5c63")
 INK = colors.HexColor("#1f2937")
 SOFT = colors.HexColor("#6b7280")
@@ -47,53 +49,39 @@ def _decode_signature(signature_b64):
         return None
 
 
-def build_exam_request_pdf(clinic, professional, patient, exam):
+def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
     """
     clinic:       {name, logo_reader|None, address, phone, email}
     professional: {full_name, specialty, license_number, signature_b64|None}
     patient:      {full_name, national_id, age, sex, history_number}
     exam:         {datetime, category, detail, justification, observations, priority, urgent}
+    style:        DocumentStyle de `apps.common.document_style`. Si no se
+                  pasa, se usa el estilo por defecto, que reproduce el
+                  aspecto que este documento tenía antes del Sprint 60.
+
+    El encabezado, el pie y la marca de agua los dibuja el motor de
+    estilos; aquí solo se compone el CONTENIDO de la solicitud.
     """
+    from apps.common.document_style import get_document_style
+
+    style = style or get_document_style(None)
+
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-    ml, mr = 20 * mm, width - 20 * mm
-    y = height - 18 * mm
+    c = canvas.Canvas(buf, pagesize=style.page_size)
+    width, height = style.page_size
+    ml, mr = style.content_left, style.content_right
 
-    # ── Encabezado: logo + datos de la clínica ──
-    logo = clinic.get("logo_reader")
-    if logo is not None:
-        try:
-            c.drawImage(logo, ml, y - 6 * mm, width=26 * mm, height=20 * mm,
-                        preserveAspectRatio=True, mask="auto")
-        except Exception:
-            pass
-    text_x = ml + (30 * mm if logo is not None else 0)
-    c.setFillColor(PETROL)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(text_x, y + 8 * mm, clinic.get("name") or "Clínica")
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 9)
-    line_y = y + 3 * mm
-    for part in [clinic.get("address"), clinic.get("phone"), clinic.get("email")]:
-        if part:
-            c.drawString(text_x, line_y, str(part))
-            line_y -= 4.5 * mm
-
-    y -= 24 * mm
-    c.setStrokeColor(PETROL)
-    c.setLineWidth(1.4)
-    c.line(ml, y, mr, y)
-    y -= 10 * mm
+    style.draw_watermark(c)
+    y = style.draw_header(c, clinic=clinic, professional=professional)
 
     # ── Título ──
-    c.setFillColor(INK)
-    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(style.title_color)
+    c.setFont(style.font_bold, style.title_size - 2)
     c.drawCentredString(width / 2, y, "SOLICITUD DE EXAMEN COMPLEMENTARIO")
     y -= 4 * mm
     if exam.get("urgent"):
-        c.setFillColor(colors.HexColor("#b91c1c"))
-        c.setFont("Helvetica-Bold", 10)
+        c.setFillColor(style.alert)
+        c.setFont(style.font_bold, style.size)
         c.drawCentredString(width / 2, y - 3 * mm, "★ PRIORIDAD URGENTE")
         y -= 7 * mm
     y -= 6 * mm

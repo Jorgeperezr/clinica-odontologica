@@ -404,7 +404,13 @@ class ExamRequestPDFView(APIView):
         clinic_name = (branding.display_name if branding and branding.display_name
                        else request.tenant.name)
 
+        # Apariencia configurada por la clínica (Sprint 60): el generador
+        # no decide colores ni márgenes, los recibe ya resueltos.
+        from apps.common.document_style import get_document_style
+        doc_style = get_document_style(request.tenant)
+
         pdf_bytes = build_exam_request_pdf(
+            style=doc_style,
             clinic={
                 "name": clinic_name,
                 "logo_reader": logo_reader,
