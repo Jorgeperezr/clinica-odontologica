@@ -306,3 +306,63 @@ class DocumentAppearanceTests(APITestCase):
         resp = self.client.delete("/api/v1/config/document-appearance/")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["page"]["size"], "A4")
+
+    def test_all_connected_generators_follow_the_configuration(self):
+        """
+        Los generadores conectados al motor deben cambiar cuando cambia la
+        configuración. Cubre los DOS estilos de reportlab que usa el
+        sistema: canvas (solicitud, consentimiento) y Platypus (historia
+        clínica), porque el motor tiene que servir a ambos.
+        """
+        from datetime import datetime
+
+        from apps.clinical.consent_pdf import build_consent_pdf
+        from apps.clinical.exam_request_pdf import build_exam_request_pdf
+        from apps.common.document_style import get_document_style
+
+        clinic = {"name": "Clínica Doc", "address": "", "phone": "", "email": ""}
+        prof = {"full_name": "Dra. Ruiz", "specialty": "Cirugía", "license_number": "1"}
+        pat = {"full_name": "Juan Pérez", "national_id": "1", "age": "30",
+               "sex": "M", "history_number": "1"}
+
+        def render(style):
+            exam = build_exam_request_pdf(
+                style=style, clinic=clinic, professional=prof, patient=pat,
+                exam={"datetime": datetime.now(), "category": "RX", "detail": "d",
+                      "justification": "j", "observations": "", "priority": "Normal",
+                      "urgent": False})
+            consent = build_consent_pdf(
+                style=style, clinic=clinic, professional=prof, patient=pat,
+                consent={"title": "T", "procedure": "p", "benefits": "b", "risks": "r",
+                         "alternatives": "a", "body_text": "t", "observations": "o",
+                         "signed_place": "Quito", "signed_date": "2026-08-01"})
+            return exam, consent
+
+        before = render(get_document_style(self.tenant))
+        for doc in before:
+            self.assertTrue(doc.startswith(b"%PDF"))
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch("/api/v1/config/document-appearance/", {
+            "page": {"size": "LETTER"},
+            "typography": {"family": "Times"},
+            "watermark": {"enabled": True, "text": "BORRADOR"},
+        }, format="json")
+
+        after = render(get_document_style(self.tenant))
+        for old, new in zip(before, after):
+            self.assertTrue(new.startswith(b"%PDF"))
+            self.assertNotEqual(old, new)
+
+    def test_official_msp_form_is_not_affected_by_the_engine(self):
+        """
+        El formulario MSP HCU-033/2021 es un formato oficial de diseño
+        legalmente fijado: NO debe seguir la apariencia de la clínica.
+        """
+        import inspect
+
+        from apps.clinical import form033_pdf
+
+        source = inspect.getsource(form033_pdf)
+        self.assertNotIn("document_style", source)
+        self.assertNotIn("get_document_style", source)

@@ -274,6 +274,112 @@ class DocumentStyle:
         except Exception:
             pass       # la marca de agua jamás debe impedir emitir el documento
 
+    # ── Soporte para generadores con Platypus ─────────────────────────
+    #
+    # El sistema tiene generadores de los dos estilos de reportlab: unos
+    # dibujan sobre el canvas (solicitudes, consentimientos) y otros
+    # componen con flowables (historia clínica). El motor sirve a ambos,
+    # o los que usan Platypus se quedarían fuera de la configuración.
+
+    def platypus_doc(self, buffer, title=""):
+        """SimpleDocTemplate con la hoja y los márgenes configurados."""
+        from reportlab.platypus import SimpleDocTemplate
+
+        return SimpleDocTemplate(
+            buffer, pagesize=self.page_size,
+            leftMargin=self.margin_left, rightMargin=self.margin_right,
+            topMargin=self.margin_top, bottomMargin=self.margin_bottom,
+            title=title or "",
+        )
+
+    def paragraph_styles(self):
+        """Hoja de estilos de párrafo con la tipografía y la paleta configuradas."""
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+
+        ss = getSampleStyleSheet()
+        ss.add(ParagraphStyle(
+            name="DocTitle", parent=ss["Title"], fontName=self.font_bold,
+            fontSize=self.title_size, leading=self.title_size * 1.2,
+            textColor=self.title_color, spaceAfter=10,
+        ))
+        ss.add(ParagraphStyle(
+            name="DocHeading", parent=ss["Heading2"], fontName=self.font_bold,
+            fontSize=self.subtitle_size, leading=self.subtitle_size * 1.25,
+            textColor=self.subtitle_color, spaceBefore=8, spaceAfter=4,
+        ))
+        ss.add(ParagraphStyle(
+            name="DocBody", parent=ss["Normal"], fontName=self.font,
+            fontSize=self.size, leading=self.leading, textColor=self.ink,
+        ))
+        ss.add(ParagraphStyle(
+            name="DocSmall", parent=ss["Normal"], fontName=self.font,
+            fontSize=max(6, self.size - 2.5), leading=self.leading * 0.85,
+            textColor=self.secondary,
+        ))
+        return ss
+
+    def page_furniture(self, clinic=None, professional=None):
+        """
+        Callback `onPage` para Platypus: dibuja marca de agua y pie en cada
+        página. El encabezado de estos documentos va como contenido (ver
+        `header_flowables`), porque en Platypus dibujarlo aquí se solaparía
+        con el texto salvo reservando margen a mano.
+        """
+        def draw(c, doc):
+            self.draw_watermark(c)
+            self.draw_footer(c, page_number=doc.page)
+        return draw
+
+    def header_flowables(self, clinic=None, professional=None):
+        """Encabezado como contenido, para los documentos compuestos con Platypus."""
+        from reportlab.platypus import Image, Paragraph, Spacer, Table, TableStyle
+
+        h = self.s["header"]
+        if not h.get("enabled", True):
+            return []
+        clinic = clinic or {}
+        professional = professional or {}
+        ss = self.paragraph_styles()
+
+        lines = []
+        if h.get("show_clinic_name", True) and clinic.get("name"):
+            lines.append(f'<font color="{self.primary.hexval().replace("0x", "#")}">'
+                         f'<b>{clinic["name"]}</b></font>')
+        if h.get("show_professional", True) and professional.get("full_name"):
+            bits = [professional["full_name"]]
+            if h.get("show_specialty", True) and professional.get("specialty"):
+                bits.append(professional["specialty"])
+            lines.append(" · ".join(bits))
+        contact = [clinic.get(k) for k, flag in
+                   (("address", "show_address"), ("phone", "show_phone"),
+                    ("email", "show_email"), ("website", "show_website"))
+                   if h.get(flag, True) and clinic.get(k)]
+        if contact:
+            lines.append(" · ".join(str(x) for x in contact))
+        text = Paragraph("<br/>".join(lines), ss["DocSmall"]) if lines else Paragraph("", ss["DocSmall"])
+
+        lg = self.s["logo"]
+        logo = clinic.get("logo_reader") if h.get("show_logo", True) else None
+        if logo is not None:
+            try:
+                img = Image(logo, width=float(lg.get("width_mm", 26)) * mm,
+                            height=float(lg.get("height_mm", 20)) * mm, kind="proportional")
+                row = [[img, text]]
+                widths = [float(lg.get("width_mm", 26)) * mm + float(lg.get("gap_mm", 4)) * mm, None]
+            except Exception:
+                row, widths = [[text]], [None]
+        else:
+            row, widths = [[text]], [None]
+
+        table = Table(row, colWidths=widths, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.8, self.separator),
+        ]))
+        return [table, Spacer(1, self.block_spacing)]
+
     # ── Tablas ────────────────────────────────────────────────────────
     def table_style(self, header_rows=1):
         """TableStyle de reportlab con la configuración de la clínica."""

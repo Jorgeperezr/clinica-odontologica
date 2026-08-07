@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 132 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 170 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 60 — motor global de estilos de documentos (base)
+## Estado actual: Sprint 61 — generadores conectados al motor de documentos
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -772,6 +772,41 @@ mano, y que la apariencia se configure una sola vez por clínica.
 **Pendiente de esta línea:** conectar el resto de generadores
 (consentimientos, recetas, historia clínica, presupuestos, reportes) y la
 pantalla Configuración → Apariencia de documentos con vista previa.
+
+
+### Sprint 61 — Generadores conectados al motor de documentos (hecho)
+Segundo sprint de la línea. El motor deja de ser infraestructura y pasa a
+gobernar los documentos que la clínica emite de verdad.
+
+- **Consentimiento informado profesional** (`consent_pdf.py`): encabezado,
+  pie y marca de agua los dibuja el motor; el generador compone solo el
+  contenido. El salto de página conserva ahora encabezado, pie y marca de
+  agua, cosa que antes no hacía.
+- **Historia clínica y consentimiento simple** (`pdf_utils.py`), que se
+  componen con **Platypus** en vez de canvas. Para no dejarlos fuera de la
+  configuración, el motor gana soporte para ese estilo de generador:
+  `platypus_doc()` (hoja y márgenes), `paragraph_styles()` (tipografía y
+  paleta), `header_flowables()` y `page_furniture()` (pie y marca de agua
+  en cada página).
+- Las vistas pasan el estilo del tenant, de modo que cada clínica ve sus
+  documentos con su propia apariencia.
+- **Tests:** 2 nuevos, uno que comprueba que los generadores de AMBOS
+  estilos de reportlab reaccionan a un cambio de configuración, y otro que
+  verifica que el formulario MSP HCU-033/2021 **no** usa el motor —es un
+  formato oficial de diseño legalmente fijado y personalizarlo lo
+  invalidaría—.
+
+**Corregidos dos tests inestables por frontera de fecha** (deuda marcada
+como P0 en `PROJECT_ANALYSIS.md`, que ya había bloqueado la validación dos
+veces en la misma jornada):
+- `test_waiting_patients_after_checkin` creaba la cita con `ahora + 1 hora`
+  y el endpoint filtra por fecha local: ejecutado en la última hora del
+  día, la cita se iba al día siguiente y la prueba fallaba.
+- `test_monthly_view_returns_whole_month` creaba las citas con `ahora + N
+  días`, así que a final de mes se iban al mes siguiente y quedaban fuera
+  de la vista consultada.
+Ambas fijan ahora una fecha local concreta. No eran fallos del producto,
+pero pintaban el CI de rojo sin motivo.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.

@@ -502,7 +502,10 @@ class ConsentPDFView(APIView):
         clinic_name = (branding.display_name if branding and branding.display_name
                        else request.tenant.name)
 
+        from apps.common.document_style import get_document_style
+
         pdf_bytes = build_consent_pdf(
+            style=get_document_style(request.tenant),
             clinic={
                 "name": clinic_name, "logo_reader": logo_reader,
                 "address": branding.address if branding else "",
