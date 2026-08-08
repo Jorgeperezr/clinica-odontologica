@@ -5,6 +5,7 @@ import { api, apiBase } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../../../lib/theme";
 import LogoCropper from "../../../lib/LogoCropper";
+import DocumentAppearance from "../../../lib/DocumentAppearance";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -23,8 +24,9 @@ export default function ConfiguracionPage() {
       <BackButton fallback="/panel/" />
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
-      <div className="tabs" style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"]].map(([k, label]) => (
+      <div className="tabs" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
+          ["documentos", "Apariencia de documentos"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -44,6 +46,7 @@ export default function ConfiguracionPage() {
       {tab === "parametros" && <ParametersTab />}
       {tab === "consentimientos" && <ConsentTemplatesTab />}
       {tab === "personalizacion" && <BrandingTab />}
+      {tab === "documentos" && <DocumentAppearance />}
     </div>
   );
 }

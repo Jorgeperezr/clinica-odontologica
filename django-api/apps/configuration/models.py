@@ -214,7 +214,7 @@ def _default_doc_footer():
     return {
         "enabled": True,
         "text": "", "show_page_numbers": True, "show_date": True,
-        "show_time": False, "show_signature_line": True, "legal_text": "",
+        "show_time": False, "show_clinic": True, "legal_text": "",
         "align": "center", "text_color": "",
     }
 

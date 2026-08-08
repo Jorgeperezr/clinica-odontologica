@@ -221,7 +221,7 @@ class DocumentStyle:
         return line_y - self.block_spacing
 
     # ── Pie ───────────────────────────────────────────────────────────
-    def draw_footer(self, c, page_number=None, total_pages=None):
+    def draw_footer(self, c, page_number=None, total_pages=None, clinic=None):
         f = self.s["footer"]
         if not f.get("enabled", True):
             return
@@ -231,6 +231,12 @@ class DocumentStyle:
         c.line(self.content_left, y + 6 * mm, self.content_right, y + 6 * mm)
 
         bits = []
+        # El pie institucional (nombre, dirección, teléfono) lo escribía
+        # cada generador por su cuenta; ahora sale de aquí, de modo que
+        # todos los documentos lo muestran igual y se puede desactivar.
+        if f.get("show_clinic", True) and clinic:
+            bits += [str(clinic[k]) for k in ("name", "address", "phone", "email")
+                     if clinic.get(k)]
         if f.get("text"):
             bits.append(f["text"])
         if f.get("show_date", True):
@@ -273,6 +279,79 @@ class DocumentStyle:
             c.restoreState()
         except Exception:
             pass       # la marca de agua jamás debe impedir emitir el documento
+
+    # ── Firmas ────────────────────────────────────────────────────────
+    def draw_signature(self, c, y, slots):
+        """
+        Dibuja uno o varios bloques de firma y devuelve la Y por debajo.
+
+        `slots` es una lista de diccionarios
+        {caption, full_name, license_number, specialty, image}. Con un
+        solo bloque se respeta `signature.position`; con dos o más se
+        reparten a lo ancho del contenido, que es lo que necesita el
+        consentimiento (paciente y profesional).
+
+        Antes cada generador dibujaba su propia línea de firma con
+        medidas y colores escritos a mano, así que la firma era lo único
+        del documento que no seguía la configuración de la clínica.
+        """
+        sg = self.s["signature"]
+        slots = [s for s in slots if s]
+        if not slots:
+            return y
+
+        iw = float(sg.get("width_mm", 45)) * mm
+        ih = float(sg.get("height_mm", 18)) * mm
+        line_w = max(iw + 15 * mm, 55 * mm)
+        if len(slots) > 1:
+            line_w = min(line_w, (self.content_width - 10 * mm) / len(slots))
+            gap = (self.content_width - line_w * len(slots)) / (len(slots) - 1)
+            xs = [self.content_left + i * (line_w + gap) for i in range(len(slots))]
+        else:
+            pos = sg.get("position", "right")
+            if pos == "left":
+                x0 = self.content_left
+            elif pos == "center":
+                x0 = self.content_left + (self.content_width - line_w) / 2
+            else:
+                x0 = self.content_right - line_w
+            xs = [x0]
+
+        line_y = y - ih - 2 * mm
+        lowest = line_y
+        for x0, slot in zip(xs, slots):
+            if sg.get("show_image", True) and slot.get("image") is not None:
+                try:
+                    c.drawImage(slot["image"], x0 + (line_w - iw) / 2, line_y + 1.5 * mm,
+                                width=iw, height=ih, preserveAspectRatio=True, mask="auto")
+                except Exception:
+                    pass       # una firma ilegible no debe romper el documento
+            c.setStrokeColor(self.ink)
+            c.setLineWidth(0.6)
+            c.line(x0, line_y, x0 + line_w, line_y)
+
+            rows = []
+            if slot.get("caption"):
+                rows.append((True, slot["caption"]))
+            if sg.get("show_name", True) and slot.get("full_name"):
+                rows.append((not slot.get("caption"), slot["full_name"]))
+            detail = []
+            if sg.get("show_specialty", True) and slot.get("specialty"):
+                detail.append(str(slot["specialty"]))
+            if sg.get("show_license", True) and slot.get("license_number"):
+                detail.append(f"Reg. {slot['license_number']}")
+            if detail:
+                rows.append((False, " · ".join(detail)))
+
+            ty = line_y - 5 * mm
+            for bold, text in rows:
+                c.setFont(self.font_bold if bold else self.font,
+                          self.size - (0.5 if bold else 1.5))
+                c.setFillColor(self.ink if bold else self.secondary)
+                c.drawCentredString(x0 + line_w / 2, ty, text)
+                ty -= self.size + 1
+            lowest = min(lowest, ty)
+        return lowest - 2 * mm
 
     # ── Soporte para generadores con Platypus ─────────────────────────
     #
@@ -327,7 +406,7 @@ class DocumentStyle:
         """
         def draw(c, doc):
             self.draw_watermark(c)
-            self.draw_footer(c, page_number=doc.page)
+            self.draw_footer(c, page_number=doc.page, clinic=clinic)
         return draw
 
     def header_flowables(self, clinic=None, professional=None):
@@ -391,6 +470,9 @@ class DocumentStyle:
         header_text = _color(pal.get("table_header_text"), "#ffffff")
         border = _color(t.get("border_color") or pal.get("separator"), "#d1d5db")
         pad = float(t.get("cell_padding_mm", 2)) * mm
+        # El aire entre filas se suma al relleno vertical: es la forma de
+        # conseguirlo en reportlab, que no tiene separación de filas.
+        vpad = pad * 0.6 + float(t.get("row_spacing_mm", 0)) * mm
 
         cmds = [
             ("FONTNAME", (0, 0), (-1, header_rows - 1), self.font_bold),
@@ -400,8 +482,8 @@ class DocumentStyle:
             ("TEXTCOLOR", (0, header_rows), (-1, -1), self.ink),
             ("LEFTPADDING", (0, 0), (-1, -1), pad),
             ("RIGHTPADDING", (0, 0), (-1, -1), pad),
-            ("TOPPADDING", (0, 0), (-1, -1), pad * 0.6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), pad * 0.6),
+            ("TOPPADDING", (0, 0), (-1, -1), vpad),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), vpad),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]
         if t.get("shaded", True):
