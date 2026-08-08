@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.configuration.models import Agreement, SystemParameter, Tariff, Treatment, DocumentAppearance
+from apps.configuration.models import Agreement, DocumentAppearance, SystemParameter, Tariff, Treatment
 
 
 class TreatmentSerializer(serializers.ModelSerializer):

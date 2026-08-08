@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -14,5 +14,5 @@ class SendTemplateRequest(BaseModel):
 
 class SendTemplateResponse(BaseModel):
     status: str
-    provider_message_id: Optional[str] = None
-    detail: Optional[str] = None
+    provider_message_id: str | None = None
+    detail: str | None = None

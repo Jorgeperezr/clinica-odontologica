@@ -264,7 +264,9 @@ class Sprint45Tests(APITestCase):
 
     def test_waiting_patients_after_checkin(self):
         from datetime import datetime, time, timedelta
+
         from django.utils import timezone
+
         from apps.agenda.models import Appointment, Doctor
 
         du = User.objects.create_user(email="d@s45.ec", password="superseguro123",

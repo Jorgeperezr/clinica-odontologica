@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 61 — generadores conectados al motor de documentos
+## Estado actual: Sprint 62 — CI reproducible (linter con versión fija)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -807,6 +807,38 @@ veces en la misma jornada):
   de la vista consultada.
 Ambas fijan ahora una fecha local concreta. No eran fallos del producto,
 pero pintaban el CI de rojo sin motivo.
+
+
+### Sprint 62 — CI reproducible: el linter deja de romperse solo (hecho)
+
+El CI llevaba varios commits en rojo **sin que ninguno de ellos hubiera
+introducido un fallo**. Causa: el flujo instalaba `ruff` sin fijar
+versión, así que cada máquina cogía una distinta. Al publicarse la 0.16,
+el conjunto de reglas ACTIVAS POR DEFECTO cambió —añadió la ordenación de
+imports (`I`) y varias reglas de modernización (`UP`)— y aparecieron 521
+avisos en `django-api` y 3 en el gateway, en archivos que nadie había
+tocado, incluido `config/urls.py`. En local seguía en verde porque allí
+había una 0.15.
+
+La corrección tiene dos partes, y hacen falta las dos:
+
+- **`ruff.toml` en la raíz** con el conjunto de reglas declarado de forma
+  EXPLÍCITA (`E4`, `E7`, `E9`, `F`, `I`, `UP`). Con `select` explícito, lo
+  que ruff considere por defecto en el futuro deja de afectar al proyecto.
+  Se excluyen las migraciones: las genera Django y su formato no lo
+  decidimos nosotros —de ahí que los 521 avisos se quedaran en 26 reales—.
+- **Versión fija en el CI** (`ruff==0.16.1`) en los dos trabajos, para que
+  el resultado sea el mismo en el portátil y en el servidor.
+
+Corregidos los 26 avisos reales (orden de imports y dos anotaciones
+`Optional[str]` que pasan a `str | None`). La suite sigue en 170 tests en
+verde tras el reordenado, que es la comprobación que importa: reordenar
+imports en Django puede alterar el orden de carga.
+
+**Lección para el proyecto:** cualquier herramienta de calidad que se
+instale sin fijar versión es una compilación que se romperá sola algún
+día. `npm install` del trabajo de frontend usa `package-lock.json`, así
+que ese ya era reproducible.
 
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.

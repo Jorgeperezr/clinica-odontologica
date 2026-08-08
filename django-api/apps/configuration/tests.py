@@ -109,6 +109,7 @@ class ClinicBrandingTests(APITestCase):
 
     def _png(self, color):
         import io
+
         from PIL import Image
         buf = io.BytesIO()
         Image.new("RGB", (64, 64), color).save(buf, format="PNG")
@@ -273,9 +274,10 @@ class DocumentAppearanceTests(APITestCase):
         Prueba de punta a punta del motor: cambiar la hoja a apaisado debe
         cambiar el PDF que emite un generador real.
         """
+        from datetime import datetime
+
         from apps.clinical.exam_request_pdf import build_exam_request_pdf
         from apps.common.document_style import get_document_style
-        from datetime import datetime
 
         args = dict(
             clinic={"name": "Clínica Doc", "address": "", "phone": "", "email": ""},

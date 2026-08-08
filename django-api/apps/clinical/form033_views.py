@@ -257,7 +257,10 @@ class Form033PDFExportView(APIView):
 
         from apps.clinical.form033_pdf import build_form033_pdf
         from apps.clinical.models import (
-            Diagnosis, ExamRequest, Form033Record, InformedConsent,
+            Diagnosis,
+            ExamRequest,
+            Form033Record,
+            InformedConsent,
             TreatmentPlanItem,
         )
         from apps.patients.models import PatientDocument
@@ -371,7 +374,7 @@ class ExamRequestPDFView(APIView):
     def get(self, request, pk, exam_id):
         from django.http import HttpResponse
 
-        from apps.clinical.exam_request_pdf import build_exam_request_pdf, _age_from_birth
+        from apps.clinical.exam_request_pdf import _age_from_birth, build_exam_request_pdf
         from apps.clinical.models import ExamRequest
         from apps.configuration.models import ClinicBranding
 
