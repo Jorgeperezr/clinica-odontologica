@@ -8,8 +8,9 @@ y el cliente del gateway (gateway_client.py) ya lo referencian.
 """
 
 
-from apps.common.models import TenantAwareModel
 from django.db import models
+
+from apps.common.models import TenantAwareModel
 
 
 class WhatsAppTemplate(TenantAwareModel):

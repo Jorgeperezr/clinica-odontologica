@@ -16,15 +16,12 @@ import base64
 import io
 from datetime import date
 
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-PETROL = colors.HexColor("#0e5c63")
-INK = colors.HexColor("#1f2937")
-SOFT = colors.HexColor("#6b7280")
-LINE = colors.HexColor("#d1d5db")
+# Este documento ya no define colores ni tipografías propias: todo sale
+# de `apps.common.document_style`, que es el único punto donde se
+# configura el aspecto de los documentos (Sprint 63).
 
 
 def _age_from_birth(birth):
@@ -47,53 +44,39 @@ def _decode_signature(signature_b64):
         return None
 
 
-def build_exam_request_pdf(clinic, professional, patient, exam):
+def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
     """
     clinic:       {name, logo_reader|None, address, phone, email}
     professional: {full_name, specialty, license_number, signature_b64|None}
     patient:      {full_name, national_id, age, sex, history_number}
     exam:         {datetime, category, detail, justification, observations, priority, urgent}
+    style:        DocumentStyle de `apps.common.document_style`. Si no se
+                  pasa, se usa el estilo por defecto, que reproduce el
+                  aspecto que este documento tenía antes del Sprint 60.
+
+    El encabezado, el pie y la marca de agua los dibuja el motor de
+    estilos; aquí solo se compone el CONTENIDO de la solicitud.
     """
+    from apps.common.document_style import get_document_style
+
+    style = style or get_document_style(None)
+
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-    ml, mr = 20 * mm, width - 20 * mm
-    y = height - 18 * mm
+    c = canvas.Canvas(buf, pagesize=style.page_size)
+    width, height = style.page_size
+    ml, mr = style.content_left, style.content_right
 
-    # ── Encabezado: logo + datos de la clínica ──
-    logo = clinic.get("logo_reader")
-    if logo is not None:
-        try:
-            c.drawImage(logo, ml, y - 6 * mm, width=26 * mm, height=20 * mm,
-                        preserveAspectRatio=True, mask="auto")
-        except Exception:
-            pass
-    text_x = ml + (30 * mm if logo is not None else 0)
-    c.setFillColor(PETROL)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(text_x, y + 8 * mm, clinic.get("name") or "Clínica")
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 9)
-    line_y = y + 3 * mm
-    for part in [clinic.get("address"), clinic.get("phone"), clinic.get("email")]:
-        if part:
-            c.drawString(text_x, line_y, str(part))
-            line_y -= 4.5 * mm
-
-    y -= 24 * mm
-    c.setStrokeColor(PETROL)
-    c.setLineWidth(1.4)
-    c.line(ml, y, mr, y)
-    y -= 10 * mm
+    style.draw_watermark(c)
+    y = style.draw_header(c, clinic=clinic, professional=professional)
 
     # ── Título ──
-    c.setFillColor(INK)
-    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(style.title_color)
+    c.setFont(style.font_bold, style.title_size - 2)
     c.drawCentredString(width / 2, y, "SOLICITUD DE EXAMEN COMPLEMENTARIO")
     y -= 4 * mm
     if exam.get("urgent"):
-        c.setFillColor(colors.HexColor("#b91c1c"))
-        c.setFont("Helvetica-Bold", 10)
+        c.setFillColor(style.alert)
+        c.setFont(style.font_bold, style.size)
         c.drawCentredString(width / 2, y - 3 * mm, "★ PRIORIDAD URGENTE")
         y -= 7 * mm
     y -= 6 * mm
@@ -101,10 +84,10 @@ def build_exam_request_pdf(clinic, professional, patient, exam):
     # ── Helper de secciones ──
     def section(title):
         nonlocal y
-        c.setFillColor(PETROL)
-        c.setFont("Helvetica-Bold", 10)
+        c.setFillColor(style.primary)
+        c.setFont(style.font_bold, style.size)
         c.drawString(ml, y, title.upper())
-        c.setStrokeColor(LINE)
+        c.setStrokeColor(style.separator)
         c.setLineWidth(0.5)
         c.line(ml, y - 2 * mm, mr, y - 2 * mm)
         y -= 8 * mm
@@ -112,11 +95,11 @@ def build_exam_request_pdf(clinic, professional, patient, exam):
     def field(label, value, x=None, inline=False):
         nonlocal y
         xx = x if x is not None else ml
-        c.setFillColor(SOFT)
-        c.setFont("Helvetica", 8.5)
+        c.setFillColor(style.secondary)
+        c.setFont(style.font, style.size - 1.5)
         c.drawString(xx, y, label.upper())
-        c.setFillColor(INK)
-        c.setFont("Helvetica", 10.5)
+        c.setFillColor(style.ink)
+        c.setFont(style.font, style.size + 0.5)
         c.drawString(xx, y - 5 * mm, str(value) if value not in (None, "") else "—")
         if not inline:
             y -= 11 * mm
@@ -149,18 +132,18 @@ def build_exam_request_pdf(clinic, professional, patient, exam):
 
     def paragraph(label, text):
         nonlocal y
-        c.setFillColor(SOFT)
-        c.setFont("Helvetica", 8.5)
+        c.setFillColor(style.secondary)
+        c.setFont(style.font, style.size - 1.5)
         c.drawString(ml, y, label.upper())
         y -= 5 * mm
-        c.setFillColor(INK)
-        c.setFont("Helvetica", 10)
+        c.setFillColor(style.ink)
+        c.setFont(style.font, style.size)
         # Envoltura simple de texto
         words = str(text or "—").split()
         line, maxw = "", mr - ml
         for w in words:
             test = f"{line} {w}".strip()
-            if c.stringWidth(test, "Helvetica", 10) > maxw:
+            if c.stringWidth(test, style.font, style.size) > maxw:
                 c.drawString(ml, y, line)
                 y -= 5 * mm
                 line = w
@@ -174,35 +157,22 @@ def build_exam_request_pdf(clinic, professional, patient, exam):
         paragraph("Observaciones", exam.get("observations"))
 
     # ── Firma y sello ──
-    y = max(y, 60 * mm)
-    sign_y = 48 * mm
-    sig = _decode_signature(professional.get("signature_b64"))
-    if sig is not None:
-        try:
-            c.drawImage(sig, width / 2 - 30 * mm, sign_y, width=60 * mm, height=22 * mm,
-                        preserveAspectRatio=True, mask="auto")
-        except Exception:
-            pass
-    c.setStrokeColor(INK)
-    c.setLineWidth(0.6)
-    c.line(width / 2 - 40 * mm, sign_y, width / 2 + 40 * mm, sign_y)
-    c.setFillColor(INK)
-    c.setFont("Helvetica-Bold", 10)
-    c.drawCentredString(width / 2, sign_y - 5 * mm, professional.get("full_name") or "")
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 8.5)
-    c.drawCentredString(width / 2, sign_y - 9.5 * mm,
-                        f"Firma y sello · Reg. {professional.get('license_number') or '—'}")
+    # El bloque queda anclado abajo cuando el contenido es corto y baja
+    # con el contenido cuando es largo, sin llegar a pisar el pie.
+    sign_top = max(min(y - 4 * mm, style.margin_bottom + 52 * mm),
+                   style.margin_bottom + 46 * mm)
+    style.draw_signature(c, sign_top, [{
+        "caption": "Firma y sello",
+        "full_name": professional.get("full_name") or "",
+        "specialty": professional.get("specialty"),
+        "license_number": professional.get("license_number"),
+        "image": _decode_signature(professional.get("signature_b64")),
+    }])
 
     # ── Pie institucional ──
-    c.setStrokeColor(LINE)
-    c.setLineWidth(0.5)
-    c.line(ml, 16 * mm, mr, 16 * mm)
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 7.5)
-    footer = " · ".join([p for p in [clinic.get("name"), clinic.get("address"),
-                                     clinic.get("phone"), clinic.get("email")] if p])
-    c.drawCentredString(width / 2, 11 * mm, footer or "")
+    # Lo dibuja el motor con la configuración de la clínica: mismo pie en
+    # todos los documentos y desactivable desde Configuración.
+    style.draw_footer(c, clinic=clinic)
 
     c.showPage()
     c.save()

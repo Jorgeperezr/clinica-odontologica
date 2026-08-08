@@ -3,8 +3,8 @@ import uuid
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 
-from apps.common.models import Tenant
 from apps.accounts.managers import UserManager
+from apps.common.models import Tenant
 
 
 class User(AbstractBaseUser, PermissionsMixin):

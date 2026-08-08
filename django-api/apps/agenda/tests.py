@@ -1,7 +1,7 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
-from django.utils import timezone
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -139,8 +139,18 @@ class Sprint20AgendaTests(APITestCase):
             tenant=self.tenant, first_name="Mes", last_name="Prueba", national_id="2020202020",
         )
 
-    def _create_appt(self, days_ahead):
-        start = timezone.now() + timedelta(days=days_ahead)
+    def _create_appt(self, day_of_month):
+        """
+        Cita en un DÍA CONCRETO del mes en curso. Antes se creaba con
+        `now + N días`, así que al ejecutarse en los últimos días del mes
+        la cita se iba al mes siguiente y quedaba fuera de la vista
+        mensual que la prueba consulta.
+        """
+        today = timezone.localdate()
+        start = timezone.make_aware(
+            datetime.combine(today.replace(day=day_of_month), time(9, 0)),
+            timezone.get_current_timezone(),
+        )
         return Appointment.objects.create(
             tenant=self.tenant, patient=self.patient, doctor=self.doctor,
             scheduled_start=start, scheduled_end=start + timedelta(minutes=30),

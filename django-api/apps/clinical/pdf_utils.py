@@ -7,21 +7,39 @@ import io
 from datetime import datetime
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
     Image,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
 
 
-def _base_styles():
+def _base_styles(style=None):
+    """
+    Hoja de estilos del documento. Si se recibe un `DocumentStyle`
+    (Sprint 60) los párrafos toman la tipografía y la paleta configuradas
+    por la clínica; si no, se conservan los valores originales para no
+    alterar los documentos ya emitidos.
+    """
     styles = getSampleStyleSheet()
+    if style is not None:
+        base = style.paragraph_styles()
+        # Se reexponen con los nombres que ya usaban estos generadores
+        styles.add(ParagraphStyle(name="ClinicTitle", parent=base["DocTitle"]))
+        styles.add(ParagraphStyle(name="Small", parent=base["DocSmall"]))
+        styles["Normal"].fontName = style.font
+        styles["Normal"].fontSize = style.size
+        styles["Normal"].leading = style.leading
+        styles["Normal"].textColor = style.ink
+        styles["Heading2"].fontName = style.font_bold
+        styles["Heading2"].fontSize = style.subtitle_size
+        styles["Heading2"].textColor = style.subtitle_color
+        return styles
+
     styles.add(ParagraphStyle(
         name="ClinicTitle", parent=styles["Title"], fontSize=16, spaceAfter=12,
     ))
@@ -31,15 +49,21 @@ def _base_styles():
     return styles
 
 
-def generate_consent_pdf(consent, signature_path=None) -> bytes:
+def generate_consent_pdf(consent, signature_path=None, style=None, clinic=None) -> bytes:
     """
     Genera el PDF de un consentimiento informado con la firma incrustada.
     Devuelve los bytes del PDF (para guardar en Cloud Storage / FileField).
+
+    `style` es el DocumentStyle de la clínica (Sprint 60).
     """
+    from apps.common.document_style import get_document_style
+
+    style = style or get_document_style(None)
+
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm)
-    styles = _base_styles()
-    story = []
+    doc = style.platypus_doc(buffer, title=consent.title or "Consentimiento")
+    styles = _base_styles(style)
+    story = list(style.header_flowables(clinic=clinic))
 
     story.append(Paragraph(consent.title, styles["ClinicTitle"]))
     story.append(Spacer(1, 6))
@@ -91,8 +115,9 @@ def generate_consent_pdf(consent, signature_path=None) -> bytes:
     ]
     table = Table(evidence, colWidths=[5 * cm, 10 * cm])
     table.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("TEXTCOLOR", (0, 0), (-1, -1), colors.grey),
+        ("FONTNAME", (0, 0), (-1, -1), style.font),
+        ("FONTSIZE", (0, 0), (-1, -1), max(6, style.size - 2)),
+        ("TEXTCOLOR", (0, 0), (-1, -1), style.secondary),
     ]))
     story.append(table)
     story.append(Spacer(1, 6))
@@ -101,16 +126,27 @@ def generate_consent_pdf(consent, signature_path=None) -> bytes:
         styles["Small"],
     ))
 
-    doc.build(story)
+    furniture = style.page_furniture(clinic=clinic)
+    doc.build(story, onFirstPage=furniture, onLaterPages=furniture)
     return buffer.getvalue()
 
 
-def generate_clinical_history_pdf(patient, evolutions, diagnoses, plans) -> bytes:
-    """Exporta la historia clínica completa de un paciente a PDF (RF-HCL-08)."""
+def generate_clinical_history_pdf(patient, evolutions, diagnoses, plans,
+                                  style=None, clinic=None) -> bytes:
+    """
+    Exporta la historia clínica completa de un paciente a PDF (RF-HCL-08).
+
+    `style` es el DocumentStyle de la clínica (Sprint 60). Sin él se usa
+    el estilo por defecto, que reproduce el aspecto anterior.
+    """
+    from apps.common.document_style import get_document_style
+
+    style = style or get_document_style(None)
+
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm)
-    styles = _base_styles()
-    story = []
+    doc = style.platypus_doc(buffer, title="Historia clínica")
+    styles = _base_styles(style)
+    story = list(style.header_flowables(clinic=clinic))
 
     story.append(Paragraph("Historia Clínica", styles["ClinicTitle"]))
     story.append(Paragraph(
@@ -164,5 +200,6 @@ def generate_clinical_history_pdf(patient, evolutions, diagnoses, plans) -> byte
     else:
         story.append(Paragraph("Sin planes de tratamiento.", styles["Normal"]))
 
-    doc.build(story)
+    furniture = style.page_furniture(clinic=clinic)
+    doc.build(story, onFirstPage=furniture, onLaterPages=furniture)
     return buffer.getvalue()

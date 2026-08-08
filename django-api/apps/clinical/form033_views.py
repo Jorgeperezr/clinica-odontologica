@@ -257,7 +257,10 @@ class Form033PDFExportView(APIView):
 
         from apps.clinical.form033_pdf import build_form033_pdf
         from apps.clinical.models import (
-            Diagnosis, ExamRequest, Form033Record, InformedConsent,
+            Diagnosis,
+            ExamRequest,
+            Form033Record,
+            InformedConsent,
             TreatmentPlanItem,
         )
         from apps.patients.models import PatientDocument
@@ -371,7 +374,7 @@ class ExamRequestPDFView(APIView):
     def get(self, request, pk, exam_id):
         from django.http import HttpResponse
 
-        from apps.clinical.exam_request_pdf import build_exam_request_pdf, _age_from_birth
+        from apps.clinical.exam_request_pdf import _age_from_birth, build_exam_request_pdf
         from apps.clinical.models import ExamRequest
         from apps.configuration.models import ClinicBranding
 
@@ -404,7 +407,13 @@ class ExamRequestPDFView(APIView):
         clinic_name = (branding.display_name if branding and branding.display_name
                        else request.tenant.name)
 
+        # Apariencia configurada por la clínica (Sprint 60): el generador
+        # no decide colores ni márgenes, los recibe ya resueltos.
+        from apps.common.document_style import get_document_style
+        doc_style = get_document_style(request.tenant)
+
         pdf_bytes = build_exam_request_pdf(
+            style=doc_style,
             clinic={
                 "name": clinic_name,
                 "logo_reader": logo_reader,
@@ -496,7 +505,10 @@ class ConsentPDFView(APIView):
         clinic_name = (branding.display_name if branding and branding.display_name
                        else request.tenant.name)
 
+        from apps.common.document_style import get_document_style
+
         pdf_bytes = build_consent_pdf(
+            style=get_document_style(request.tenant),
             clinic={
                 "name": clinic_name, "logo_reader": logo_reader,
                 "address": branding.address if branding else "",

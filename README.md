@@ -8,7 +8,7 @@ docker compose exec django-api python manage.py test --settings=config.settings_
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 132 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 170 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -49,7 +49,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 52 completado — ficha periodontal completa
+## Estado actual: Sprint 62 — CI reproducible (linter con versión fija)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -439,6 +439,407 @@ Sustituye la implementación del Sprint 51. Con la autorización explícita para
 - **Guardado diferido y optimista:** los cambios se acumulan por pieza y se envían 450 ms después de la última edición (escribir seis sondajes produce una petición, no seis), con actualización inmediata en pantalla y recarga posterior para traer derivados e índices.
 - **Nota de arquitectura documentada en el propio archivo:** este modelo es un híbrido deliberado y el único de los cuatro que no es renderizador puro. Los estados por superficie siguen llegando por props desde `OdontogramTab` —así que registrar aquí se refleja al instante en el clásico y en el 3D—, mientras las mediciones periodontales, que ningún otro modelo posee, las gestiona este componente contra sus propios endpoints. Verificado que los otros tres modelos siguen sin escrituras. El formulario MSP 033 continúa usando el odontograma clásico, como se acordó.
 - La separación en tablas propias deja la arquitectura preparada para ortodoncia e implantología como capas adicionales sobre las mismas piezas.
+
+### Sprint 53 — Realismo visual del odontograma 3D (hecho)
+100% presentación: no cambian los datos, ni la lógica clínica, ni la
+interacción (rotación, zoom, selección y gestos táctiles siguen igual).
+Se corrigieron además tres defectos de malla que deformaban el modelo.
+
+- **Tres errores de fondo corregidos:**
+  1. *Piezas giradas 90°.* La geometría define vestibular en el eje X local,
+     pero la colocación usaba `lookAt`, que alinea el eje Z. Los incisivos se
+     veían como agujas y las coronas se solapaban entre sí. Ahora la
+     orientación es explícita (X mesio-distal siguiendo la tangente de la
+     arcada, Z vestibular hacia fuera).
+  2. *Caras de la raíz invertidas.* Corona y raíz se cosían con el mismo
+     orden de vértices pese a recorrerse en sentidos opuestos, así que las
+     caras de la raíz miraban hacia dentro, el descarte de caras traseras se
+     las comía y se abría un hueco negro en el cuello de cada pieza.
+  3. *Normales corruptas.* El arreglo de la costura UV recorría los vértices
+     a saltos fijos, pero entre anillo y anillo hay vértices sueltos (fosa
+     central, ápices, tapas de la furca); a partir del primero, promediaba
+     normales de vértices sin relación.
+- **Anatomía dental real** (`toothGeometry.js`): sección transversal por
+  familia mediante superelipse (el molar tiende al cuadrado redondeado, el
+  incisivo a una lámina), achatamiento vestíbulo-lingual progresivo que
+  convierte el borde incisal en un cincel, y **cara oclusal resuelta como
+  campo de altura** —cúspides con su número y posición por pieza, fosa
+  central, surcos de desarrollo en cruz, rebordes marginales y cresta
+  oblicua del molar superior— en vez de una tapa plana. Proporciones
+  ajustadas a las medias reales de cada pieza.
+- **Encía nueva** (`gingivaGeometry.js`): sustituye los dos toros achatados,
+  que al ser circunferencias sobre arcadas elípticas atravesaban unas piezas
+  y dejaban otras al aire. Se genera sobre la MISMA curva que coloca los
+  dientes, con margen festoneado (cénit sobre cada pieza y papila en cada
+  tronera), eminencias radiculares, encía adherida, unión mucogingival y
+  fondo de vestíbulo. El borde visible es la intersección con la pieza, de
+  modo que sigue su contorno y no puede dejar huecos.
+- **Reparto por longitud de arco** (`archCurve.js`): las piezas se distribuyen
+  según su ancho mesio-distal real. En una elipse, pasos angulares iguales dan
+  separaciones desiguales, que es lo que amontonaba los molares.
+- **Texturas procedurales** (`dentalTextures.js`), dibujadas en canvas y
+  compartidas: rugosidad y microrrelieve del esmalte (perikimatíes en la
+  corona, cemento mate en la raíz) y punteado de cáscara de naranja de la
+  encía adherida. Un material de rugosidad constante da un brillo uniforme,
+  que es el rasgo que delata el plástico.
+- **Color por vértice** de esmalte translúcido a dentina cervical y cemento,
+  dejando el color del material libre para el estado clínico.
+- **Luz y sombra:** cuatro focos (principal cálida con sombra, relleno frío,
+  contraluz y rebote inferior), encuadre del mapa de sombras ajustado a las
+  arcadas y brillo especular más amplio y suave.
+- **Rendimiento:** malla **indexada** (un tercio de la memoria de vértices) y
+  **compartida** entre piezas equivalentes — de 52 mallas únicas a diez—,
+  la encía no entra en el paso de sombras y desaparecen las 52 mallas de
+  contorno: el realce de selección pasa a ser una emisión sobre el propio
+  material. Medido en el rasterizador por software del entorno de pruebas,
+  el coste queda ~12 % por encima del anterior con mucha más superficie en
+  pantalla; en GPU real la diferencia es menor.
+
+
+### Sprint 54 — Anatomía por pieza y acabado del odontograma 3D (hecho)
+Segunda vuelta sobre el modelo 3D. Sigue siendo 100% presentación: no
+cambian los datos, la lógica clínica ni la interacción.
+
+- **Bug corregido en el caché de geometría:** la clave no distinguía la
+  cara oclusal, así que el primer molar inferior (cinco cúspides, patrón
+  Y5) y el segundo (cuatro) compartían malla y ganaba el que se
+  construyera primero. Ahora la variante oclusal entra en la clave.
+- **Anatomía por pieza:** proporciones propias de cada diente dentro de su
+  familia (el lateral superior frente al central, los incisivos inferiores
+  como piezas más estrechas de la boca, el primer molar mayor que el
+  cordal), aplicadas como escala del objeto para no romper la
+  reutilización de mallas.
+- **Postura real en la arcada** (`toothPose`): torque vestíbulo-lingual e
+  inclinación mesio-distal por familia, siguiendo el orden de la
+  prescripción ortodóncica habitual, y curva de Spee que acerca los
+  sectores posteriores al plano oclusal. Antes todas las piezas quedaban
+  verticales y paralelas.
+- **Contactos interproximales:** las piezas se reparten prácticamente sin
+  holgura y las secciones llevan convexidad proximal, de modo que las
+  coronas se tocan en su punto de contacto en vez de dejar rendijas.
+- **Oclusión ambiental horneada en el color de vértice**, gratis en tiempo
+  de ejecución: las fosas y los surcos de desarrollo se oscurecen (las
+  fisuras se leen como surcos y no como un dibujo), las caras proximales
+  se ensombrecen hacia el cuello (sin ello las coronas contiguas se
+  funden en una masa clara continua) y la encía dibuja la sombra del
+  surco donde se encuentra con cada diente.
+- **Encía ligada al cuello real de cada pieza:** la altura del margen se
+  interpola entre piezas vecinas a partir de su cuello, que la curva de
+  Spee desplaza. Con un margen a altura constante el tejido se despegaba
+  en unas piezas y montaba sobre la corona en otras.
+- **Transición de color continua** esmalte → dentina cervical → cemento
+  con una sola función axial; antes había dos funciones distintas y el
+  salto entre ambas dibujaba un anillo en el cuello.
+- **Malla más suave:** anillos agrupados en los extremos (donde está la
+  curvatura) en vez de repartidos por igual, lo que da la misma suavidad
+  aparente con menos triángulos y permitió subir el detalle oclusal.
+- **Cara oclusal más detallada:** cúspides con número y posición propios
+  de cada pieza —incluida la quinta del primer molar inferior—, rebordes
+  marginales, cresta oblicua del molar superior, cíngulo y fosa lingual
+  en el sector anterior, y ángulos incisales redondeados en el lateral.
+- **Iluminación contrastada:** el reparto de intensidades entre los cuatro
+  focos era demasiado plano; repartir la luz por igual ilumina todas las
+  caras y anula el volumen.
+
+
+### Sprint 55 — Oclusión ambiental en pantalla y mapas de normales (hecho)
+
+**Nota de alcance, importante.** El objetivo de este sprint era sustituir
+la geometría procedural por mallas dentales escaneadas de alta calidad.
+No fue posible en este entorno: ninguna de las fuentes con licencia
+utilizable resultó accesible (NIH 3D devuelve 404 en su API, BodyParts3D
+y Smithsonian responden 403, la API de GitHub está limitada a los
+repositorios de la sesión y los paquetes dentales de npm resultaron ser
+también procedurales, sin mallas). Además, las fuentes anatómicas
+realistas que existen suelen estar bajo CC BY-SA —licencia vírica— lo que
+para un producto clínico comercial es una decisión que corresponde
+tomar al responsable del proyecto, no darla por hecha.
+
+Ante eso, este sprint ataca la otra mitad del problema: **el motor de
+render**, que es donde se juega buena parte del acabado profesional.
+
+- **Oclusión ambiental en espacio de pantalla (GTAO):** cadena de
+  post-proceso con `EffectComposer`. Los rincones donde dos superficies
+  se acercan —tronera interdental, surco gingival, fondo de fisura,
+  encuentro de corona y encía— reciben menos luz del entorno; ninguna luz
+  direccional reproduce eso, hay que calcularlo desde la profundidad y
+  las normales de la escena. Es lo que más acerca el resultado al aspecto
+  de un render clínico.
+- **Repliegue seguro:** si el paso no está disponible o falla al
+  compilar, se dibuja directo como antes. La escena nunca depende del
+  post-proceso.
+- **Salvaguarda de rendimiento:** se mide el coste real durante los
+  primeros 40 fotogramas y, si el equipo no sostiene 35 fps, el
+  post-proceso se desactiva solo. Antes fluidez que oclusión.
+- **Mapas de normales** en sustitución de los de relieve: la pendiente va
+  precalculada en la textura en vez de derivarse por píxel, así que el
+  microrrelieve se ve firme y cuesta menos. Se generan por Sobel desde el
+  mismo campo de altura, de modo que relieve y normales no discrepan.
+- La captura de imagen para informes pasa por la MISMA cadena que la
+  pantalla; si no, saldría sin oclusión y no coincidiría con lo que ve el
+  profesional.
+
+**Lo que sigue pendiente para el salto de realismo:** mallas por pieza de
+origen escaneado. Requiere decidir la licencia (CC BY-SA obliga a
+compartir en las mismas condiciones), un pipeline de conversión a glTF
+con compresión, y normalizar orientación y escala de cada pieza al marco
+local que ya usa el sistema (`+X` mesio-distal, `+Z` vestibular, cuello
+en el origen). La capa de colocación, la encía, el raycasting y la
+sincronización clínica están preparadas para recibirlas sin cambios.
+
+
+### Sprint 56 — Proveedor de mallas y variación anatómica (hecho)
+El motor de render deja de saber CÓMO se fabrica un diente.
+
+- **Interfaz `MeshProvider`** (`lib/odontogram/meshProvider.js`): el motor
+  pide una pieza por su número FDI y recibe siempre lo mismo —geometría
+  en el marco local canónico, escala y medidas—. Hay dos proveedores:
+  - *procedural*, el generador actual, siempre disponible;
+  - *gltf*, que carga mallas `.glb`/`.gltf` desde `public/models/teeth/`.
+- **Listo para mallas profesionales sin tocar código:** basta con dejar
+  los ficheros y un `manifest.json` en esa carpeta. El manifiesto puede
+  corregir orientación, escala y origen de cada pieza, de modo que no hay
+  que reexportar los modelos para adaptarlos al marco del sistema. Si una
+  pieza falta, la cubre la procedural: un juego incompleto nunca deja
+  huecos en la arcada. Si no hay manifiesto, no se emite ni un error en
+  consola. Documentado en `public/models/teeth/README.md`.
+- **Independencia real:** las medidas (`mdWidth`, `blDepth`, `crownH`,
+  `rootH`) las publica el proveedor, así que el reparto por longitud de
+  arco, el margen gingival que sigue el cuello, el raycasting, la
+  selección, el historial y la sincronización clínica funcionan igual
+  venga la malla de donde venga.
+- **Variación anatómica por pieza:** desviaciones pequeñas de tamaño y
+  aplomo derivadas de forma DETERMINISTA del número FDI. Una arcada de
+  piezas idénticas se lee de inmediato como generada por ordenador; al
+  ser determinista, la misma pieza tiene siempre la misma variación y el
+  modelo no cambia entre visitas ni entre exportaciones del informe.
+- **Adaptación al tema claro/oscuro:** el lienzo es transparente y se ve
+  sobre el fondo de la aplicación. Se mide la luminancia REAL del fondo
+  —no el nombre del tema— para que funcione también con los colores de
+  marca de cada clínica, y se ajustan exposición, luces y entorno.
+- **Cámara inicial** más cercana y con un ángulo menos cenital.
+- **Limpieza:** eliminados los generadores de mapas de relieve, sin uso
+  desde que el microrrelieve va por mapas de normales.
+
+
+### Sprint 57 — Lóbulos de desarrollo y anatomía radicular (hecho)
+Salto anatómico del generador procedural. Sin tocar la lógica clínica, la
+sincronización, el raycasting ni la arquitectura `MeshProvider`.
+
+- **Lóbulos de desarrollo.** Era el límite de fondo del generador: todas
+  las familias usaban la misma sección transversal (una superelipse
+  escalada), así que solo se diferenciaban en proporciones. Una corona no
+  crece como un cilindro, se forma a partir de lóbulos que se fusionan, y
+  los surcos que quedan entre ellos son lo que da a cada familia su
+  silueta. Ahora se modelan explícitamente:
+  - incisivo: tres lóbulos vestibulares —de ahí los mamelones del borde y
+    las dos depresiones verticales de la cara— más cíngulo;
+  - canino: lóbulo medio dominante, que forma la cresta vestibular;
+  - premolar: un lóbulo vestibular marcado y otro palatino menor;
+  - molar: dos vestibulares y dos palatinos, uno por cúspide.
+  Los lóbulos se difuminan hacia el cuello, donde la corona es lisa, y se
+  marcan hacia el tercio oclusal, como en la formación real.
+- **Cresta cervical** (cíngulo en el sector anterior, cresta vestibular en
+  el posterior): el rodete que rodea la corona junto al cuello, que actúa
+  al revés que los lóbulos.
+- **Anatomía radicular:** concavidades longitudinales en las caras mesial
+  y distal —muy marcadas en el primer premolar superior y en las raíces
+  de los molares, y lo que distingue una raíz de un cono liso—, y
+  curvatura distal que se acelera hacia el ápice en vez de crecer de
+  forma lineal, con valor propio por familia.
+- **Bug corregido en el caché:** la variante oclusal del incisivo no
+  entraba en la clave, así que el central y el lateral —que redondean sus
+  ángulos incisales de forma distinta— compartían malla. Es el mismo
+  fallo que ya se corrigió para los molares inferiores.
+- **Oclusión ambiental horneada, moderada:** llevada al extremo apagaba
+  toda la mesa oclusal —que está llena de valles— y la cara masticatoria
+  se leía como un agujero negro en vez de como un relieve.
+
+
+### Sprint 58 — Asimetría mesio-distal y encía por zonas (hecho)
+Refinamiento incremental sobre la arquitectura de lóbulos del Sprint 57.
+Sin tocar `meshProvider.js`, el odontograma clásico, el compacto,
+`contract.js`, `registry.js` ni `ClinicalTabs.js` (diffs vacíos).
+
+**Encía — la prioridad de este sprint.**
+- **Papila propia de cada tramo:** alta y afilada entre incisivos, baja y
+  ancha entre molares, donde el espacio interdental es un nicho aplanado
+  y no un pico. Antes era un valor único para toda la arcada, y eso hacía
+  que el tejido se leyera como una pieza extruida.
+- **Grosor por zona:** la encía posterior es sensiblemente más gruesa que
+  la del frente, y el margen se sitúa más apical en los sectores
+  posteriores.
+- **Depresiones interradiculares:** el hueso alveolar se hunde entre raíz
+  y raíz. Sin ellas, el conjunto de eminencias radiculares se fundía en
+  una superficie continua y la encía volvía a leerse como un bloque; son
+  las que dibujan el relieve característico de la tabla vestibular.
+- **Altura de margen individual por pieza**, con la misma semilla
+  determinista del resto: un festón regular delata el trazado automático
+  tanto como una arcada de piezas idénticas.
+
+**Coronas — asimetría mesio-distal.**
+- **Ángulo mesioincisal casi recto y distoincisal redondeado** en los
+  incisivos, con el cíngulo desplazado a distal. Es el rasgo que permite
+  identificar de un vistazo si un incisivo es del lado derecho o del
+  izquierdo; sin él, las dos hemiarcadas eran una imagen especular
+  perfecta.
+- **Canino:** punta cuspídea desplazada a distal, de modo que la
+  vertiente mesial queda corta y empinada y la distal larga y tendida, y
+  rebordes mesial y distal diferenciados.
+- **Primer y segundo premolar con cara oclusal distinta:** en el primero
+  domina la cúspide vestibular y el surco central es largo y recto; en el
+  segundo las cúspides se equilibran y el surco es más corto y sinuoso.
+  Se añadieron las crestas triangulares que bajan de cada cúspide.
+- **El lado entra en la clave del caché de geometría:** la pieza derecha
+  y la izquierda del mismo número son mallas distintas. Pasa de unas doce
+  mallas únicas a unas veinticuatro, cifra irrelevante frente a las 52
+  piezas de la boca.
+
+
+### Sprint 59 — Anatomía radicular, premolares y una incidencia descartada (parcial)
+
+- **Bug corregido en el caché:** el primer y el segundo premolar
+  INFERIORES compartían malla pese a tener cara oclusal distinta (los dos
+  tienen una sola raíz, así que la clave no los separaba; en los
+  superiores se separaban por casualidad porque el primero tiene dos).
+  Ganaba el que se construyera primero. Es el mismo fallo que ya apareció
+  en molares inferiores e incisivos: ahora la clave incluye el ordinal.
+- **Segundo premolar diferenciado:** su surco central se interrumpe en el
+  centro y deja dos fositas —mesial y distal— en vez del canal continuo
+  del primero, que es lo que los distingue en la vista oclusal. Se
+  añadieron además las crestas triangulares que bajan de cada cúspide.
+- **Raíces:** torsión progresiva de la sección al descender (rompe el
+  aspecto de extrusión recta), aplanamiento mesio-distal creciente hacia
+  el ápice, y divergencia real entre raíces —en el molar inferior la
+  mesial es más ancha, más larga y se curva más que la distal; en el
+  superior la palatina es la mayor—. Antes eran copias simétricas.
+- **Cúspides funcionales frente a no funcionales:** en el maxilar las
+  palatinas soportan la oclusión y son más altas y romas; en la mandíbula
+  lo son las vestibulares.
+
+**Incidencia descartada — caras oclusales oscuras.** No era un defecto del
+modelo: el banco de pruebas con el que se revisaba la anatomía no montaba
+el mapa de entorno que la escena real sí usa, de modo que las caras
+orientadas hacia arriba no tenían nada que reflejar. Añadido el entorno al
+banco, el oscurecimiento desaparece. La oclusión ambiental horneada y las
+normales están correctas.
+
+**Pendiente — relieve molar.** Se intentó ampliarlo con crestas
+triangulares, surco vestibular, fositas accesorias y fisuras secundarias.
+El conjunto resta legibilidad en vez de sumarla: las crestas rellenan los
+valles entre cúspides y la mesa oclusal queda más plana que la de
+partida. Se ha vuelto al relieve anterior, que sí se lee, y queda anotado
+en el propio archivo. Hay que rehacerlo midiendo el efecto de cada
+término por separado, no sumándolos todos a la vez.
+
+
+### Sprint 60 — Motor global de estilos de documentos · base (hecho)
+Primer sprint de una línea nueva, independiente del odontograma. Objetivo:
+que ningún documento lleve colores, tipografías ni márgenes escritos a
+mano, y que la apariencia se configure una sola vez por clínica.
+
+- **Modelo `DocumentAppearance`** (migración `configuration/0008`), uno por
+  clínica, con nueve grupos de ajustes: encabezado, pie, tipografía,
+  paleta, tablas, página, logotipo, firma y marca de agua. Se guardan
+  **agrupados en JSON, no en sesenta columnas**: así la tabla no crece con
+  cada preferencia y —lo que de verdad importa— un documento futuro puede
+  añadir sus propios ajustes sin migración, que es el requisito de que el
+  sistema absorba documentos nuevos automáticamente.
+- **Compatibilidad hacia atrás por diseño:** `resolved()` rellena con los
+  valores por defecto las claves ausentes, de modo que un registro
+  guardado antes de que existiera un ajuste nuevo sigue siendo válido y el
+  ajuste aparece con su valor por defecto, sin migración de datos.
+- **Módulo central `apps/common/document_style.py`:** punto ÚNICO por el
+  que un generador obtiene la apariencia. Resuelve tamaño de hoja,
+  orientación, márgenes, tipografía, paleta y estilo de tabla, y dibuja
+  encabezado, pie y marca de agua. El color primario vacío **hereda la
+  marca de la clínica**, de modo que la identidad visual se define en un
+  solo sitio.
+- **Endpoint `config/document-appearance/`** (GET para todo el personal
+  —los generadores y la vista previa lo necesitan—, PATCH y DELETE solo
+  admin). El PATCH **fusiona** en vez de sustituir: el panel puede enviar
+  solo el grupo tocado sin borrar el resto.
+- **Primer generador conectado:** la solicitud de examen complementario ya
+  no dibuja su propio encabezado ni usa colores propios; los pide al
+  motor. Sirve de patrón para los demás.
+- **Excepción documentada:** el formulario MSP HCU-033/2021 NO usa este
+  motor. Es un formato oficial del Ministerio con diseño legalmente
+  fijado; personalizarlo lo invalidaría.
+- **Tests:** 7 nuevos (168 en total), incluyendo el aislamiento entre
+  clínicas, la fusión parcial y una prueba de punta a punta que cambia la
+  orientación de la hoja y comprueba que el PDF emitido cambia.
+
+**Pendiente de esta línea:** conectar el resto de generadores
+(consentimientos, recetas, historia clínica, presupuestos, reportes) y la
+pantalla Configuración → Apariencia de documentos con vista previa.
+
+
+### Sprint 61 — Generadores conectados al motor de documentos (hecho)
+Segundo sprint de la línea. El motor deja de ser infraestructura y pasa a
+gobernar los documentos que la clínica emite de verdad.
+
+- **Consentimiento informado profesional** (`consent_pdf.py`): encabezado,
+  pie y marca de agua los dibuja el motor; el generador compone solo el
+  contenido. El salto de página conserva ahora encabezado, pie y marca de
+  agua, cosa que antes no hacía.
+- **Historia clínica y consentimiento simple** (`pdf_utils.py`), que se
+  componen con **Platypus** en vez de canvas. Para no dejarlos fuera de la
+  configuración, el motor gana soporte para ese estilo de generador:
+  `platypus_doc()` (hoja y márgenes), `paragraph_styles()` (tipografía y
+  paleta), `header_flowables()` y `page_furniture()` (pie y marca de agua
+  en cada página).
+- Las vistas pasan el estilo del tenant, de modo que cada clínica ve sus
+  documentos con su propia apariencia.
+- **Tests:** 2 nuevos, uno que comprueba que los generadores de AMBOS
+  estilos de reportlab reaccionan a un cambio de configuración, y otro que
+  verifica que el formulario MSP HCU-033/2021 **no** usa el motor —es un
+  formato oficial de diseño legalmente fijado y personalizarlo lo
+  invalidaría—.
+
+**Corregidos dos tests inestables por frontera de fecha** (deuda marcada
+como P0 en `PROJECT_ANALYSIS.md`, que ya había bloqueado la validación dos
+veces en la misma jornada):
+- `test_waiting_patients_after_checkin` creaba la cita con `ahora + 1 hora`
+  y el endpoint filtra por fecha local: ejecutado en la última hora del
+  día, la cita se iba al día siguiente y la prueba fallaba.
+- `test_monthly_view_returns_whole_month` creaba las citas con `ahora + N
+  días`, así que a final de mes se iban al mes siguiente y quedaban fuera
+  de la vista consultada.
+Ambas fijan ahora una fecha local concreta. No eran fallos del producto,
+pero pintaban el CI de rojo sin motivo.
+
+
+### Sprint 62 — CI reproducible: el linter deja de romperse solo (hecho)
+
+El CI llevaba varios commits en rojo **sin que ninguno de ellos hubiera
+introducido un fallo**. Causa: el flujo instalaba `ruff` sin fijar
+versión, así que cada máquina cogía una distinta. Al publicarse la 0.16,
+el conjunto de reglas ACTIVAS POR DEFECTO cambió —añadió la ordenación de
+imports (`I`) y varias reglas de modernización (`UP`)— y aparecieron 521
+avisos en `django-api` y 3 en el gateway, en archivos que nadie había
+tocado, incluido `config/urls.py`. En local seguía en verde porque allí
+había una 0.15.
+
+La corrección tiene dos partes, y hacen falta las dos:
+
+- **`ruff.toml` en la raíz** con el conjunto de reglas declarado de forma
+  EXPLÍCITA (`E4`, `E7`, `E9`, `F`, `I`, `UP`). Con `select` explícito, lo
+  que ruff considere por defecto en el futuro deja de afectar al proyecto.
+  Se excluyen las migraciones: las genera Django y su formato no lo
+  decidimos nosotros —de ahí que los 521 avisos se quedaran en 26 reales—.
+- **Versión fija en el CI** (`ruff==0.16.1`) en los dos trabajos, para que
+  el resultado sea el mismo en el portátil y en el servidor.
+
+Corregidos los 26 avisos reales (orden de imports y dos anotaciones
+`Optional[str]` que pasan a `str | None`). La suite sigue en 170 tests en
+verde tras el reordenado, que es la comprobación que importa: reordenar
+imports en Django puede alterar el orden de carga.
+
+**Lección para el proyecto:** cualquier herramienta de calidad que se
+instale sin fijar versión es una compilación que se romperá sola algún
+día. `npm install` del trabajo de frontend usa `package-lock.json`, así
+que ese ya era reproducible.
+
 
 Lo que **no** está implementado todavía (siguientes sprints del Roadmap): lógica de negocio de pacientes, agenda, historia clínica/odontograma, tratamientos/pagos, inventario, reportes, ni la app Flutter ni el panel Next.js.
 

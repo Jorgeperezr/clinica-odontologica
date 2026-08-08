@@ -33,8 +33,8 @@ class Sprint22Base(APITestCase):
         self.patient = Patient.objects.create(
             tenant=self.tenant, first_name="Luis", last_name="Paz", national_id="1102003001",
         )
-        from apps.specialties.models import Specialty
         from apps.configuration.models import Treatment
+        from apps.specialties.models import Specialty
         spec = Specialty.objects.create(tenant=self.tenant, name="Rehab S22")
         self.t1 = Treatment.objects.create(
             tenant=self.tenant, specialty=spec, name="Corona S22", base_price=Decimal("300.00"),
@@ -180,6 +180,7 @@ class DoctorSignatureTests(APITestCase):
 
     def test_prescription_pdf_with_signature(self):
         from datetime import date
+
         from apps.clinical.models import Evolution
         self.doctor.signature_image = (
             "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAf"
@@ -206,8 +207,8 @@ class TemplateItemsAPITests(APITestCase):
         self.admin = User.objects.create_user(
             email="a@titem.ec", password="superseguro123", role="admin", tenant=self.tenant,
         )
-        from apps.specialties.models import Specialty
         from apps.configuration.models import Treatment
+        from apps.specialties.models import Specialty
         sp = Specialty.objects.create(tenant=self.tenant, name="Esp TI")
         self.treatment = Treatment.objects.create(
             tenant=self.tenant, specialty=sp, name="Trat TI", base_price="120.00",
@@ -523,7 +524,9 @@ class Form033XlsxExportTests(APITestCase):
 
     def test_official_template_is_autofilled(self):
         import io
+
         import openpyxl
+
         from apps.clinical.models import OdontogramState, ToothRecord
 
         self.client.force_authenticate(user=self.doctor_user)
@@ -599,8 +602,8 @@ class ExamRequestPDFTests(APITestCase):
         self.assertEqual(resp.data["status"], "pending")
 
     def test_generate_exam_pdf(self):
-        from apps.configuration.models import ClinicBranding
         from apps.clinical.models import ExamRequest
+        from apps.configuration.models import ClinicBranding
 
         # Datos de contacto de la clínica
         ClinicBranding.objects.create(
@@ -686,6 +689,7 @@ class ConsentImprovementsTests(APITestCase):
 
     def test_signed_consent_is_immutable(self):
         from django.utils import timezone
+
         from apps.clinical.models import InformedConsent
         consent = InformedConsent.objects.create(
             tenant=self.tenant, patient=self.patient, title="Firmado",

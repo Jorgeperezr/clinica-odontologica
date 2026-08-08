@@ -109,6 +109,7 @@ class ClinicBrandingTests(APITestCase):
 
     def _png(self, color):
         import io
+
         from PIL import Image
         buf = io.BytesIO()
         Image.new("RGB", (64, 64), color).save(buf, format="PNG")
@@ -196,3 +197,174 @@ class ClinicBrandingNamesTests(APITestCase):
         self.client.force_authenticate(user=doctor)
         resp = self.client.get("/api/v1/config/branding/")
         self.assertEqual(resp.data["short_name"], "Sonrisa Sana")
+
+
+class DocumentAppearanceTests(APITestCase):
+    """
+    Motor global de estilos de documentos (Sprint 60).
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Clínica Doc")
+        self.admin = User.objects.create_user(
+            email="admin@doc.ec", password="superseguro123", role="admin", tenant=self.tenant)
+        self.doctor = User.objects.create_user(
+            email="doc@doc.ec", password="superseguro123", role="doctor", tenant=self.tenant)
+
+    def test_defaults_are_served_without_configuring_anything(self):
+        """Sin configurar nada, el endpoint devuelve la apariencia por defecto completa."""
+        self.client.force_authenticate(user=self.doctor)
+        resp = self.client.get("/api/v1/config/document-appearance/")
+        self.assertEqual(resp.status_code, 200)
+        for group in ("header", "footer", "typography", "palette",
+                      "tables", "page", "logo", "signature", "watermark"):
+            self.assertIn(group, resp.data)
+        self.assertEqual(resp.data["page"]["size"], "A4")
+
+    def test_only_admin_can_change_appearance(self):
+        self.client.force_authenticate(user=self.doctor)
+        resp = self.client.patch("/api/v1/config/document-appearance/",
+                                 {"page": {"size": "LETTER"}}, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_patch_merges_instead_of_replacing(self):
+        """
+        Enviar un grupo parcial no debe borrar el resto de sus ajustes: el
+        panel manda solo lo que el usuario toca.
+        """
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch("/api/v1/config/document-appearance/",
+                                 {"page": {"size": "LETTER"}}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["page"]["size"], "LETTER")
+        # Los márgenes, que no se enviaron, siguen en su valor por defecto
+        self.assertEqual(resp.data["page"]["margin_top_mm"], 20)
+
+    def test_style_engine_reflects_saved_configuration(self):
+        """El motor central debe servir lo que la clínica configuró."""
+        from apps.common.document_style import get_document_style
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch("/api/v1/config/document-appearance/", {
+            "page": {"size": "LETTER", "orientation": "landscape"},
+            "typography": {"family": "Times", "size_pt": 12},
+            "palette": {"primary": "#123456"},
+        }, format="json")
+
+        style = get_document_style(self.tenant)
+        self.assertGreater(style.width, style.height)      # apaisado
+        self.assertEqual(style.font, "Times-Roman")
+        self.assertEqual(style.size, 12)
+        self.assertEqual(style.primary.hexval()[2:], "123456")
+
+    def test_appearance_is_isolated_between_clinics(self):
+        from apps.common.document_style import get_document_style
+
+        other = Tenant.objects.create(name="Otra Clínica")
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch("/api/v1/config/document-appearance/",
+                          {"palette": {"primary": "#abcdef"}}, format="json")
+
+        self.assertEqual(get_document_style(self.tenant).primary.hexval()[2:], "abcdef")
+        # La otra clínica conserva el color por defecto
+        self.assertNotEqual(get_document_style(other).primary.hexval()[2:], "abcdef")
+
+    def test_generated_document_uses_the_configured_appearance(self):
+        """
+        Prueba de punta a punta del motor: cambiar la hoja a apaisado debe
+        cambiar el PDF que emite un generador real.
+        """
+        from datetime import datetime
+
+        from apps.clinical.exam_request_pdf import build_exam_request_pdf
+        from apps.common.document_style import get_document_style
+
+        args = dict(
+            clinic={"name": "Clínica Doc", "address": "", "phone": "", "email": ""},
+            professional={"full_name": "Dra. Ruiz", "specialty": "Endodoncia",
+                          "license_number": "1"},
+            patient={"full_name": "Juan Pérez", "national_id": "1", "age": "30",
+                     "sex": "M", "history_number": "1"},
+            exam={"datetime": datetime.now(), "category": "Rayos X", "detail": "Periapical",
+                  "justification": "Dolor", "observations": "", "priority": "Normal",
+                  "urgent": False},
+        )
+        before = build_exam_request_pdf(style=get_document_style(self.tenant), **args)
+        self.assertTrue(before.startswith(b"%PDF"))
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch("/api/v1/config/document-appearance/",
+                          {"page": {"orientation": "landscape"},
+                           "watermark": {"enabled": True, "text": "COPIA"}}, format="json")
+
+        after = build_exam_request_pdf(style=get_document_style(self.tenant), **args)
+        self.assertTrue(after.startswith(b"%PDF"))
+        self.assertNotEqual(before, after)
+
+    def test_reset_restores_defaults(self):
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch("/api/v1/config/document-appearance/",
+                          {"page": {"size": "LEGAL"}}, format="json")
+        resp = self.client.delete("/api/v1/config/document-appearance/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["page"]["size"], "A4")
+
+    def test_all_connected_generators_follow_the_configuration(self):
+        """
+        Los generadores conectados al motor deben cambiar cuando cambia la
+        configuración. Cubre los DOS estilos de reportlab que usa el
+        sistema: canvas (solicitud, consentimiento) y Platypus (historia
+        clínica), porque el motor tiene que servir a ambos.
+        """
+        from datetime import datetime
+
+        from apps.clinical.consent_pdf import build_consent_pdf
+        from apps.clinical.exam_request_pdf import build_exam_request_pdf
+        from apps.common.document_style import get_document_style
+
+        clinic = {"name": "Clínica Doc", "address": "", "phone": "", "email": ""}
+        prof = {"full_name": "Dra. Ruiz", "specialty": "Cirugía", "license_number": "1"}
+        pat = {"full_name": "Juan Pérez", "national_id": "1", "age": "30",
+               "sex": "M", "history_number": "1"}
+
+        def render(style):
+            exam = build_exam_request_pdf(
+                style=style, clinic=clinic, professional=prof, patient=pat,
+                exam={"datetime": datetime.now(), "category": "RX", "detail": "d",
+                      "justification": "j", "observations": "", "priority": "Normal",
+                      "urgent": False})
+            consent = build_consent_pdf(
+                style=style, clinic=clinic, professional=prof, patient=pat,
+                consent={"title": "T", "procedure": "p", "benefits": "b", "risks": "r",
+                         "alternatives": "a", "body_text": "t", "observations": "o",
+                         "signed_place": "Quito", "signed_date": "2026-08-01"})
+            return exam, consent
+
+        before = render(get_document_style(self.tenant))
+        for doc in before:
+            self.assertTrue(doc.startswith(b"%PDF"))
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch("/api/v1/config/document-appearance/", {
+            "page": {"size": "LETTER"},
+            "typography": {"family": "Times"},
+            "watermark": {"enabled": True, "text": "BORRADOR"},
+        }, format="json")
+
+        after = render(get_document_style(self.tenant))
+        for old, new in zip(before, after):
+            self.assertTrue(new.startswith(b"%PDF"))
+            self.assertNotEqual(old, new)
+
+    def test_official_msp_form_is_not_affected_by_the_engine(self):
+        """
+        El formulario MSP HCU-033/2021 es un formato oficial de diseño
+        legalmente fijado: NO debe seguir la apariencia de la clínica.
+        """
+        import inspect
+
+        from apps.clinical import form033_pdf
+
+        source = inspect.getsource(form033_pdf)
+        self.assertNotIn("document_style", source)
+        self.assertNotIn("get_document_style", source)
