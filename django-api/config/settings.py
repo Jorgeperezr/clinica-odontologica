@@ -206,6 +206,12 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:3000", cast=Csv())
 
+# En producción el panel y la API comparten origen tras nginx, pero en
+# desarrollo el panel corre en otro puerto y el navegador oculta las
+# cabeceras de respuesta que no se declaren aquí. Sin esto, una descarga
+# generada por la API llega sin su nombre de archivo.
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]
+
 # --------------------------------------------------------------------------
 # Celery / Redis (recordatorios, tareas programadas — ver Arquitectura v1.2)
 # --------------------------------------------------------------------------

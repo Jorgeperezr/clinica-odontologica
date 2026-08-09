@@ -12,6 +12,9 @@ urlpatterns = [
     path("config/branding/", views.ClinicBrandingView.as_view(), name="clinic-branding"),
     path("config/document-appearance/", views.DocumentAppearanceView.as_view(),
          name="document-appearance"),
+    path("config/backup/", views.TenantBackupView.as_view(), name="tenant-backup"),
+    path("config/backup/decrypt/", views.TenantBackupDecryptView.as_view(),
+         name="tenant-backup-decrypt"),
     path("config/parameters/", views.SystemParameterListView.as_view(), name="parameter-list"),
     path("config/parameters/<uuid:pk>/", views.SystemParameterDetailView.as_view(), name="parameter-detail"),
 ]

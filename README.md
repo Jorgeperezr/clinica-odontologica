@@ -884,6 +884,51 @@ el arranque. Luego entrá a http://localhost/admin/
 > tenant por defecto para resolver esto. Si corrés el proyecto sin Docker,
 > ejecutá `python manage.py bootstrap` antes de `createsuperuser`.
 
+### Sprint 63 — Apariencia de documentos configurable con vista previa (hecho)
+- Nueva pestaña **Configuración → Apariencia de documentos** con los nueve grupos de ajustes y vista previa en vivo que reproduce las reglas de dibujo del PDF.
+- El motor gana `draw_signature()` (el bloque de firma era lo único del documento que no seguía la configuración) y el pie institucional pasa a salir de él.
+- `exam_request_pdf` y `consent_pdf` se quedan sin colores ni tipografías escritos a mano.
+
+### Sprint 64 — Los últimos generadores entran en el motor (hecho)
+- **Receta** extraída a `apps/clinical/prescription_pdf.py` y conectada al motor. La hoja pasa a ser configurable (`page.prescription_size`, A5 por defecto: se imprime en talonario). Corregida su envoltura de líneas, que cortaba a 70 caracteres y se salía del papel con otra tipografía.
+- **Reportes en Excel**: cabecera, filas alternas y tipografía salen de la configuración; el azul `2563EB` estaba escrito en el código.
+- `clinic_snapshot()` unifica los datos de la clínica, que estaban copiados en tres vistas. Efecto secundario del duplicado: la historia clínica salía **sin membrete** porque nadie lo copió allí. Corregido.
+
+### Sprint 65 — Copia de seguridad de la clínica, cifrada y desde el panel (hecho)
+
+**Configuración → Copia de seguridad**: la administración de la clínica
+genera un archivo cifrado con los datos de SU clínica y lo vuelve a abrir
+desde la misma pantalla.
+
+- **Cifrado** AES-256-GCM con clave derivada por PBKDF2-HMAC-SHA256
+  (400 000 iteraciones). El archivo va autenticado: alterar un byte
+  impide abrirlo, en vez de degradar el contenido en silencio. La frase
+  no se guarda en ninguna parte, tampoco en la auditoría.
+- **Quién puede**: solo el rol `admin` **de la clínica**. El Super
+  Administrador de la plataforma queda fuera a propósito mediante el
+  permiso `IsClinicAdmin`, que —a diferencia de `HasRole`— no deja pasar
+  a los superusuarios: administra el servicio, no es titular de los datos
+  de ninguna clínica.
+- **Alcance por clínica**: las tablas se recorren resolviendo la ruta
+  hasta el tenant por las claves foráneas, de modo que un modelo nuevo
+  entra en la copia sin tocar este código. Las 45 tablas del dominio
+  resuelven; se excluyen a propósito el catálogo CIE-10, la configuración
+  de la plataforma y las credenciales de un solo uso (OTP, tokens de
+  restablecimiento, tokens de dispositivo), y se omite el hash de
+  contraseña de los usuarios.
+- **Descifrar no restaura**: muestra qué contiene y permite descargarlo
+  en claro. Reponer datos sobre la base sigue siendo una operación de
+  servidor (`scripts/restore.sh`), no algo a un clic en un panel.
+- Una copia de otra clínica no se abre aquí ni conociendo su frase.
+- **No sustituye** a `scripts/backup.sh`: esa vuelca la base entera y es
+  la copia de recuperación de la plataforma. La comparativa está en
+  `DEPLOY.md`.
+- **Tests:** 14 nuevos (184 en total), centrados en quién puede hacerlo:
+  el superadministrador recibe 403 tanto al generar como al descifrar.
+- `cryptography` pasa a estar declarada en `requirements.txt`: ya venía
+  de forma transitiva con `google-auth` y ahora el código la importa
+  directamente.
+
 ## Desarrollo en GitHub Codespaces
 
 Este repo funciona bien en Codespaces para `django-api/`, `whatsapp-gateway/` y (más adelante) el panel Next.js — todo corre sobre Docker dentro del devcontainer. El desarrollo de la app Flutter requiere emulador con aceleración gráfica, por lo que se recomienda hacerlo en una máquina local (o dispositivo físico) en paralelo, no dentro de Codespaces.

@@ -84,6 +84,24 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
 
 ## Backups CIFRADOS (obligatorio en la Opción B, recomendado en la A)
 
+Hay **dos copias distintas** y conviene no confundirlas, porque protegen
+cosas diferentes y las hace gente diferente:
+
+| | Copia de la plataforma | Copia de la clínica |
+|---|---|---|
+| Qué contiene | La base entera: **todas** las clínicas | Los datos de **una** clínica |
+| Quién la hace | Quien administra el servidor | La administradora de la clínica |
+| Desde dónde | `scripts/backup.sh` en el servidor | Panel → Configuración → Copia de seguridad |
+| Clave | `BACKUP_PASSPHRASE` del `.env` | La frase que escribe en pantalla |
+| Sirve para | Recuperar el servicio ante un desastre | Que la clínica conserve y consulte sus datos |
+| Restaura | Sí, con `scripts/restore.sh` | No: solo descifra y muestra el contenido |
+
+La copia de la clínica **no sustituye** a la de la plataforma: no incluye
+los archivos adjuntos ni permite levantar el servicio de nuevo. La de la
+plataforma sigue siendo obligatoria.
+
+### Copia de la plataforma (servidor)
+
 El repo incluye `scripts/backup.sh` (exporta toda la base — pacientes,
 registros clínicos, pagos — y la cifra con AES-256) y `scripts/restore.sh`
 (restaura un backup ante un error, con confirmación explícita).
@@ -114,6 +132,25 @@ COMPOSE_FILE=docker-compose.prod.yml ./scripts/restore.sh backups/clinica-2026-0
 Copiar `backups/` a un destino EXTERNO (rclone a Google Drive, disco USB
 rotado). Un backup que vive en la misma máquina no es backup. Y probar la
 restauración al menos una vez antes de tener pacientes reales.
+
+### Copia de la clínica (panel)
+
+En **Configuración → Copia de seguridad**, la administradora de la
+clínica genera un archivo `.clinicabk` con los datos de su clínica y lo
+vuelve a abrir desde la misma pantalla escribiendo su frase de cifrado.
+
+- Cifrado AES-256-GCM con clave derivada por PBKDF2-HMAC-SHA256
+  (400 000 iteraciones). El archivo va autenticado: si se altera un solo
+  byte, no se abre.
+- **La frase no se guarda en ninguna parte**, tampoco en la auditoría.
+  Perderla equivale a perder el archivo.
+- Solo el rol `admin` **de la clínica**. El Super Administrador de la
+  plataforma no puede emitir ni abrir estas copias: administra el
+  servicio, no es titular de los datos de ninguna clínica.
+- Descifrar no restaura nada. Reponer datos sobre la base sigue siendo
+  una operación de servidor (`scripts/restore.sh`), no de panel.
+- El JSON descifrado que se descarga va **sin cifrar** y contiene datos
+  de salud: hay que borrarlo del equipo al terminar (LOPDP).
 
 ## Actualizaciones del sistema
 

@@ -2,7 +2,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.common.permissions import HasRole
+from apps.common.permissions import HasRole, IsClinicAdmin
 from apps.configuration.models import Agreement, SystemParameter, Tariff, Treatment
 from apps.configuration.serializers import (
     AgreementSerializer,
@@ -231,3 +231,125 @@ class DocumentAppearanceView(APIView):
             setattr(obj, group, DocumentAppearance.DEFAULTS[group]())
         obj.save()
         return Response(DocumentAppearanceSerializer(obj).data)
+
+
+# ── Copia de seguridad de la clínica (Sprint 65) ─────────────────────
+MIN_PASSPHRASE = 12
+MAX_BACKUP_UPLOAD = 60 * 1024 * 1024      # 60 MB
+
+
+def _audit_backup(request, action, metadata=None):
+    from apps.accounts.models import AuditLog
+
+    AuditLog.objects.create(
+        tenant=request.tenant, user=request.user, action=action,
+        entity_type="TenantBackup", entity_id=str(request.tenant.id),
+        ip_address=request.META.get("REMOTE_ADDR"),
+        metadata=metadata or {},
+    )
+
+
+class TenantBackupView(APIView):
+    """
+    POST /api/v1/config/backup/ — genera la copia cifrada de la clínica y
+    la devuelve como descarga.
+
+    Cuerpo: {"passphrase": "...", "passphrase_confirm": "..."}
+
+    Solo la administradora o el administrador de la clínica. El Super
+    Administrador queda fuera a propósito: administra la plataforma, no
+    es titular de los datos de ninguna clínica (ver `IsClinicAdmin`).
+    """
+
+    permission_classes = [IsClinicAdmin]
+
+    def post(self, request):
+        passphrase = (request.data.get("passphrase") or "").strip()
+        confirm = (request.data.get("passphrase_confirm") or "").strip()
+
+        if len(passphrase) < MIN_PASSPHRASE:
+            return Response(
+                {"error": {"message":
+                    f"La frase de cifrado debe tener al menos {MIN_PASSPHRASE} caracteres."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if confirm and confirm != passphrase:
+            return Response(
+                {"error": {"message": "La frase de cifrado y su confirmación no coinciden."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.http import HttpResponse
+
+        from apps.common.tenant_backup import build_encrypted, suggested_filename
+
+        blob, manifest = build_encrypted(request.tenant, passphrase, requested_by=request.user)
+
+        # Se audita el hecho, nunca la frase: dejarla en el registro
+        # anularía el cifrado para cualquiera que lea la auditoría.
+        _audit_backup(request, "create_backup", {
+            "total_records": manifest["total_records"],
+            "bytes": len(blob),
+        })
+
+        response = HttpResponse(blob, content_type="application/octet-stream")
+        response["Content-Disposition"] = f'attachment; filename="{suggested_filename(request.tenant)}"'
+        response["X-Backup-Records"] = str(manifest["total_records"])
+        return response
+
+
+class TenantBackupDecryptView(APIView):
+    """
+    POST /api/v1/config/backup/decrypt/ — descifra una copia y devuelve
+    su contenido legible.
+
+    Envío multipart: `file` (el .clinicabk) y `passphrase`.
+
+    Descifrar NO restaura nada: devuelve la información para consultarla
+    o guardarla en claro. Reemplazar la base de datos con una copia es
+    una operación destructiva que se hace desde el servidor, con
+    `scripts/restore.sh`, y no debe estar a un clic en un panel web.
+    """
+
+    permission_classes = [IsClinicAdmin]
+
+    def post(self, request):
+        from apps.common.tenant_backup import BackupError, read_encrypted
+
+        upload = request.FILES.get("file")
+        passphrase = (request.data.get("passphrase") or "").strip()
+
+        if upload is None:
+            return Response({"error": {"message": "Adjunta el archivo de la copia."}},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not passphrase:
+            return Response({"error": {"message": "Escribe la frase con la que se cifró."}},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if upload.size > MAX_BACKUP_UPLOAD:
+            return Response(
+                {"error": {"message": "El archivo supera el tamaño máximo admitido (60 MB)."}},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        try:
+            payload = read_encrypted(upload.read(), passphrase)
+        except BackupError as exc:
+            _audit_backup(request, "decrypt_backup_failed", {"reason": str(exc)})
+            return Response({"error": {"message": str(exc)}},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Una copia de otra clínica no se abre aquí aunque se conozca su
+        # frase: cada administración descifra lo suyo.
+        origin = payload.get("manifest", {}).get("tenant", {}).get("id")
+        if origin and str(origin) != str(request.tenant.id):
+            _audit_backup(request, "decrypt_backup_denied", {"origin_tenant": str(origin)})
+            return Response(
+                {"error": {"message": "Esta copia pertenece a otra clínica y no se puede abrir aquí."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        _audit_backup(request, "decrypt_backup", {
+            "total_records": payload["manifest"].get("total_records", 0),
+            "generated_at": payload["manifest"].get("generated_at", ""),
+        })
+        return Response(payload)
