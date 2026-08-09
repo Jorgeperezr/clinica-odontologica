@@ -252,6 +252,9 @@ def _default_doc_page():
     return {
         "size": "A4",               # A4 | LETTER | LEGAL
         "orientation": "portrait",  # portrait | landscape
+        # La receta se imprime en talonario, así que lleva su propia hoja
+        # (A5 por tradición) aunque comparta con el resto la identidad.
+        "prescription_size": "A5",  # A5 | A4 | LETTER
         "margin_top_mm": 20, "margin_bottom_mm": 18,
         "margin_left_mm": 20, "margin_right_mm": 20,
         "columns": 1, "block_spacing_mm": 5,

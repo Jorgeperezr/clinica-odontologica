@@ -35,12 +35,17 @@ const GROUPS = [
   {
     key: "page",
     label: "Página",
-    hint: "Tamaño de hoja, orientación y márgenes de todos los documentos.",
+    hint: "Tamaño de hoja, orientación y márgenes de todos los documentos. "
+        + "La receta lleva su propia hoja porque se imprime en talonario.",
     fields: [
       { k: "size", t: "select", label: "Tamaño de hoja",
-        options: [["A4", "A4 (210 × 297 mm)"], ["LETTER", "Carta (216 × 279 mm)"], ["LEGAL", "Oficio (216 × 356 mm)"]] },
+        options: [["A4", "A4 (210 × 297 mm)"], ["LETTER", "Carta (216 × 279 mm)"],
+                  ["LEGAL", "Oficio (216 × 356 mm)"], ["A5", "A5 (148 × 210 mm)"]] },
       { k: "orientation", t: "select", label: "Orientación",
         options: [["portrait", "Vertical"], ["landscape", "Horizontal"]] },
+      { k: "prescription_size", t: "select", label: "Hoja de la receta",
+        options: [["A5", "A5 (148 × 210 mm)"], ["A4", "A4 (210 × 297 mm)"],
+                  ["LETTER", "Carta (216 × 279 mm)"]] },
       { k: "margin_top_mm", t: "num", label: "Margen superior", suffix: "mm", min: 5, max: 60 },
       { k: "margin_bottom_mm", t: "num", label: "Margen inferior", suffix: "mm", min: 5, max: 60 },
       { k: "margin_left_mm", t: "num", label: "Margen izquierdo", suffix: "mm", min: 5, max: 60 },
@@ -130,7 +135,8 @@ const GROUPS = [
   {
     key: "tables",
     label: "Tablas",
-    hint: "Aplica a presupuestos, planes de tratamiento y reportes.",
+    hint: "Aplica a las tablas de los PDF y a la cabecera y las filas de "
+        + "los reportes exportados a Excel.",
     fields: [
       { k: "shaded", t: "bool", label: "Cabecera con fondo" },
       { k: "zebra", t: "bool", label: "Filas alternas" },
@@ -172,7 +178,9 @@ const GROUPS = [
 ];
 
 /* Medidas de hoja en milímetros, iguales a las de reportlab. */
-const PAGE_MM = { A4: [210, 297], LETTER: [215.9, 279.4], LEGAL: [215.9, 355.6] };
+const PAGE_MM = {
+  A4: [210, 297], LETTER: [215.9, 279.4], LEGAL: [215.9, 355.6], A5: [148, 210],
+};
 const PT_MM = 25.4 / 72;          // 1 punto tipográfico en milímetros
 const FALLBACK_PRIMARY = "#0e5c63";
 

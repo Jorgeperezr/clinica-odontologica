@@ -42,10 +42,13 @@ configuración.
 from datetime import datetime
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, LEGAL, LETTER, landscape
+from reportlab.lib.pagesizes import A4, A5, LEGAL, LETTER, landscape
 from reportlab.lib.units import mm
 
-_PAGE_SIZES = {"A4": A4, "LETTER": LETTER, "LEGAL": LEGAL}
+_PAGE_SIZES = {"A4": A4, "LETTER": LETTER, "LEGAL": LEGAL, "A5": A5}
+
+# Equivalentes de las familias de reportlab en las hojas de cálculo.
+_XLSX_FONTS = {"Helvetica": "Arial", "Times": "Times New Roman", "Courier": "Courier New"}
 
 # Familias tipográficas incorporadas en reportlab. No se admiten fuentes
 # arbitrarias porque habría que registrar el .ttf y distribuirlo; las
@@ -495,6 +498,53 @@ class DocumentStyle:
                          [colors.white, _color(t.get("zebra_color"), "#f9fafb")]))
         return TableStyle(cmds)
 
+    # ── Hojas de cálculo ──────────────────────────────────────────────
+    def xlsx_theme(self):
+        """
+        La misma apariencia, traducida a lo que entiende openpyxl.
+
+        Los reportes en Excel son documentos de la clínica como cualquier
+        otro: si la cabecera de las tablas del PDF es del color de la
+        marca, la del .xlsx tiene que serlo también. openpyxl quiere los
+        colores en 'RRGGBB' sin almohadilla y nombres de fuente reales,
+        de ahí la traducción.
+        """
+        t = self.s["tables"]
+        pal = self.s["palette"]
+        ty = self.s["typography"]
+
+        def hex6(value, fallback):
+            raw = str(value or "").strip() or fallback
+            raw = raw.lstrip("#")
+            return raw.upper() if len(raw) == 6 else fallback.lstrip("#").upper()
+
+        primary = pal.get("primary") or self.brand.get("primary") or _FALLBACK_PRIMARY
+        return {
+            "header_bg": hex6(t.get("header_bg") or pal.get("table_header_bg") or primary,
+                              _FALLBACK_PRIMARY),
+            "header_text": hex6(pal.get("table_header_text"), "#FFFFFF"),
+            "body_text": hex6(ty.get("color"), "#1F2937"),
+            "zebra": bool(t.get("zebra", True)),
+            "zebra_bg": hex6(t.get("zebra_color"), "#F9FAFB"),
+            "font": _XLSX_FONTS.get(ty.get("family"), "Calibri"),
+            "size": float(ty.get("size_pt", 10)),
+        }
+
+    # ── Estilo derivado ───────────────────────────────────────────────
+    def for_page(self, size, orientation=None):
+        """
+        El mismo estilo sobre otra hoja. Lo necesitan los documentos cuyo
+        formato de papel forma parte de su naturaleza —la receta se
+        imprime en talonario— sin que por ello dejen de seguir la
+        identidad configurada por la clínica.
+        """
+        settings = dict(self.s)
+        settings["page"] = dict(self.s["page"])
+        settings["page"]["size"] = size
+        if orientation:
+            settings["page"]["orientation"] = orientation
+        return DocumentStyle(settings, brand=self.brand)
+
 
 def default_settings():
     """Apariencia por defecto, sin tocar la base de datos."""
@@ -523,6 +573,44 @@ def get_document_style(tenant=None, brand=None):
     if brand is None and tenant is not None:
         brand = _brand_of(tenant)
     return DocumentStyle(settings, brand=brand)
+
+
+def clinic_snapshot(tenant):
+    """
+    Datos de la clínica para el encabezado y el pie: nombre, dirección,
+    contacto y el logotipo ya abierto como ImageReader.
+
+    Cada vista que emitía un documento repetía este bloque, con el
+    resultado de que la historia clínica se quedó sin membrete porque
+    allí nadie lo copió. Con un único punto, cualquier documento nuevo lo
+    obtiene con una línea.
+    """
+    if tenant is None:
+        return {}
+    try:
+        from apps.configuration.models import ClinicBranding
+
+        branding = ClinicBranding.objects.filter(tenant=tenant).first()
+    except Exception:
+        branding = None
+
+    logo_reader = None
+    if branding and branding.logo:
+        try:
+            from reportlab.lib.utils import ImageReader
+
+            logo_reader = ImageReader(branding.logo.path)
+        except Exception:
+            logo_reader = None      # logotipo ilegible: el documento sale igual
+
+    return {
+        "name": (branding.display_name if branding and branding.display_name
+                 else getattr(tenant, "name", "")),
+        "logo_reader": logo_reader,
+        "address": branding.address if branding else "",
+        "phone": branding.phone if branding else "",
+        "email": branding.email if branding else "",
+    }
 
 
 def _brand_of(tenant):
