@@ -965,6 +965,24 @@ salto de directorio (`..`, `%2e%2e`, `..%2f`), 404 también.
 **Tests:** 186 (2 nuevos y uno reescrito — afirmaba que `file_url` empezaba
 por `/media/`, que es precisamente el contrato que había que cambiar).
 
+### Sprint 67 — Fuera el código muerto de los Sprints 50–51 (hecho)
+
+948 líneas en tres archivos que no importaba nadie:
+`odontogram/CompactView.js` (Sprint 46), `odontogram/AdvancedCompactView.js`
+(Sprint 51) y `odontogram/advanced/AdvancedCompactView.js` (Sprint 50) —los
+dos últimos, dos intentos de la misma idea—. El registro sirve la vista
+«Compacto» desde `periodontal/PeriodontalMatrix` desde el Sprint 52.
+
+Comprobado antes de borrar, no después: ningún import los alcanza (ni
+estático ni dinámico), `ToothArt` —lo único que usaban— sigue vivo para las
+vistas anatómica y periodontal, y la atribución a los proyectos originales
+(Dorisoy.PeriodontalChart.JavaFX y PeriodontalCharting) está también en la
+cabecera de `PeriodontalMatrix.js`, así que no se pierde el crédito.
+
+Tras el borrado, los cuatro modelos del registro siguen resolviendo
+(clásico, anatómico, compacto y 3D) y el tamaño del bundle no cambia, que es
+la confirmación de que ese código nunca llegaba al navegador.
+
 ## Desarrollo en GitHub Codespaces
 
 Este repo funciona bien en Codespaces para `django-api/`, `whatsapp-gateway/` y (más adelante) el panel Next.js — todo corre sobre Docker dentro del devcontainer. El desarrollo de la app Flutter requiere emulador con aceleración gráfica, por lo que se recomienda hacerlo en una máquina local (o dispositivo físico) en paralelo, no dentro de Codespaces.
