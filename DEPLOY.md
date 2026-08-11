@@ -187,6 +187,27 @@ UANATACA, ANF). Con esos certificados se integra el firmado PAdES del
 PDF (librería endesive) — mismo patrón que Meta y Google: el código
 queda listo, faltan las credenciales del trámite.
 
+## Archivos subidos (`/media/`)
+
+Nginx sirve desde disco **únicamente** `/media/branding/` — el logotipo de la
+clínica, que es público y va en un `<img>` sin sesión. Cualquier otra ruta
+bajo `/media/` devuelve 404 a propósito.
+
+El resto de lo que hay ahí dentro son radiografías, documentos de pacientes,
+consentimientos firmados y firmas manuscritas. Nginx no sabe quién pide un
+archivo, así que publicarlos por esa vía los dejaría al alcance de cualquiera
+que acertara la URL, sin sesión y sin registro de acceso. Se entregan por la
+API (`/api/v1/patients/{id}/documents/{doc}/file/`), que valida clínica,
+paciente y permisos antes de devolver el binario.
+
+**Si alguna vez hace falta publicar una carpeta nueva**, añádele su propio
+`location` con `alias`; no amplíes el de `branding` ni sustituyas el `return
+404` por un `alias` general.
+
+Con `USE_CLOUD_STORAGE=True` los archivos van al bucket y esto no aplica:
+las URLs son absolutas y el control de acceso lo da el propio bucket, que debe
+quedar **privado** por el mismo motivo.
+
 ## Pendientes ANTES de pacientes reales
 
 - [ ] Cambiar TODAS las contraseñas de desarrollo (Jorge2025 no va a producción).

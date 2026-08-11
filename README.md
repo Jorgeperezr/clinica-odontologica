@@ -929,6 +929,42 @@ desde la misma pantalla.
   de forma transitiva con `google-auth` y ahora el código la importa
   directamente.
 
+### Sprint 66 — Archivos subidos: se ven los que deben y no los que no (hecho)
+
+Dos fallos de producción confirmados, no supuestos:
+
+- **`/media/` devolvía 404 en producción.** `nginx.conf` proxyaba esa ruta a
+  Django, y Django solo publica media con `DEBUG=True`. Efecto visible: el
+  logotipo de la clínica no se mostraba.
+- **Con `USE_CLOUD_STORAGE=True` el proyecto no arrancaba.** Se definían a la
+  vez `DEFAULT_FILE_STORAGE` y `STORAGES`, que en Django 5 son excluyentes
+  (`ImproperlyConfigured`). Nadie lo había notado porque el interruptor no se
+  ha encendido en ningún despliegue. Ahora el backend del bucket se declara
+  dentro de `STORAGES`, y `MEDIA_URL`/`MEDIA_ROOT` se definen siempre.
+
+Lo importante apareció al ir a arreglar el primero: **la corrección evidente
+era la peligrosa.** Servir `/media/` desde nginx habría dejado radiografías,
+documentos de pacientes, consentimientos firmados y firmas manuscritas
+descargables por cualquiera que acertara la URL, sin sesión y sin registro de
+acceso. El serializador de documentos devolvía justamente esa ruta y la
+rejilla de miniaturas la usaba en un `<img>`.
+
+- nginx sirve **solo** `/media/branding/` (el logotipo, que es público) y
+  niega explícitamente el resto de `/media/`, para que un cambio futuro no lo
+  abra por descuido.
+- `PatientDocumentSerializer.file_url` pasa a apuntar al endpoint autenticado
+  que ya existía desde el Sprint 38 y que valida clínica, paciente y permisos.
+- Nuevo `AuthImage`: una etiqueta `<img>` no puede llevar la cabecera de
+  autorización, así que la miniatura se pide con `fetch` y se pinta desde un
+  objectURL, el mismo patrón que ya usaba `DocumentPreview`.
+
+**Verificado con nginx de verdad**, no por lectura del archivo: logotipo 200;
+radiografía, documento de paciente y `/media/` a secas, 404; y tres formas de
+salto de directorio (`..`, `%2e%2e`, `..%2f`), 404 también.
+
+**Tests:** 186 (2 nuevos y uno reescrito — afirmaba que `file_url` empezaba
+por `/media/`, que es precisamente el contrato que había que cambiar).
+
 ## Desarrollo en GitHub Codespaces
 
 Este repo funciona bien en Codespaces para `django-api/`, `whatsapp-gateway/` y (más adelante) el panel Next.js — todo corre sobre Docker dentro del devcontainer. El desarrollo de la app Flutter requiere emulador con aceleración gráfica, por lo que se recomienda hacerlo en una máquina local (o dispositivo físico) en paralelo, no dentro de Codespaces.
