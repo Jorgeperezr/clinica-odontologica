@@ -230,8 +230,12 @@ ocurren.
 3. **JWT en `localStorage`** (`frontend/lib/api.js`): expuesto ante XSS. Riesgo
    moderado (no hay contenido de terceros inyectable hoy), pero una migración a
    cookies `httpOnly` o mitigaciones CSP es deseable antes de crecer.
-4. **Sin tests del gateway FastAPI**: el parseo del webhook de Meta (crítico
-   para confirmaciones de cita) solo tiene lint en CI.
+4. ~~**Sin tests del gateway FastAPI**~~ **RESUELTO (Sprint 69).** 30 pruebas
+   sobre firma del webhook, parseo del formato de Meta, verificación de la URL
+   y token interno; el trabajo de CI pasa a ejecutarlas además del lint. Al
+   escribirlas apareció un fallo real: una excepción inesperada al procesar un
+   evento devolvía 500, y Meta acaba desactivando el webhook de la cuenta ante
+   los 5xx repetidos.
 5. **Sin observabilidad**: no hay Sentry/alertas ni logging estructurado;
    en producción los errores solo quedan en stdout de los contenedores.
 6. **Backups**: scripts cifrados existen (`scripts/backup.sh`), pero no hay

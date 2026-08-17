@@ -66,8 +66,16 @@ async def receive_webhook(request: Request):
     payload = await request.json()
     logger.info("Webhook de Meta recibido")
 
+    # Un evento que falle NO puede tumbar la respuesta: Meta reintenta ante
+    # un 5xx y acaba desactivando el webhook de la cuenta. Perder un evento
+    # es malo; quedarse sin webhook es peor. `notify_django` ya absorbe los
+    # errores de red, pero cualquier otro (un fallo al serializar, un cambio
+    # de formato inesperado) llegaba hasta aquí y devolvía 500.
     for event in _parse_meta_events(payload):
-        await notify_django(**event)
+        try:
+            await notify_django(**event)
+        except Exception:
+            logger.exception("No se pudo procesar un evento del webhook")
 
     return {"received": True}
 

@@ -1035,6 +1035,42 @@ a todo el diente y no solo a la mesa.
 104 ms de generación. El instrumento de medida queda documentado en el
 propio módulo para que el siguiente intento no vuelva a ser a ojo.
 
+### Sprint 69 — El gateway de WhatsApp deja de ir sin red (hecho)
+
+Era el único servicio sin una sola prueba, y es el que da la cara a
+internet: recibe el webhook de Meta, valida su firma y traduce su formato
+al que entiende Django. Un fallo ahí no se ve en el panel; se ve como
+recordatorios que no llegan y confirmaciones de cita que se pierden.
+
+**30 pruebas**, por orden de importancia:
+
+- **Firma del webhook**, que es lo único que separa un evento de Meta de
+  uno inventado por cualquiera que descubra la URL pública. Se cubre la
+  firma válida, la ausente, la incorrecta y —la que de verdad importa— una
+  firma válida reutilizada con otro contenido.
+- **Parseo del formato de Meta**: mensajes de texto, respuestas por botón
+  (que es como se contesta la plantilla de recordatorio), cambios de
+  estado, los dos en el mismo sobre, varios `entry` y `changes`, tipos no
+  textuales (foto, audio, ubicación) y siete formas de sobre vacío o
+  incompleto. Meta omite claves con toda naturalidad y ninguna debe
+  provocar un `KeyError`.
+- **Verificación inicial de la URL** y **token de servicio interno**.
+- **Recorrido completo**, que es donde un bucle mal puesto no da error y
+  simplemente no avisa a nadie.
+
+**Un fallo real encontrado al escribirlas.** `notify_django` absorbe los
+errores de red, pero cualquier otra excepción llegaba hasta el manejador y
+devolvía 500. Meta reintenta ante un 5xx y acaba **desactivando el webhook
+de la cuenta**: perder un evento es malo, quedarse sin webhook es peor.
+Ahora cada evento se procesa aislado; si uno falla se registra y los demás
+siguen, con dos pruebas que lo fijan.
+
+**CI**: el trabajo pasa de llamarse `whatsapp-gateway-lint` a
+`whatsapp-gateway` y ejecuta las pruebas además del lint, con
+`requirements-dev.txt` de versiones fijas por el mismo motivo que el
+linter. También se corrige el aviso de obsolescencia de Pydantic
+(`class Config` → `SettingsConfigDict`), que desaparece en la V3.
+
 ## Desarrollo en GitHub Codespaces
 
 Este repo funciona bien en Codespaces para `django-api/`, `whatsapp-gateway/` y (más adelante) el panel Next.js — todo corre sobre Docker dentro del devcontainer. El desarrollo de la app Flutter requiere emulador con aceleración gráfica, por lo que se recomienda hacerlo en una máquina local (o dispositivo físico) en paralelo, no dentro de Codespaces.
