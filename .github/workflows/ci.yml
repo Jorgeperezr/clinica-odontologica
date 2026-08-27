@@ -39,6 +39,17 @@ jobs:
         working-directory: django-api
         run: python manage.py test --settings=config.settings_test -v 2
 
+      # Segunda pasada con la clínica en un huso muy lejano del servidor.
+      # Varios fallos han venido de mezclar la fecha del servidor con la
+      # fecha local de la clínica, y solo aparecen cuando ambas difieren:
+      # a las horas en que coinciden, la suite pasa igual. Kiritimati
+      # (UTC+14) garantiza que no coincidan nunca.
+      - name: Tests (huso lejano, frontera de fecha)
+        working-directory: django-api
+        env:
+          DJANGO_TIME_ZONE: Pacific/Kiritimati
+        run: python manage.py test --settings=config.settings_test
+
   whatsapp-gateway:
     runs-on: ubuntu-latest
     steps:

@@ -1071,6 +1071,46 @@ siguen, con dos pruebas que lo fijan.
 linter. También se corrige el aviso de obsolescencia de Pydantic
 (`class Config` → `SettingsConfigDict`), que desaparece en la V3.
 
+### Sprint 70 — Cumpleaños, husos y fechas frontera (hecho)
+
+El análisis daba por vivo el riesgo del «test flaky de medianoche». En vez
+de revisarlo a ojo se ejecutó la suite entera con el reloj movido a fechas
+frontera y con la clínica en varios husos. Apareció más de lo esperado, y
+no en los tests: **tres fallos de producción en las 40 líneas del listado
+de cumpleaños**.
+
+- **Quien nació un 29 de febrero desaparecía tres de cada cuatro años.** La
+  ventana se construye sumando días y salta del 28 de febrero al 1 de
+  marzo, así que el par (2, 29) no aparecía nunca y a ese paciente no se
+  le felicitaba jamás en año no bisiesto. Ahora se le atiende el 28.
+- **La edad salía mal al cruzar el fin de año.** Con la ventana a caballo
+  entre diciembre y enero, los años cumplidos se contaban sobre el año en
+  curso: a un paciente que cumplía 27 el 2 de enero el panel le ponía 26.
+- **Se usaba la fecha del servidor, no la de la clínica.** `date.today()`
+  con el contenedor en UTC y la clínica en Guayaquil (UTC−5) significa que
+  entre medianoche y las 05:00 se listaban los cumpleaños del día
+  siguiente y se perdía el de quien cumplía ese mismo día. Pasa a
+  `timezone.localdate()`.
+
+**Un aviso sobre el método.** El primer barrido dio dos fallos más que
+resultaron ser **artefactos del instrumento**: `libfaketime` congela el
+reloj si no se le pide que avance, y con el reloj parado todos los
+`created_at` salen idénticos y el orden queda indefinido. Se comprobó
+antes de «arreglar» nada; con el reloj en marcha esos dos fallos no
+existen.
+
+También se corrigió un test que mezclaba dos fuentes de fecha —creaba las
+citas con la fecha local y consultaba con la del servidor—, resto de la
+corrección a medias del Sprint 61.
+
+**Para que no vuelva a colarse:** cinco pruebas nuevas fijan estos casos
+con la fecha SIMULADA, de modo que se comprueban en cada ejecución y no un
+día al año; `TIME_ZONE` pasa a ser configurable por entorno (útil además
+para una sede en otro huso); y el CI ejecuta una segunda pasada con la
+clínica en UTC+14, donde la fecha del servidor y la local no coinciden
+nunca. Verificado: 191 tests en verde en nueve fechas frontera y cuatro
+husos.
+
 ## Desarrollo en GitHub Codespaces
 
 Este repo funciona bien en Codespaces para `django-api/`, `whatsapp-gateway/` y (más adelante) el panel Next.js — todo corre sobre Docker dentro del devcontainer. El desarrollo de la app Flutter requiere emulador con aceleración gráfica, por lo que se recomienda hacerlo en una máquina local (o dispositivo físico) en paralelo, no dentro de Codespaces.

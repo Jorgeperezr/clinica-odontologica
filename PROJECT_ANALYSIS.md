@@ -226,7 +226,11 @@ ocurren.
    `/media/branding/` y niega el resto, y `file_url` apunta al endpoint
    autenticado. Verificado con nginx real: logotipo 200, radiografía y
    documento 404, incluidos intentos de salto de directorio.
-2. **Test flaky de medianoche** (sección 5): CI rojo intermitente ≈ 1 hora/día.
+2. ~~**Test flaky de medianoche**~~ **RESUELTO (Sprints 61 y 70).** La suite
+   pasa ahora en nueve fechas frontera (fin de mes, fin de año, 29 de febrero,
+   1 de marzo) y en cuatro husos horarios. El CI ejecuta una segunda pasada con
+   la clínica en UTC+14 para que la fecha del servidor y la local NUNCA
+   coincidan, que es la condición en la que aparecen estos fallos.
 3. **JWT en `localStorage`** (`frontend/lib/api.js`): expuesto ante XSS. Riesgo
    moderado (no hay contenido de terceros inyectable hoy), pero una migración a
    cookies `httpOnly` o mitigaciones CSP es deseable antes de crecer.
