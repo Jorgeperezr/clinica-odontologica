@@ -1,4 +1,4 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -176,3 +176,58 @@ class ClinicBrandingView(APIView):
         if auto_palette is not None:
             data["auto_palette"] = auto_palette
         return Response(data)
+
+
+class DocumentAppearanceView(APIView):
+    """
+    GET   /api/v1/config/document-appearance/ — apariencia de los documentos.
+          Lectura para todo el personal clínico: los generadores de PDF y
+          la vista previa del panel la necesitan, no solo el administrador.
+    PATCH /api/v1/config/document-appearance/ — solo administrador. Acepta
+          uno o varios grupos; los ajustes se fusionan con lo guardado, de
+          modo que enviar solo el grupo tocado no borra el resto.
+
+    El formulario MSP HCU-033/2021 queda FUERA de este motor por ser un
+    formato oficial de diseño legalmente fijado.
+    """
+
+    permission_classes = [HasRole.for_roles("admin", "reception", "doctor", "auxiliary")]
+
+    def _get_or_create(self, request):
+        from .models import DocumentAppearance
+        obj, _ = DocumentAppearance.objects.get_or_create(tenant=request.tenant)
+        return obj
+
+    def get(self, request):
+        from .serializers import DocumentAppearanceSerializer
+        return Response(DocumentAppearanceSerializer(self._get_or_create(request)).data)
+
+    def patch(self, request):
+        from .serializers import DocumentAppearanceSerializer
+
+        if request.user.role != "admin":
+            return Response(
+                {"error": {"message": "Solo el administrador puede cambiar la apariencia."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        obj = self._get_or_create(request)
+        ser = DocumentAppearanceSerializer(obj, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ser.data)
+
+    def delete(self, request):
+        """Restablece la apariencia por defecto (solo administrador)."""
+        from .models import DocumentAppearance
+        from .serializers import DocumentAppearanceSerializer
+
+        if request.user.role != "admin":
+            return Response(
+                {"error": {"message": "Solo el administrador puede restablecer la apariencia."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        obj = self._get_or_create(request)
+        for group in DocumentAppearance.GROUPS:
+            setattr(obj, group, DocumentAppearance.DEFAULTS[group]())
+        obj.save()
+        return Response(DocumentAppearanceSerializer(obj).data)

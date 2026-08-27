@@ -1,5 +1,5 @@
-from django.utils.functional import SimpleLazyObject
 from django.utils.deprecation import MiddlewareMixin
+from django.utils.functional import SimpleLazyObject
 
 
 def _resolve_tenant(request):

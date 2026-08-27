@@ -263,14 +263,23 @@ class Sprint45Tests(APITestCase):
         self.assertTrue(resp.data[0]["is_today"])
 
     def test_waiting_patients_after_checkin(self):
-        from datetime import timedelta
+        from datetime import datetime, time, timedelta
+
         from django.utils import timezone
+
         from apps.agenda.models import Appointment, Doctor
 
         du = User.objects.create_user(email="d@s45.ec", password="superseguro123",
                                       role="doctor", tenant=self.tenant, full_name="Dra. Espera")
         doctor = Doctor.objects.create(tenant=self.tenant, user=du)
-        start = timezone.now() + timedelta(hours=1)
+        # La cita debe caer en la fecha LOCAL de hoy: el endpoint de
+        # pacientes en sala filtra por `scheduled_start__date=hoy`. Con
+        # `now + 1 hora` la prueba fallaba al ejecutarse en la última hora
+        # del día, porque la cita se iba a la fecha siguiente.
+        start = timezone.make_aware(
+            datetime.combine(timezone.localdate(), time(10, 0)),
+            timezone.get_current_timezone(),
+        )
         appt = Appointment.objects.create(
             tenant=self.tenant, patient=self.patient, doctor=doctor,
             scheduled_start=start, scheduled_end=start + timedelta(minutes=30),

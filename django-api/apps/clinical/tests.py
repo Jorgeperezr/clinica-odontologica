@@ -330,6 +330,7 @@ class ClinicalWithoutDoctorProfileTests(APITestCase):
     def test_edit_evolution_keeps_previous_in_audit(self):
         """Editar una evolución guarda constancia del texto anterior."""
         from datetime import date
+
         from apps.accounts.models import AuditLog
         from apps.clinical.models import Evolution
 
@@ -351,6 +352,7 @@ class ClinicalWithoutDoctorProfileTests(APITestCase):
 
     def test_delete_evolution_is_audited_with_content(self):
         from datetime import date
+
         from apps.accounts.models import AuditLog
         from apps.clinical.models import Evolution
 

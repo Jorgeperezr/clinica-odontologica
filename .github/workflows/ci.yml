@@ -1,3 +1,9 @@
+# El linter va con VERSIÓN FIJA a propósito. Instalándolo sin fijar, cada
+# release nuevo puede cambiar qué reglas están activas por defecto y
+# romper la compilación sin que nadie toque el código: pasó al salir la
+# 0.16, que añadió al conjunto por defecto la ordenación de imports y
+# varias reglas de modernización. El conjunto de reglas está declarado
+# de forma explícita en `ruff.toml`, en la raíz del repositorio.
 name: CI
 
 on:
@@ -26,7 +32,7 @@ jobs:
           cache: "pip"
           cache-dependency-path: django-api/requirements.txt
       - name: Instalar dependencias
-        run: pip install -r django-api/requirements.txt ruff
+        run: pip install -r django-api/requirements.txt ruff==0.16.1
       - name: Lint
         run: ruff check django-api/apps django-api/config
       - name: Tests (SQLite en memoria)
@@ -43,7 +49,7 @@ jobs:
           cache: "pip"
           cache-dependency-path: whatsapp-gateway/requirements.txt
       - name: Instalar dependencias
-        run: pip install -r whatsapp-gateway/requirements.txt ruff
+        run: pip install -r whatsapp-gateway/requirements.txt ruff==0.16.1
       - name: Lint
         run: ruff check whatsapp-gateway/app whatsapp-gateway/main.py
 

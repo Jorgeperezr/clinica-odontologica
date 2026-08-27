@@ -15,12 +15,13 @@ lugar/fecha y espacio para huella.
 import io
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from apps.clinical.exam_request_pdf import _decode_signature
 
+# Colores de reserva: se usan solo si no llega un estilo de documento.
+# La apariencia real la aporta `apps.common.document_style` (Sprint 60).
 PETROL = colors.HexColor("#0e5c63")
 INK = colors.HexColor("#1f2937")
 SOFT = colors.HexColor("#6b7280")
@@ -49,69 +50,63 @@ def _wrap(c, text, x, y, maxw, font="Helvetica", size=10, leading=5):
     return y
 
 
-def build_consent_pdf(clinic, professional, patient, consent):
+def build_consent_pdf(clinic, professional, patient, consent, style=None):
     """
     clinic:       {name, logo_reader|None, address, phone, email}
     professional: {full_name, specialty, license_number, signature_b64|None}
     patient:      {full_name, national_id, birth_date, age, sex, history_number}
     consent:      {title, procedure, benefits, risks, alternatives, body_text,
                    observations, patient_signature_b64|None, signed_place, signed_date}
+    style:        DocumentStyle de `apps.common.document_style`. Si no se
+                  pasa se usa el estilo por defecto, que reproduce el
+                  aspecto anterior al motor de estilos.
+
+    El encabezado, el pie y la marca de agua los dibuja el motor; aquí se
+    compone solo el CONTENIDO del consentimiento.
     """
+    from apps.common.document_style import get_document_style
+
+    style = style or get_document_style(None)
+
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-    ml, mr = 20 * mm, width - 20 * mm
+    c = canvas.Canvas(buf, pagesize=style.page_size)
+    width, height = style.page_size
+    ml, mr = style.content_left, style.content_right
     maxw = mr - ml
-    y = height - 16 * mm
+
+    def header():
+        """Encabezado y marca de agua de la página actual."""
+        style.draw_watermark(c)
+        return style.draw_header(c, clinic=clinic, professional=professional)
+
+    y = header()
 
     def ensure(space):
+        """Salta de página conservando encabezado, pie y marca de agua."""
         nonlocal y
-        if y - space < 20 * mm:
+        if y - space < style.margin_bottom + 12 * mm:
+            style.draw_footer(c)
             c.showPage()
-            y = height - 16 * mm
-
-    # ── Encabezado ──
-    logo = clinic.get("logo_reader")
-    if logo is not None:
-        try:
-            c.drawImage(logo, ml, y - 6 * mm, width=24 * mm, height=18 * mm,
-                        preserveAspectRatio=True, mask="auto")
-        except Exception:
-            pass
-    tx = ml + (28 * mm if logo is not None else 0)
-    c.setFillColor(PETROL)
-    c.setFont("Helvetica-Bold", 15)
-    c.drawString(tx, y + 6 * mm, clinic.get("name") or "Clínica")
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 8.5)
-    ly = y + 1 * mm
-    for part in [clinic.get("address"), clinic.get("phone"), clinic.get("email")]:
-        if part:
-            c.drawString(tx, ly, str(part))
-            ly -= 4 * mm
-    y -= 22 * mm
-    c.setStrokeColor(PETROL)
-    c.setLineWidth(1.2)
-    c.line(ml, y, mr, y)
-    y -= 9 * mm
+            y = header()
 
     # ── Título ──
-    c.setFillColor(INK)
-    c.setFont("Helvetica-Bold", 13)
+    c.setFillColor(style.title_color)
+    c.setFont(style.font_bold, style.title_size - 3)
     c.drawCentredString(width / 2, y, "CONSENTIMIENTO INFORMADO")
     y -= 6 * mm
-    c.setFont("Helvetica-Bold", 11)
-    c.setFillColor(PETROL)
-    y = _wrap(c, consent.get("title"), ml, y, maxw, font="Helvetica-Bold", size=11, leading=5.5)
+    c.setFont(style.font_bold, style.size + 1)
+    c.setFillColor(style.primary)
+    y = _wrap(c, consent.get("title"), ml, y, maxw,
+              font=style.font_bold, size=style.size + 1, leading=5.5)
     y -= 3 * mm
 
     # ── Paciente y profesional (dos columnas) ──
     def kv(label, value, x, yy):
-        c.setFillColor(SOFT)
-        c.setFont("Helvetica", 8)
+        c.setFillColor(style.secondary)
+        c.setFont(style.font, style.size - 2)
         c.drawString(x, yy, label.upper())
-        c.setFillColor(INK)
-        c.setFont("Helvetica", 9.5)
+        c.setFillColor(style.ink)
+        c.setFont(style.font, style.size - 0.5)
         c.drawString(x, yy - 4 * mm, str(value) if value not in (None, "") else "—")
 
     col2 = ml + 92 * mm
@@ -206,14 +201,9 @@ def build_consent_pdf(clinic, professional, patient, consent):
     c.drawString(ml + 32 * mm, y - 4 * mm, lugar_fecha)
 
     # ── Pie institucional ──
-    c.setStrokeColor(LINE)
-    c.setLineWidth(0.5)
-    c.line(ml, 15 * mm, mr, 15 * mm)
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 7)
-    footer = " · ".join([p for p in [clinic.get("name"), clinic.get("address"),
-                                     clinic.get("phone"), clinic.get("email")] if p])
-    c.drawCentredString(width / 2, 10.5 * mm, footer or "")
+    # El pie institucional lo dibuja el motor con la configuración de la
+    # clínica, igual en todos los documentos.
+    style.draw_footer(c)
 
     c.showPage()
     c.save()
