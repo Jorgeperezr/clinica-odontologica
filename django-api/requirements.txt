@@ -16,3 +16,8 @@ reportlab==4.2.2
 whitenoise==6.7.0
 python-dateutil==2.9.0
 openpyxl==3.1.5
+# Cifrado de la copia de seguridad de la clínica (AES-256-GCM + PBKDF2).
+# Ya venía instalada de forma transitiva con google-auth; se declara
+# explícita porque ahora el código la importa de forma directa y no debe
+# depender de que otra librería la siga arrastrando.
+cryptography==49.0.0

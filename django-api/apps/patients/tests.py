@@ -149,16 +149,39 @@ class PatientDocumentFlowTests(APITestCase):
             format="multipart",
         )
 
-    def test_upload_returns_relative_url_and_metadata(self):
+    def test_upload_returns_guarded_url_and_metadata(self):
+        """
+        `file_url` apunta al endpoint autenticado, no a /media/.
+
+        Hasta el Sprint 66 devolvía la ruta del archivo en disco, lo que
+        obligaba a publicar /media/ para poder mostrarlo; ahí dentro hay
+        radiografías y documentos de pacientes, de modo que la URL era
+        suficiente para llevárselos sin sesión.
+        """
         resp = self._upload()
         self.assertEqual(resp.status_code, 201, resp.content)
-        # URL relativa, NO absoluta con localhost
-        self.assertTrue(resp.data["file_url"].startswith("/media/"))
+        self.assertNotIn("/media/", resp.data["file_url"])
         self.assertNotIn("http", resp.data["file_url"])
+        self.assertRegex(
+            resp.data["file_url"],
+            r"^/api/v1/patients/[0-9a-f-]+/documents/\d+/file/$",
+        )
         self.assertEqual(resp.data["file_name"][-4:], ".pdf")
         self.assertGreater(resp.data["file_size"], 0)
         self.assertEqual(resp.data["uploaded_by_name"], "Dr. Documentos")
         self.assertEqual(resp.data["doc_type_display"], "Informe")
+
+    def test_returned_url_is_the_one_that_serves_the_file(self):
+        """La ruta que publica el serializador tiene que funcionar tal cual."""
+        url = self._upload().data["file_url"]
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(b"".join(resp.streaming_content), b"%PDF-1.4 fake")
+
+    def test_returned_url_is_useless_without_session(self):
+        url = self._upload().data["file_url"]
+        self.client.force_authenticate(user=None)
+        self.assertIn(self.client.get(url).status_code, (401, 403))
 
     def test_authenticated_file_download(self):
         self._upload()

@@ -84,6 +84,24 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
 
 ## Backups CIFRADOS (obligatorio en la Opción B, recomendado en la A)
 
+Hay **dos copias distintas** y conviene no confundirlas, porque protegen
+cosas diferentes y las hace gente diferente:
+
+| | Copia de la plataforma | Copia de la clínica |
+|---|---|---|
+| Qué contiene | La base entera: **todas** las clínicas | Los datos de **una** clínica |
+| Quién la hace | Quien administra el servidor | La administradora de la clínica |
+| Desde dónde | `scripts/backup.sh` en el servidor | Panel → Configuración → Copia de seguridad |
+| Clave | `BACKUP_PASSPHRASE` del `.env` | La frase que escribe en pantalla |
+| Sirve para | Recuperar el servicio ante un desastre | Que la clínica conserve y consulte sus datos |
+| Restaura | Sí, con `scripts/restore.sh` | No: solo descifra y muestra el contenido |
+
+La copia de la clínica **no sustituye** a la de la plataforma: no incluye
+los archivos adjuntos ni permite levantar el servicio de nuevo. La de la
+plataforma sigue siendo obligatoria.
+
+### Copia de la plataforma (servidor)
+
 El repo incluye `scripts/backup.sh` (exporta toda la base — pacientes,
 registros clínicos, pagos — y la cifra con AES-256) y `scripts/restore.sh`
 (restaura un backup ante un error, con confirmación explícita).
@@ -114,6 +132,25 @@ COMPOSE_FILE=docker-compose.prod.yml ./scripts/restore.sh backups/clinica-2026-0
 Copiar `backups/` a un destino EXTERNO (rclone a Google Drive, disco USB
 rotado). Un backup que vive en la misma máquina no es backup. Y probar la
 restauración al menos una vez antes de tener pacientes reales.
+
+### Copia de la clínica (panel)
+
+En **Configuración → Copia de seguridad**, la administradora de la
+clínica genera un archivo `.clinicabk` con los datos de su clínica y lo
+vuelve a abrir desde la misma pantalla escribiendo su frase de cifrado.
+
+- Cifrado AES-256-GCM con clave derivada por PBKDF2-HMAC-SHA256
+  (400 000 iteraciones). El archivo va autenticado: si se altera un solo
+  byte, no se abre.
+- **La frase no se guarda en ninguna parte**, tampoco en la auditoría.
+  Perderla equivale a perder el archivo.
+- Solo el rol `admin` **de la clínica**. El Super Administrador de la
+  plataforma no puede emitir ni abrir estas copias: administra el
+  servicio, no es titular de los datos de ninguna clínica.
+- Descifrar no restaura nada. Reponer datos sobre la base sigue siendo
+  una operación de servidor (`scripts/restore.sh`), no de panel.
+- El JSON descifrado que se descarga va **sin cifrar** y contiene datos
+  de salud: hay que borrarlo del equipo al terminar (LOPDP).
 
 ## Actualizaciones del sistema
 
@@ -149,6 +186,27 @@ LEGAL de Ecuador (firmaEC): cada doctor necesita su certificado digital
 UANATACA, ANF). Con esos certificados se integra el firmado PAdES del
 PDF (librería endesive) — mismo patrón que Meta y Google: el código
 queda listo, faltan las credenciales del trámite.
+
+## Archivos subidos (`/media/`)
+
+Nginx sirve desde disco **únicamente** `/media/branding/` — el logotipo de la
+clínica, que es público y va en un `<img>` sin sesión. Cualquier otra ruta
+bajo `/media/` devuelve 404 a propósito.
+
+El resto de lo que hay ahí dentro son radiografías, documentos de pacientes,
+consentimientos firmados y firmas manuscritas. Nginx no sabe quién pide un
+archivo, así que publicarlos por esa vía los dejaría al alcance de cualquiera
+que acertara la URL, sin sesión y sin registro de acceso. Se entregan por la
+API (`/api/v1/patients/{id}/documents/{doc}/file/`), que valida clínica,
+paciente y permisos antes de devolver el binario.
+
+**Si alguna vez hace falta publicar una carpeta nueva**, añádele su propio
+`location` con `alias`; no amplíes el de `branding` ni sustituyas el `return
+404` por un `alias` general.
+
+Con `USE_CLOUD_STORAGE=True` los archivos van al bucket y esto no aplica:
+las URLs son absolutas y el control de acceso lo da el propio bucket, que debe
+quedar **privado** por el mismo motivo.
 
 ## Pendientes ANTES de pacientes reales
 

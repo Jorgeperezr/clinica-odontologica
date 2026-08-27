@@ -214,13 +214,18 @@ ocurren.
 
 ### 6.1 Riesgos técnicos
 
-1. **Servido de `/media/` en producción (verificar antes del despliegue).**
-   `nginx.conf` proxya `/media/` a Django, pero Django solo sirve media con
-   `DEBUG=True` (`config/urls.py:32`). En `docker-compose.prod.yml` nginx monta
-   `media_data` en `/app/media:ro` pero **no existe un `location` que sirva
-   desde esa ruta**. Consecuencia probable: logos de clínica (que usan URL
-   `/media/...` directa) devolverían 404 en producción. Los documentos de
-   pacientes no se ven afectados (usan el endpoint autenticado del Sprint 38).
+1. ~~**Servido de `/media/` en producción.**~~ **RESUELTO (Sprint 66).** El
+   diagnóstico era correcto en la conclusión y equivocado en un detalle: sí
+   existía un `location /media/`, pero *proxyaba a Django*, que solo publica
+   media con `DEBUG=True`, así que en producción devolvía 404 igualmente. Al
+   ir a corregirlo apareció algo peor de lo previsto: los documentos de
+   pacientes **sí** estaban afectados, porque el serializador devolvía la ruta
+   `/media/...` y la rejilla de miniaturas la usaba en un `<img>` — publicar
+   /media/ para arreglar el logotipo habría dejado radiografías y documentos
+   clínicos descargables sin sesión. Ahora nginx sirve solo
+   `/media/branding/` y niega el resto, y `file_url` apunta al endpoint
+   autenticado. Verificado con nginx real: logotipo 200, radiografía y
+   documento 404, incluidos intentos de salto de directorio.
 2. **Test flaky de medianoche** (sección 5): CI rojo intermitente ≈ 1 hora/día.
 3. **JWT en `localStorage`** (`frontend/lib/api.js`): expuesto ante XSS. Riesgo
    moderado (no hay contenido de terceros inyectable hoy), pero una migración a
