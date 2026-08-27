@@ -16,17 +16,12 @@ import base64
 import io
 from datetime import date
 
-from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-# Colores de reserva. Se usan solo si no llega un estilo de documento;
-# la apariencia real la aporta `apps.common.document_style` (Sprint 60),
-# que es el único punto donde se configura el aspecto de los documentos.
-PETROL = colors.HexColor("#0e5c63")
-INK = colors.HexColor("#1f2937")
-SOFT = colors.HexColor("#6b7280")
-LINE = colors.HexColor("#d1d5db")
+# Este documento ya no define colores ni tipografías propias: todo sale
+# de `apps.common.document_style`, que es el único punto donde se
+# configura el aspecto de los documentos (Sprint 63).
 
 
 def _age_from_birth(birth):
@@ -89,10 +84,10 @@ def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
     # ── Helper de secciones ──
     def section(title):
         nonlocal y
-        c.setFillColor(PETROL)
-        c.setFont("Helvetica-Bold", 10)
+        c.setFillColor(style.primary)
+        c.setFont(style.font_bold, style.size)
         c.drawString(ml, y, title.upper())
-        c.setStrokeColor(LINE)
+        c.setStrokeColor(style.separator)
         c.setLineWidth(0.5)
         c.line(ml, y - 2 * mm, mr, y - 2 * mm)
         y -= 8 * mm
@@ -100,11 +95,11 @@ def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
     def field(label, value, x=None, inline=False):
         nonlocal y
         xx = x if x is not None else ml
-        c.setFillColor(SOFT)
-        c.setFont("Helvetica", 8.5)
+        c.setFillColor(style.secondary)
+        c.setFont(style.font, style.size - 1.5)
         c.drawString(xx, y, label.upper())
-        c.setFillColor(INK)
-        c.setFont("Helvetica", 10.5)
+        c.setFillColor(style.ink)
+        c.setFont(style.font, style.size + 0.5)
         c.drawString(xx, y - 5 * mm, str(value) if value not in (None, "") else "—")
         if not inline:
             y -= 11 * mm
@@ -137,18 +132,18 @@ def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
 
     def paragraph(label, text):
         nonlocal y
-        c.setFillColor(SOFT)
-        c.setFont("Helvetica", 8.5)
+        c.setFillColor(style.secondary)
+        c.setFont(style.font, style.size - 1.5)
         c.drawString(ml, y, label.upper())
         y -= 5 * mm
-        c.setFillColor(INK)
-        c.setFont("Helvetica", 10)
+        c.setFillColor(style.ink)
+        c.setFont(style.font, style.size)
         # Envoltura simple de texto
         words = str(text or "—").split()
         line, maxw = "", mr - ml
         for w in words:
             test = f"{line} {w}".strip()
-            if c.stringWidth(test, "Helvetica", 10) > maxw:
+            if c.stringWidth(test, style.font, style.size) > maxw:
                 c.drawString(ml, y, line)
                 y -= 5 * mm
                 line = w
@@ -162,35 +157,22 @@ def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
         paragraph("Observaciones", exam.get("observations"))
 
     # ── Firma y sello ──
-    y = max(y, 60 * mm)
-    sign_y = 48 * mm
-    sig = _decode_signature(professional.get("signature_b64"))
-    if sig is not None:
-        try:
-            c.drawImage(sig, width / 2 - 30 * mm, sign_y, width=60 * mm, height=22 * mm,
-                        preserveAspectRatio=True, mask="auto")
-        except Exception:
-            pass
-    c.setStrokeColor(INK)
-    c.setLineWidth(0.6)
-    c.line(width / 2 - 40 * mm, sign_y, width / 2 + 40 * mm, sign_y)
-    c.setFillColor(INK)
-    c.setFont("Helvetica-Bold", 10)
-    c.drawCentredString(width / 2, sign_y - 5 * mm, professional.get("full_name") or "")
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 8.5)
-    c.drawCentredString(width / 2, sign_y - 9.5 * mm,
-                        f"Firma y sello · Reg. {professional.get('license_number') or '—'}")
+    # El bloque queda anclado abajo cuando el contenido es corto y baja
+    # con el contenido cuando es largo, sin llegar a pisar el pie.
+    sign_top = max(min(y - 4 * mm, style.margin_bottom + 52 * mm),
+                   style.margin_bottom + 46 * mm)
+    style.draw_signature(c, sign_top, [{
+        "caption": "Firma y sello",
+        "full_name": professional.get("full_name") or "",
+        "specialty": professional.get("specialty"),
+        "license_number": professional.get("license_number"),
+        "image": _decode_signature(professional.get("signature_b64")),
+    }])
 
     # ── Pie institucional ──
-    c.setStrokeColor(LINE)
-    c.setLineWidth(0.5)
-    c.line(ml, 16 * mm, mr, 16 * mm)
-    c.setFillColor(SOFT)
-    c.setFont("Helvetica", 7.5)
-    footer = " · ".join([p for p in [clinic.get("name"), clinic.get("address"),
-                                     clinic.get("phone"), clinic.get("email")] if p])
-    c.drawCentredString(width / 2, 11 * mm, footer or "")
+    # Lo dibuja el motor con la configuración de la clínica: mismo pie en
+    # todos los documentos y desactivable desde Configuración.
+    style.draw_footer(c, clinic=clinic)
 
     c.showPage()
     c.save()

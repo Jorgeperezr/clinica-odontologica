@@ -115,8 +115,9 @@ def generate_consent_pdf(consent, signature_path=None, style=None, clinic=None) 
     ]
     table = Table(evidence, colWidths=[5 * cm, 10 * cm])
     table.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("TEXTCOLOR", (0, 0), (-1, -1), colors.grey),
+        ("FONTNAME", (0, 0), (-1, -1), style.font),
+        ("FONTSIZE", (0, 0), (-1, -1), max(6, style.size - 2)),
+        ("TEXTCOLOR", (0, 0), (-1, -1), style.secondary),
     ]))
     story.append(table)
     story.append(Spacer(1, 6))
@@ -125,7 +126,7 @@ def generate_consent_pdf(consent, signature_path=None, style=None, clinic=None) 
         styles["Small"],
     ))
 
-    furniture = style.page_furniture()
+    furniture = style.page_furniture(clinic=clinic)
     doc.build(story, onFirstPage=furniture, onLaterPages=furniture)
     return buffer.getvalue()
 
@@ -199,6 +200,6 @@ def generate_clinical_history_pdf(patient, evolutions, diagnoses, plans,
     else:
         story.append(Paragraph("Sin planes de tratamiento.", styles["Normal"]))
 
-    furniture = style.page_furniture()
+    furniture = style.page_furniture(clinic=clinic)
     doc.build(story, onFirstPage=furniture, onLaterPages=furniture)
     return buffer.getvalue()
