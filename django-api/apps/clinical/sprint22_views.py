@@ -21,6 +21,7 @@ from apps.clinical.models import (
 )
 from apps.clinical.serializers import TreatmentPlanTemplateSerializer
 from apps.common.permissions import HasRole
+from apps.configuration.pricing import prefetch_tariffs, price_for
 
 CAN_EDIT_CLINICAL = HasRole.for_roles("admin", "doctor", "auxiliary")
 CAN_VIEW_CLINICAL = HasRole.for_roles("admin", "doctor", "auxiliary", "reception")
@@ -108,12 +109,29 @@ class ApplyTemplateView(APIView):
         return Response(TreatmentPlanSerializer(plan).data, status=201)
 
 
+def _item_price(item, agreement, tariffs):
+    """
+    Precio de una línea del plan al pasarla a presupuesto.
+
+    Un `estimated_price` escrito a mano manda sobre el tarifario: si el
+    odontólogo pactó una cifra con el paciente, el convenio no debe
+    reescribirla por la espalda. Lo que sí se sustituye es el valor que el
+    propio sistema puso por defecto —vacío, o copiado del precio base al
+    aplicar una plantilla—, porque eso no lo decidió nadie.
+    """
+    estimated = item.estimated_price
+    auto = not estimated or estimated == item.treatment.base_price
+    if auto:
+        return price_for(item.treatment, agreement, tariffs=tariffs)
+    return estimated
+
+
 class PlanToBudgetView(APIView):
     """
     POST /api/v1/treatment-plans/{pk}/generate-budget/
     Presupuesto automático: crea el Budget (billing) con un ítem por cada
-    ítem del plan, a los precios estimados del plan. Une el flujo clínico
-    con el financiero en un clic.
+    ítem del plan, a la tarifa que corresponde al convenio del paciente.
+    Une el flujo clínico con el financiero en un clic.
     """
 
     permission_classes = [HasRole.for_roles("admin", "reception", "doctor")]
@@ -123,8 +141,11 @@ class PlanToBudgetView(APIView):
         from apps.billing.serializers import BudgetSerializer
 
         try:
-            plan = TreatmentPlan.objects.prefetch_related("items__treatment").get(
-                id=pk, tenant=request.tenant
+            plan = (
+                TreatmentPlan.objects
+                .select_related("patient__agreement")
+                .prefetch_related("items__treatment")
+                .get(id=pk, tenant=request.tenant)
             )
         except TreatmentPlan.DoesNotExist:
             return Response({"detail": "Plan no encontrado."}, status=404)
@@ -133,13 +154,20 @@ class PlanToBudgetView(APIView):
         if not items:
             return Response({"detail": "El plan no tiene ítems."}, status=400)
 
+        # El presupuesto se emite con la tarifa del convenio del paciente
+        # (Sprint 71). Antes se usaba siempre el precio base del catálogo:
+        # la clínica podía tener cargado el tarifario entero de una
+        # aseguradora y seguir presupuestando la tarifa particular.
+        agreement = plan.patient.agreement
+        tariffs = prefetch_tariffs(request.tenant, agreement)
+
         budget = Budget.objects.create(
             tenant=request.tenant, patient=plan.patient,
             notes="Generado automáticamente desde el plan de tratamiento.",
         )
         total = 0
         for item in items:
-            price = item.estimated_price or item.treatment.base_price
+            price = _item_price(item, agreement, tariffs)
             BudgetItem.objects.create(
                 budget=budget, treatment=item.treatment,
                 tooth_fdi_code=item.tooth_fdi_code or "",
@@ -153,7 +181,10 @@ class PlanToBudgetView(APIView):
             tenant=request.tenant, user=request.user,
             action="generate_budget_from_plan", entity_type="Budget",
             entity_id=str(budget.id),
-            metadata={"plan_id": str(plan.id), "total": str(total)},
+            metadata={
+                "plan_id": str(plan.id), "total": str(total),
+                "agreement": agreement.name if agreement else None,
+            },
         )
         return Response(BudgetSerializer(budget).data, status=201)
 

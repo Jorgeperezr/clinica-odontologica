@@ -274,7 +274,19 @@ ocurren.
 6. **Duplicidad latente `full_name` vs. `first_name/last_name`** entre `User`
    (full_name) y `Patient` (first/last) — no es un bug, pero obliga a
    formatear en cada vista.
-7. **UI faltante para convenios y tarifarios** (backend listo desde Sprint 2).
+7. ~~**UI faltante para convenios y tarifarios**~~ **RESUELTO (Sprint 71).**
+   El diagnóstico se quedaba corto: faltaba la pantalla, sí, pero además
+   `Agreement` y `Tariff` **no los leía nadie**. El presupuesto se calculaba
+   siempre con `Treatment.base_price`, así que una clínica podía cargar el
+   tarifario entero de una aseguradora y seguir cobrando la tarifa
+   particular; y no existía forma de decir qué paciente está cubierto por
+   qué convenio. Ahora hay `Patient.agreement`, un único punto de
+   resolución de precios (`apps/configuration/pricing.py`) con precedencia
+   declarada, y el presupuesto automático lo usa. Al conectarlo aparecieron
+   dos agujeros de aislamiento: ni `TariffSerializer` ni `PatientSerializer`
+   comprobaban que el tratamiento o el convenio recibidos fueran de la
+   misma clínica — el `queryset` que DRF deduce de un ForeignKey no filtra
+   por tenant.
 
 ### 6.3 Fortalezas a preservar
 
@@ -324,7 +336,9 @@ recorre todos los módulos; accesibilidad (WCAG AA verificado, reduced-motion).
 9. Observabilidad mínima: Sentry (Django + Next) y healthchecks monitorizados.
 
 ### P2 — Completar el alcance funcional
-10. UI de convenios y tarifarios en Configuración (backend ya listo).
+10. ~~UI de convenios y tarifarios en Configuración~~ (Sprint 71). Incluyó
+    lo que el backend «ya listo» no tenía: vínculo paciente–convenio y uso
+    real de la tarifa al presupuestar.
 11. App móvil de pacientes (Flutter): login OTP, citas, evoluciones visibles,
     estado de cuenta — el backend ya expone lo necesario.
 12. Google Calendar Fase 2 (OAuth bidireccional).

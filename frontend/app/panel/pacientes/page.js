@@ -195,10 +195,24 @@ function PatientCard({ patient: p }) {
 function PatientForm({ onSaved }) {
   const [form, setForm] = useState({
     first_name: "", last_name: "", national_id: "",
-    phone: "", email: "", birth_date: "",
+    phone: "", email: "", birth_date: "", agreement: "",
   });
+  const [agreements, setAgreements] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Los convenios se cargan una vez al abrir el formulario. Si la clínica
+  // no tiene ninguno, el selector no llega a pintarse: no tiene sentido
+  // pedir «particular o convenio» donde solo existe una respuesta.
+  useEffect(() => {
+    api("/config/agreements/")
+      .then(async (r) => {
+        const data = await r.json();
+        const list = data.results || data;
+        setAgreements(Array.isArray(list) ? list.filter((a) => a.is_active) : []);
+      })
+      .catch(() => setAgreements([]));
+  }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -210,6 +224,9 @@ function PatientForm({ onSaved }) {
       const body = { ...form };
       if (!body.birth_date) delete body.birth_date;
       if (!body.email) delete body.email;
+      // "" no es un UUID: el paciente particular va sin convenio, no con
+      // uno vacío, o el serializador responde 400.
+      if (!body.agreement) delete body.agreement;
       const resp = await api("/patients/", { method: "POST", body: JSON.stringify(body) });
       const data = await resp.json();
       if (!resp.ok) {
@@ -254,6 +271,15 @@ function PatientForm({ onSaved }) {
           <label>Fecha de nacimiento</label>
           <input type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} />
         </div>
+        {agreements.length > 0 && (
+          <div className="field">
+            <label>Convenio</label>
+            <select value={form.agreement} onChange={(e) => set("agreement", e.target.value)}>
+              <option value="">Particular (sin convenio)</option>
+              {agreements.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+        )}
       </div>
       <button className="btn btn-primary" disabled={saving}>
         {saving ? "Guardando…" : "Guardar paciente"}
