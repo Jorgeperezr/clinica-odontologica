@@ -65,14 +65,28 @@ class PatientDocumentSerializer(serializers.ModelSerializer):
 
 class PatientSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
+    agreement_name = serializers.CharField(source="agreement.name", read_only=True,
+                                           default=None)
 
     class Meta:
         model = Patient
         fields = [
             "id", "first_name", "last_name", "full_name", "national_id",
             "birth_date", "phone", "email", "address", "photo", "created_at",
+            "agreement", "agreement_name",
         ]
         read_only_fields = ["id", "created_at"]
+
+    def validate_agreement(self, value):
+        """
+        El convenio tiene que ser de esta clínica. Sin esta comprobación un
+        usuario podía asignar a su paciente el convenio de otra clínica con
+        solo mandar su id: el `queryset` del serializador no filtra por
+        tenant, y a partir de ahí sus tarifarios habrían fijado el precio.
+        """
+        if value is not None and value.tenant_id != self.context["request"].tenant.id:
+            raise serializers.ValidationError("El convenio no pertenece a esta clínica.")
+        return value
 
     def validate_national_id(self, value):
         tenant = self.context["request"].tenant

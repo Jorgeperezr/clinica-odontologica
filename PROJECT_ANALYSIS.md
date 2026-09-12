@@ -226,12 +226,20 @@ ocurren.
    `/media/branding/` y niega el resto, y `file_url` apunta al endpoint
    autenticado. Verificado con nginx real: logotipo 200, radiografía y
    documento 404, incluidos intentos de salto de directorio.
-2. **Test flaky de medianoche** (sección 5): CI rojo intermitente ≈ 1 hora/día.
+2. ~~**Test flaky de medianoche**~~ **RESUELTO (Sprints 61 y 70).** La suite
+   pasa ahora en nueve fechas frontera (fin de mes, fin de año, 29 de febrero,
+   1 de marzo) y en cuatro husos horarios. El CI ejecuta una segunda pasada con
+   la clínica en UTC+14 para que la fecha del servidor y la local NUNCA
+   coincidan, que es la condición en la que aparecen estos fallos.
 3. **JWT en `localStorage`** (`frontend/lib/api.js`): expuesto ante XSS. Riesgo
    moderado (no hay contenido de terceros inyectable hoy), pero una migración a
    cookies `httpOnly` o mitigaciones CSP es deseable antes de crecer.
-4. **Sin tests del gateway FastAPI**: el parseo del webhook de Meta (crítico
-   para confirmaciones de cita) solo tiene lint en CI.
+4. ~~**Sin tests del gateway FastAPI**~~ **RESUELTO (Sprint 69).** 30 pruebas
+   sobre firma del webhook, parseo del formato de Meta, verificación de la URL
+   y token interno; el trabajo de CI pasa a ejecutarlas además del lint. Al
+   escribirlas apareció un fallo real: una excepción inesperada al procesar un
+   evento devolvía 500, y Meta acaba desactivando el webhook de la cuenta ante
+   los 5xx repetidos.
 5. **Sin observabilidad**: no hay Sentry/alertas ni logging estructurado;
    en producción los errores solo quedan en stdout de los contenedores.
 6. **Backups**: scripts cifrados existen (`scripts/backup.sh`), pero no hay
@@ -266,7 +274,19 @@ ocurren.
 6. **Duplicidad latente `full_name` vs. `first_name/last_name`** entre `User`
    (full_name) y `Patient` (first/last) — no es un bug, pero obliga a
    formatear en cada vista.
-7. **UI faltante para convenios y tarifarios** (backend listo desde Sprint 2).
+7. ~~**UI faltante para convenios y tarifarios**~~ **RESUELTO (Sprint 71).**
+   El diagnóstico se quedaba corto: faltaba la pantalla, sí, pero además
+   `Agreement` y `Tariff` **no los leía nadie**. El presupuesto se calculaba
+   siempre con `Treatment.base_price`, así que una clínica podía cargar el
+   tarifario entero de una aseguradora y seguir cobrando la tarifa
+   particular; y no existía forma de decir qué paciente está cubierto por
+   qué convenio. Ahora hay `Patient.agreement`, un único punto de
+   resolución de precios (`apps/configuration/pricing.py`) con precedencia
+   declarada, y el presupuesto automático lo usa. Al conectarlo aparecieron
+   dos agujeros de aislamiento: ni `TariffSerializer` ni `PatientSerializer`
+   comprobaban que el tratamiento o el convenio recibidos fueran de la
+   misma clínica — el `queryset` que DRF deduce de un ForeignKey no filtra
+   por tenant.
 
 ### 6.3 Fortalezas a preservar
 
@@ -316,7 +336,9 @@ recorre todos los módulos; accesibilidad (WCAG AA verificado, reduced-motion).
 9. Observabilidad mínima: Sentry (Django + Next) y healthchecks monitorizados.
 
 ### P2 — Completar el alcance funcional
-10. UI de convenios y tarifarios en Configuración (backend ya listo).
+10. ~~UI de convenios y tarifarios en Configuración~~ (Sprint 71). Incluyó
+    lo que el backend «ya listo» no tenía: vínculo paciente–convenio y uso
+    real de la tarifa al presupuestar.
 11. App móvil de pacientes (Flutter): login OTP, citas, evoluciones visibles,
     estado de cuenta — el backend ya expone lo necesario.
 12. Google Calendar Fase 2 (OAuth bidireccional).

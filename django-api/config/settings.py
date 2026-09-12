@@ -153,7 +153,11 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internacionalización
 # --------------------------------------------------------------------------
 LANGUAGE_CODE = "es-ec"
-TIME_ZONE = "America/Guayaquil"
+# Configurable por entorno: el sistema es multiclínica y una sede en otro
+# huso necesita el suyo. En pruebas sirve además para reproducir el
+# desfase entre la fecha del servidor y la fecha local de la clínica,
+# que es de donde han salido varios fallos de frontera de fecha.
+TIME_ZONE = config("DJANGO_TIME_ZONE", default="America/Guayaquil")
 USE_I18N = True
 USE_TZ = True
 

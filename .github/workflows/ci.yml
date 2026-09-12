@@ -10,7 +10,13 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    # `branches` filtra por la rama BASE, no por la del PR. Con solo
+    # [main, develop], un PR apilado sobre otro —base `claude/...`— no
+    # dispara nada: no sale en rojo, sale SIN CI, que se parece
+    # demasiado a estar en verde. Pasó con la pila de cinco PR del
+    # Sprint 70: cuatro de ellos llevaban semanas sin ejecutar una sola
+    # comprobación y la última ejecución visible era de antes de dividir.
+    branches: [main, develop, 'claude/**']
 
 jobs:
   django-tests:
@@ -39,7 +45,18 @@ jobs:
         working-directory: django-api
         run: python manage.py test --settings=config.settings_test -v 2
 
-  whatsapp-gateway-lint:
+      # Segunda pasada con la clínica en un huso muy lejano del servidor.
+      # Varios fallos han venido de mezclar la fecha del servidor con la
+      # fecha local de la clínica, y solo aparecen cuando ambas difieren:
+      # a las horas en que coinciden, la suite pasa igual. Kiritimati
+      # (UTC+14) garantiza que no coincidan nunca.
+      - name: Tests (huso lejano, frontera de fecha)
+        working-directory: django-api
+        env:
+          DJANGO_TIME_ZONE: Pacific/Kiritimati
+        run: python manage.py test --settings=config.settings_test
+
+  whatsapp-gateway:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,11 +64,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-          cache-dependency-path: whatsapp-gateway/requirements.txt
+          cache-dependency-path: whatsapp-gateway/requirements-dev.txt
       - name: Instalar dependencias
-        run: pip install -r whatsapp-gateway/requirements.txt ruff==0.16.1
+        run: pip install -r whatsapp-gateway/requirements-dev.txt ruff==0.16.1
       - name: Lint
-        run: ruff check whatsapp-gateway/app whatsapp-gateway/main.py
+        run: ruff check whatsapp-gateway/app whatsapp-gateway/main.py whatsapp-gateway/tests
+      - name: Tests
+        working-directory: whatsapp-gateway
+        run: python -m pytest tests -q
 
   frontend-build:
     runs-on: ubuntu-latest

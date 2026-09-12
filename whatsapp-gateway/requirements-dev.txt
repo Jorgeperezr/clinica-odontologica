@@ -1,0 +1,5 @@
+# Dependencias solo de desarrollo y CI. Van con versión FIJA por el mismo
+# motivo que el linter (ver la cabecera de .github/workflows/ci.yml): una
+# herramienta sin fijar convierte la compilación en algo que se rompe solo.
+-r requirements.txt
+pytest==8.3.3

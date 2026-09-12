@@ -813,3 +813,104 @@ class PeriodontalChartTests(APITestCase):
         self.client.force_authenticate(user=intruso)
         r = self.client.patch(f"/api/v1/periodontal-teeth/{tid}/", {"mobility": 3}, format="json")
         self.assertEqual(r.status_code, 404)
+
+
+class BudgetUnderAgreementTests(Sprint22Base):
+    """
+    El presupuesto automático bajo convenio (Sprint 71).
+
+    Hasta ahora esta vista usaba siempre `Treatment.base_price`, así que los
+    convenios y tarifarios existían en la base de datos sin efecto ninguno
+    sobre lo que se le cobraba al paciente. Estas pruebas fijan que el
+    presupuesto sale con la tarifa del convenio y —lo que es igual de
+    importante— que NO pisa un precio escrito a mano.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from apps.configuration.models import Agreement, Tariff
+
+        self.Tariff = Tariff
+        self.agreement = Agreement.objects.create(
+            tenant=self.tenant, name="Seguro Andino", discount_percentage=Decimal("20.00"),
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def _plan_con(self, treatment, estimated_price=None):
+        """Plan de un solo ítem, para aislar el precio que se está midiendo."""
+        from apps.clinical.models import TreatmentPlan, TreatmentPlanItem
+
+        plan = TreatmentPlan.objects.create(tenant=self.tenant, patient=self.patient)
+        TreatmentPlanItem.objects.create(
+            treatment_plan=plan, treatment=treatment, order=1,
+            estimated_price=(
+                treatment.base_price if estimated_price is None else estimated_price
+            ),
+        )
+        return plan
+
+    def _presupuestar(self, plan):
+        resp = self.client.post(f"/api/v1/treatment-plans/{plan.id}/generate-budget/")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        return resp.data
+
+    def test_sin_convenio_el_presupuesto_no_cambia(self):
+        data = self._presupuestar(self._plan_con(self.t1))
+        self.assertEqual(data["total_amount"], "300.00")
+
+    def test_el_presupuesto_aplica_el_descuento_del_convenio(self):
+        self.patient.agreement = self.agreement
+        self.patient.save()
+        data = self._presupuestar(self._plan_con(self.t1))
+        self.assertEqual(data["total_amount"], "240.00")
+
+    def test_el_presupuesto_aplica_el_tarifario_pactado(self):
+        self.patient.agreement = self.agreement
+        self.patient.save()
+        self.Tariff.objects.create(
+            tenant=self.tenant, treatment=self.t1,
+            agreement=self.agreement, price=Decimal("175.00"),
+        )
+        data = self._presupuestar(self._plan_con(self.t1))
+        self.assertEqual(data["total_amount"], "175.00")
+
+    def test_un_precio_escrito_a_mano_no_lo_pisa_el_convenio(self):
+        """
+        Si el odontólogo pactó una cifra con el paciente, el tarifario no
+        debe reescribirla por la espalda. Solo se sustituye el valor que
+        puso el propio sistema.
+        """
+        self.patient.agreement = self.agreement
+        self.patient.save()
+        plan = self._plan_con(self.t1, estimated_price=Decimal("120.00"))
+        self.assertEqual(self._presupuestar(plan)["total_amount"], "120.00")
+
+    def test_un_convenio_de_otra_clinica_no_se_puede_asignar(self):
+        """
+        El `queryset` del ForeignKey no filtra por tenant: sin validación,
+        mandar el id bastaba para que los tarifarios de otra clínica
+        fijaran el precio de este paciente.
+        """
+        from apps.configuration.models import Agreement
+
+        otra = Tenant.objects.create(name="Clínica Ajena S71", ruc="1791234567002")
+        ajeno = Agreement.objects.create(tenant=otra, name="Convenio ajeno")
+        resp = self.client.patch(
+            f"/api/v1/patients/{self.patient.id}/", {"agreement": str(ajeno.id)}
+        )
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.patient.refresh_from_db()
+        self.assertIsNone(self.patient.agreement_id)
+
+    def test_borrar_el_convenio_no_borra_al_paciente(self):
+        """
+        Terminar el contrato con una aseguradora no puede hacer desaparecer
+        a los pacientes que cubría: pasan a particulares.
+        """
+        self.patient.agreement = self.agreement
+        self.patient.save()
+        self.agreement.delete()
+        self.patient.refresh_from_db()
+        self.assertTrue(Patient.objects.filter(id=self.patient.id).exists())
+        self.assertIsNone(self.patient.agreement_id)
+        self.assertEqual(self._presupuestar(self._plan_con(self.t1))["total_amount"], "300.00")

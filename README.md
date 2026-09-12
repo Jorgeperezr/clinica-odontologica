@@ -1035,6 +1035,82 @@ a todo el diente y no solo a la mesa.
 104 ms de generación. El instrumento de medida queda documentado en el
 propio módulo para que el siguiente intento no vuelva a ser a ojo.
 
+### Sprint 69 — El gateway de WhatsApp deja de ir sin red (hecho)
+
+Era el único servicio sin una sola prueba, y es el que da la cara a
+internet: recibe el webhook de Meta, valida su firma y traduce su formato
+al que entiende Django. Un fallo ahí no se ve en el panel; se ve como
+recordatorios que no llegan y confirmaciones de cita que se pierden.
+
+**30 pruebas**, por orden de importancia:
+
+- **Firma del webhook**, que es lo único que separa un evento de Meta de
+  uno inventado por cualquiera que descubra la URL pública. Se cubre la
+  firma válida, la ausente, la incorrecta y —la que de verdad importa— una
+  firma válida reutilizada con otro contenido.
+- **Parseo del formato de Meta**: mensajes de texto, respuestas por botón
+  (que es como se contesta la plantilla de recordatorio), cambios de
+  estado, los dos en el mismo sobre, varios `entry` y `changes`, tipos no
+  textuales (foto, audio, ubicación) y siete formas de sobre vacío o
+  incompleto. Meta omite claves con toda naturalidad y ninguna debe
+  provocar un `KeyError`.
+- **Verificación inicial de la URL** y **token de servicio interno**.
+- **Recorrido completo**, que es donde un bucle mal puesto no da error y
+  simplemente no avisa a nadie.
+
+**Un fallo real encontrado al escribirlas.** `notify_django` absorbe los
+errores de red, pero cualquier otra excepción llegaba hasta el manejador y
+devolvía 500. Meta reintenta ante un 5xx y acaba **desactivando el webhook
+de la cuenta**: perder un evento es malo, quedarse sin webhook es peor.
+Ahora cada evento se procesa aislado; si uno falla se registra y los demás
+siguen, con dos pruebas que lo fijan.
+
+**CI**: el trabajo pasa de llamarse `whatsapp-gateway-lint` a
+`whatsapp-gateway` y ejecuta las pruebas además del lint, con
+`requirements-dev.txt` de versiones fijas por el mismo motivo que el
+linter. También se corrige el aviso de obsolescencia de Pydantic
+(`class Config` → `SettingsConfigDict`), que desaparece en la V3.
+
+### Sprint 70 — Cumpleaños, husos y fechas frontera (hecho)
+
+El análisis daba por vivo el riesgo del «test flaky de medianoche». En vez
+de revisarlo a ojo se ejecutó la suite entera con el reloj movido a fechas
+frontera y con la clínica en varios husos. Apareció más de lo esperado, y
+no en los tests: **tres fallos de producción en las 40 líneas del listado
+de cumpleaños**.
+
+- **Quien nació un 29 de febrero desaparecía tres de cada cuatro años.** La
+  ventana se construye sumando días y salta del 28 de febrero al 1 de
+  marzo, así que el par (2, 29) no aparecía nunca y a ese paciente no se
+  le felicitaba jamás en año no bisiesto. Ahora se le atiende el 28.
+- **La edad salía mal al cruzar el fin de año.** Con la ventana a caballo
+  entre diciembre y enero, los años cumplidos se contaban sobre el año en
+  curso: a un paciente que cumplía 27 el 2 de enero el panel le ponía 26.
+- **Se usaba la fecha del servidor, no la de la clínica.** `date.today()`
+  con el contenedor en UTC y la clínica en Guayaquil (UTC−5) significa que
+  entre medianoche y las 05:00 se listaban los cumpleaños del día
+  siguiente y se perdía el de quien cumplía ese mismo día. Pasa a
+  `timezone.localdate()`.
+
+**Un aviso sobre el método.** El primer barrido dio dos fallos más que
+resultaron ser **artefactos del instrumento**: `libfaketime` congela el
+reloj si no se le pide que avance, y con el reloj parado todos los
+`created_at` salen idénticos y el orden queda indefinido. Se comprobó
+antes de «arreglar» nada; con el reloj en marcha esos dos fallos no
+existen.
+
+También se corrigió un test que mezclaba dos fuentes de fecha —creaba las
+citas con la fecha local y consultaba con la del servidor—, resto de la
+corrección a medias del Sprint 61.
+
+**Para que no vuelva a colarse:** cinco pruebas nuevas fijan estos casos
+con la fecha SIMULADA, de modo que se comprueban en cada ejecución y no un
+día al año; `TIME_ZONE` pasa a ser configurable por entorno (útil además
+para una sede en otro huso); y el CI ejecuta una segunda pasada con la
+clínica en UTC+14, donde la fecha del servidor y la local no coinciden
+nunca. Verificado: 191 tests en verde en nueve fechas frontera y cuatro
+husos.
+
 ## Desarrollo en GitHub Codespaces
 
 Este repo funciona bien en Codespaces para `django-api/`, `whatsapp-gateway/` y (más adelante) el panel Next.js — todo corre sobre Docker dentro del devcontainer. El desarrollo de la app Flutter requiere emulador con aceleración gráfica, por lo que se recomienda hacerlo en una máquina local (o dispositivo físico) en paralelo, no dentro de Codespaces.

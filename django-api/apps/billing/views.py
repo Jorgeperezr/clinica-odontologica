@@ -532,19 +532,31 @@ class BirthdaysView(APIView):
     permission_classes = [HasRole.for_roles("admin", "reception", "doctor", "auxiliary")]
 
     def get(self, request):
-        from datetime import date, timedelta
+        import calendar
+        from datetime import timedelta
 
         try:
             days = max(0, min(int(request.query_params.get("days", 7)), 60))
         except ValueError:
             days = 7
 
-        today = date.today()
-        # Pares (mes, día) de la ventana consultada
+        # Fecha LOCAL de la clínica, no la del servidor. Con `date.today()`
+        # y el contenedor en UTC, entre medianoche y las 05:00 de Guayaquil
+        # ya se listaban los cumpleaños del día siguiente y se perdía el de
+        # quien cumplía ese mismo día.
+        today = timezone.localdate()
+
+        # Pares (mes, día) de la ventana → (posición, año en que cae)
         wanted = {}
         for offset in range(days + 1):
             d = today + timedelta(days=offset)
-            wanted.setdefault((d.month, d.day), offset)
+            wanted.setdefault((d.month, d.day), (offset, d.year))
+            # Quien nació un 29 de febrero no tiene cumpleaños los años no
+            # bisiestos: se le felicita el 28. Sin esto desaparecía de la
+            # lista tres de cada cuatro años, porque la ventana salta del
+            # 28 de febrero al 1 de marzo y (2, 29) nunca aparecía.
+            if (d.month, d.day) == (2, 28) and not calendar.isleap(d.year):
+                wanted.setdefault((2, 29), (offset, d.year))
 
         qs = Patient.objects.filter(
             tenant=request.tenant, is_active=True, birth_date__isnull=False
@@ -555,10 +567,11 @@ class BirthdaysView(APIView):
             key = (p.birth_date.month, p.birth_date.day)
             if key not in wanted:
                 continue
-            offset = wanted[key]
-            turns = today.year - p.birth_date.year
-            if (today.month, today.day) < key:
-                turns = today.year - p.birth_date.year
+            offset, year_of = wanted[key]
+            # Los años que cumple se cuentan sobre el año en que cae ESE
+            # cumpleaños, no sobre el actual: con una ventana de hasta 60
+            # días se cruza el fin de año, y entonces salía uno de menos.
+            turns = year_of - p.birth_date.year
             results.append({
                 "id": str(p.id),
                 "full_name": f"{p.first_name} {p.last_name}",

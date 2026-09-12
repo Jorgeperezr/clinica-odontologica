@@ -57,6 +57,9 @@ function PatientDetail() {
         </span>
       </div>
 
+      <PatientAgreement patient={patient} canEdit={role === "admin" || role === "reception"}
+                        onChanged={(p) => setPatient(p)} />
+
       <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
         {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
@@ -625,6 +628,85 @@ function EvolutionsTab({ patientId }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * Convenio del paciente (Sprint 71).
+ *
+ * Se muestra junto a la cabecera porque condiciona el dinero de todo lo que
+ * venga después: el presupuesto que se genere desde el plan saldrá con la
+ * tarifa de este convenio. Tenerlo escondido en un formulario de edición
+ * llevaría a presupuestar con la tarifa equivocada sin enterarse.
+ *
+ * Solo administración y recepción lo cambian: es un dato administrativo, no
+ * clínico.
+ */
+function PatientAgreement({ patient, canEdit, onChanged }) {
+  const [agreements, setAgreements] = useState([]);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!editing || agreements.length) return;
+    api("/config/agreements/")
+      .then(async (r) => {
+        const data = await r.json();
+        const list = data.results || data;
+        setAgreements(Array.isArray(list) ? list.filter((a) => a.is_active) : []);
+      })
+      .catch(() => setError("No se pudieron cargar los convenios."));
+  }, [editing, agreements.length]);
+
+  async function save(value) {
+    setSaving(true);
+    setError("");
+    try {
+      const resp = await api(`/patients/${patient.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ agreement: value || null }),
+      });
+      if (!resp.ok) throw new Error(`No se pudo guardar (error ${resp.status}).`);
+      onChanged(await resp.json());
+      setEditing(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                  fontSize: 13, color: "var(--ink-soft)", marginBottom: 4 }}>
+      <span>Convenio:</span>
+      {editing ? (
+        <select autoFocus disabled={saving} defaultValue={patient.agreement || ""}
+                aria-label="Convenio del paciente"
+                onChange={(e) => save(e.target.value)}
+                style={{ padding: "4px 8px", border: "1px solid var(--line)",
+                         borderRadius: "var(--radius-sm, 4px)" }}>
+          <option value="">Particular (sin convenio)</option>
+          {agreements.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      ) : (
+        <>
+          <strong style={{ color: "var(--ink)" }}>
+            {patient.agreement_name || "Particular"}
+          </strong>
+          {canEdit && (
+            <button type="button" onClick={() => setEditing(true)}
+                    style={{ background: "transparent", border: "none", padding: 0,
+                             color: "var(--petrol)", fontSize: 13, cursor: "pointer" }}>
+              Cambiar
+            </button>
+          )}
+        </>
+      )}
+      {error && <span style={{ color: "var(--red)" }}>{error}</span>}
     </div>
   );
 }
