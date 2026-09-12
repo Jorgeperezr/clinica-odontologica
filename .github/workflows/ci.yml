@@ -10,7 +10,13 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    # `branches` filtra por la rama BASE, no por la del PR. Con solo
+    # [main, develop], un PR apilado sobre otro —base `claude/...`— no
+    # dispara nada: no sale en rojo, sale SIN CI, que se parece
+    # demasiado a estar en verde. Pasó con la pila de cinco PR del
+    # Sprint 70: cuatro de ellos llevaban semanas sin ejecutar una sola
+    # comprobación y la última ejecución visible era de antes de dividir.
+    branches: [main, develop, 'claude/**']
 
 jobs:
   django-tests:
