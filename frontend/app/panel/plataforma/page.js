@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, readList } from "../../../lib/api";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 
 const TABS = [
@@ -84,11 +84,8 @@ function ClinicsTab() {
 
   const load = useCallback(async () => {
     try {
-      const resp = await api("/platform/clinics/");
-      const data = await resp.json();
-      if (!resp.ok) throw new Error();
-      setClinics(data.results || data);
-    } catch { setError("No se pudieron cargar las clínicas."); }
+      setClinics(await readList(await api("/platform/clinics/")));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las clínicas. ${err.message}` : "No se pudieron cargar las clínicas."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -228,9 +225,8 @@ function AdminsTab() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/platform/clinics/");
-      const data = await resp.json();
-      setClinics(data.results || data);
-    } catch { setError("No se pudieron cargar las clínicas."); }
+      setClinics(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las clínicas. ${err.message}` : "No se pudieron cargar las clínicas."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { api } from "./api";
+import { api, apiErrorMessage, readList } from "./api";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -40,13 +40,6 @@ const SOURCE_HINT = {
   base: { label: "Catálogo", title: "Heredado del precio base del tratamiento." },
 };
 
-async function readError(resp) {
-  const data = await resp.json().catch(() => ({}));
-  const detail = data?.error?.details || data?.detail || data;
-  const first = typeof detail === "object" ? Object.values(detail)[0] : detail;
-  return Array.isArray(first) ? first[0] : String(first || `Error ${resp.status}`);
-}
-
 export default function AgreementsTariffs() {
   const [matrix, setMatrix] = useState(null);
   const [error, setError] = useState("");
@@ -54,7 +47,7 @@ export default function AgreementsTariffs() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/config/price-matrix/");
-      if (!resp.ok) throw new Error(await readError(resp));
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
       setMatrix(await resp.json());
     } catch (err) {
       setError(err.message || "No se pudo cargar el tarifario.");
@@ -85,8 +78,7 @@ function AgreementsPanel({ onChanged }) {
   const load = useCallback(async () => {
     try {
       const resp = await api("/config/agreements/");
-      const data = await resp.json();
-      setAgreements(data.results || data);
+      setAgreements(await readList(resp));
     } catch {
       setError("No se pudieron cargar los convenios.");
     }
@@ -109,7 +101,7 @@ function AgreementsPanel({ onChanged }) {
       const resp = await api("/config/agreements/", {
         method: "POST", body: JSON.stringify(body),
       });
-      if (!resp.ok) throw new Error(await readError(resp));
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
       setForm({ name: "", discount_percentage: "" });
       await load();
       onChanged();
@@ -127,7 +119,7 @@ function AgreementsPanel({ onChanged }) {
         method: "PATCH",
         body: JSON.stringify({ is_active: !agreement.is_active }),
       });
-      if (!resp.ok) throw new Error(await readError(resp));
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
       await load();
       onChanged();
     } catch (err) {
@@ -251,7 +243,7 @@ function PriceGrid({ matrix, onReload }) {
           price: rawValue === "" ? null : rawValue,
         }),
       });
-      if (!resp.ok) throw new Error(await readError(resp));
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
       // Solo cierro la celda si sigue siendo la que se estaba editando:
       // al saltar de una celda a otra con un clic, el desenfoque guarda la
       // primera y cerrarla a ciegas apagaría la que acaba de abrirse.

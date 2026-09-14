@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, currentUser } from "../../../lib/api";
+import { api, currentUser, readList, readObject } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import PatientPayments from "../../../lib/PatientPayments";
 import { VIEWS, getView, readPreferredView, savePreferredView } from "../../../lib/odontogram/registry";
@@ -32,6 +32,7 @@ export default function PatientDetailPage() {
 function PatientDetail() {
   const id = useSearchParams().get("id");
   const [patient, setPatient] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [role, setRole] = useState("");
   const [tab, setTab] = useState("odontograma");
 
@@ -42,8 +43,24 @@ function PatientDetail() {
   }, []);
 
   useEffect(() => {
-    api(`/patients/${id}/`).then(async (r) => setPatient(await r.json())).catch(() => {});
+    setLoadError("");
+    api(`/patients/${id}/`)
+      .then(async (r) => setPatient(await readObject(r)))
+      // Tragarse el motivo dejaba la ficha en «Cargando…» para siempre:
+      // el usuario se queda mirando un rótulo que nunca cambia y sin
+      // saber si es lentitud, un permiso o el límite de peticiones.
+      .catch((err) => setLoadError(err?.message || "No se pudo cargar el paciente."));
   }, [id]);
+
+  if (loadError) {
+    return (
+      <div>
+        <BackButton fallback="/panel/pacientes/" label="Pacientes" />
+        <div className="error-box" style={{ marginTop: 12 }}>{loadError}</div>
+        <button className="btn" onClick={() => window.location.reload()}>Reintentar</button>
+      </div>
+    );
+  }
 
   if (!patient) return <div className="empty">Cargando…</div>;
 
@@ -138,19 +155,21 @@ function OdontogramTab({ patientId, initialView }) {
       }
       setTeeth(map);
       setRm(rmMap);
-    } catch { setError("No se pudo cargar el odontograma."); }
+    } catch (err) { setError(err?.message ? `No se pudo cargar el odontograma. ${err.message}` : "No se pudo cargar el odontograma."); }
   }, [patientId]);
 
   useEffect(() => {
     loadCurrent();
-    api("/odontogram-states/").then(async (r) => setStates(await r.json())).catch(() => {});
+    // Es una LISTA y el odontograma la recorre con .map: si aquí entrara
+    // un objeto de error, el .map derribaría la ficha ENTERA, no solo el
+    // odontograma — todas las pestañas del paciente a la vez.
+    api("/odontogram-states/").then(async (r) => setStates(await readList(r))).catch(() => {});
   }, [loadCurrent]);
 
   const loadHistory = useCallback(async (tooth) => {
     try {
       const resp = await api(`/patients/${patientId}/tooth-records/?tooth_fdi_code=${tooth}`);
-      const data = await resp.json();
-      setHistory(data.results || data);
+      setHistory(await readList(resp));
     } catch { /* silencioso */ }
   }, [patientId]);
 
@@ -450,9 +469,8 @@ function EvolutionsTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/evolutions/`);
-      const data = await resp.json();
-      setEvolutions(data.results || data);
-    } catch { setError("No se pudieron cargar las evoluciones."); }
+      setEvolutions(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las evoluciones. ${err.message}` : "No se pudieron cargar las evoluciones."); }
   }, [patientId]);
 
   useEffect(() => { load(); }, [load]);
@@ -653,11 +671,7 @@ function PatientAgreement({ patient, canEdit, onChanged }) {
   useEffect(() => {
     if (!editing || agreements.length) return;
     api("/config/agreements/")
-      .then(async (r) => {
-        const data = await r.json();
-        const list = data.results || data;
-        setAgreements(Array.isArray(list) ? list.filter((a) => a.is_active) : []);
-      })
+      .then(async (r) => setAgreements((await readList(r)).filter((a) => a.is_active)))
       .catch(() => setError("No se pudieron cargar los convenios."));
   }, [editing, agreements.length]);
 

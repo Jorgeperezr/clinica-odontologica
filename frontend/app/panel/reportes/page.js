@@ -57,7 +57,7 @@ export default function ReportesPage() {
       setProduction(await p.json());
       setNewPatients(await n.json());
       setApptSummary(await s.json());
-    } catch { setError("No se pudieron cargar los reportes."); }
+    } catch (err) { setError(err?.message ? `No se pudieron cargar los reportes. ${err.message}` : "No se pudieron cargar los reportes."); }
     finally { setLoading(false); }
   }
 
@@ -78,7 +78,7 @@ export default function ReportesPage() {
       const a = document.createElement("a");
       a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
-    } catch { setError("No se pudo descargar el Excel."); }
+    } catch (err) { setError(err?.message ? `No se pudo descargar el Excel. ${err.message}` : "No se pudo descargar el Excel."); }
   }
 
   // Totales derivados

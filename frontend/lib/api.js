@@ -110,3 +110,62 @@ export async function api(path, options = {}) {
   }
   return resp;
 }
+
+
+/**
+ * Lista de una respuesta de la API, SIEMPRE como array.
+ *
+ * El patrón que había repartido por todo el panel era:
+ *
+ *     const data = await resp.json();
+ *     setCosas(data.results || data);
+ *
+ * y da por hecho que la petición fue bien. Cuando no lo es, el cuerpo
+ * sigue siendo JSON válido pero es un objeto —`{"detail": "..."}`—, así
+ * que `data.results` es undefined, `|| data` deja el objeto entero en el
+ * estado y el `cosas.map(...)` de más abajo lanza «map is not a
+ * function». React derriba el árbol y **la pantalla se queda en blanco**:
+ * ni el dato, ni un aviso, ni una pista de qué pasó.
+ *
+ * No es hipotético. El límite de peticiones es de 60 por minuto y por
+ * usuario (`DEFAULT_THROTTLE_RATES`), y la pantalla de configuración
+ * lanza varias por cada pestaña que se abre: basta con recorrerlas
+ * rápido para que la API conteste 429 y el panel se apague. Lo mismo con
+ * un 500, un 503 o un 403 con cuerpo.
+ *
+ * Dos defensas, a propósito:
+ *   1. Si la respuesta no es correcta, se lanza un error con el mensaje
+ *      del servidor, para que el `catch` de quien llama enseñe algo.
+ *   2. Aunque sea correcta, si lo recibido no es una lista se devuelve
+ *      una vacía en vez de propagar la sorpresa hasta el `.map`.
+ */
+export async function readList(resp) {
+  if (!resp.ok) throw new Error(await apiErrorMessage(resp));
+  const data = await resp.json().catch(() => null);
+  const list = data?.results ?? data;
+  return Array.isArray(list) ? list : [];
+}
+
+/** Igual que `readList`, pero para respuestas que son un único objeto. */
+export async function readObject(resp) {
+  if (!resp.ok) throw new Error(await apiErrorMessage(resp));
+  return resp.json();
+}
+
+/**
+ * Mensaje legible de una respuesta de error. El backend usa un
+ * envoltorio propio (`error.details`) y DRF usa `detail`; los errores de
+ * validación llegan como {campo: ["mensaje"]}.
+ */
+export async function apiErrorMessage(resp) {
+  const data = await resp.json().catch(() => null);
+  if (resp.status === 429) {
+    return "Demasiadas peticiones seguidas. Espera unos segundos y vuelve a intentarlo.";
+  }
+  const detail = data?.error?.details || data?.detail || data;
+  if (!detail) return `No se pudo completar la operación (error ${resp.status}).`;
+  if (typeof detail === "string") return detail;
+  const first = Object.values(detail)[0];
+  const mensaje = Array.isArray(first) ? first[0] : first;
+  return typeof mensaje === "string" ? mensaje : `Error ${resp.status}`;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, apiBase } from "../../../lib/api";
+import { api, apiBase, readList } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../../../lib/theme";
 import LogoCropper from "../../../lib/LogoCropper";
@@ -69,9 +69,9 @@ function TreatmentsTab() {
       const [tResp, sResp] = await Promise.all([
         api("/config/treatments/"), api("/specialties/"),
       ]);
-      const t = await tResp.json(); setTreatments(t.results || t);
-      const s = await sResp.json(); setSpecialties(s.results || s);
-    } catch { setError("No se pudo cargar el catálogo."); }
+      setTreatments(await readList(tResp));
+      setSpecialties(await readList(sResp));
+    } catch (err) { setError(err?.message ? `No se pudo cargar el catálogo. ${err.message}` : "No se pudo cargar el catálogo."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -142,9 +142,8 @@ function SpecialtiesTab() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/specialties/");
-      const data = await resp.json();
-      setSpecialties(data.results || data);
-    } catch { setError("No se pudieron cargar las especialidades."); }
+      setSpecialties(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las especialidades. ${err.message}` : "No se pudieron cargar las especialidades."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -202,9 +201,8 @@ function ParametersTab() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/config/parameters/");
-      const data = await resp.json();
-      setParams(data.results || data);
-    } catch { setError("No se pudieron cargar los parámetros."); }
+      setParams(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar los parámetros. ${err.message}` : "No se pudieron cargar los parámetros."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -282,9 +280,8 @@ function UsersTab() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/users/");
-      const data = await resp.json();
-      setUsers(data.results || data);
-    } catch { setError("No se pudieron cargar los usuarios."); }
+      setUsers(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar los usuarios. ${err.message}` : "No se pudieron cargar los usuarios."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -374,9 +371,9 @@ function TemplatesTab() {
       const [tResp, trResp] = await Promise.all([
         api("/clinical/plan-templates/"), api("/config/treatments/?is_active=true"),
       ]);
-      const t = await tResp.json(); setTemplates(t.results || t);
-      const tr = await trResp.json(); setTreatments(tr.results || tr);
-    } catch { setError("No se pudieron cargar las plantillas."); }
+      setTemplates(await readList(tResp));
+      setTreatments(await readList(trResp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las plantillas. ${err.message}` : "No se pudieron cargar las plantillas."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -517,7 +514,7 @@ function BrandingTab() {
       setAddress(data.address || "");
       setPhone(data.phone || "");
       setContactEmail(data.email || "");
-    } catch { setError("No se pudo cargar la personalización."); }
+    } catch (err) { setError(err?.message ? `No se pudo cargar la personalización. ${err.message}` : "No se pudo cargar la personalización."); }
   }
   useEffect(() => { load(); }, []);
 
@@ -770,9 +767,8 @@ function ConsentTemplatesTab() {
   async function load() {
     try {
       const resp = await api("/consent-templates/");
-      const data = await resp.json();
-      setTemplates(data.results || data);
-    } catch { setError("No se pudieron cargar las plantillas."); }
+      setTemplates(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las plantillas. ${err.message}` : "No se pudieron cargar las plantillas."); }
   }
   useEffect(() => { load(); }, []);
 

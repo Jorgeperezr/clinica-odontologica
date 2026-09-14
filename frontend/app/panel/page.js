@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, currentUser } from "../../lib/api";
+import { api, currentUser, readList } from "../../lib/api";
 import DayAlerts from "../../lib/DayAlerts";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
@@ -40,7 +40,7 @@ export default function Dashboard() {
     // Cada widget carga según lo que el rol puede ver; los que el
     // backend rechace (403) simplemente no se muestran.
     api(`/agenda/view/?mode=daily&date=${todayISO()}`)
-      .then(async (r) => { if (r.ok) { const d = await r.json(); setAppointments(d.results || d); } })
+      .then(async (r) => { if (r.ok) { setAppointments(await readList(r)); } })
       .catch(() => {});
 
     api("/patients/?search=")

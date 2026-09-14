@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, readList } from "./api";
 
 export default function DiagnosisSection({ patientId }) {
   const [diagnoses, setDiagnoses] = useState([]);
@@ -17,9 +17,8 @@ export default function DiagnosisSection({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/diagnoses/`);
-      const data = await resp.json();
-      setDiagnoses(data.results || data);
-    } catch { setError("No se pudieron cargar los diagnósticos."); }
+      setDiagnoses(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar los diagnósticos. ${err.message}` : "No se pudieron cargar los diagnósticos."); }
   }, [patientId]);
 
   useEffect(() => { load(); }, [load]);

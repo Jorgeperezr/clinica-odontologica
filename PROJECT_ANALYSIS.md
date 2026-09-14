@@ -265,16 +265,33 @@ ocurren.
 3. **Páginas monolíticas en el frontend**: `configuracion/page.js` (866 líneas),
    `paciente/page.js` (630), `ClinicalTabs.js` (567), `plataforma/page.js`
    (532). Funcionan, pero elevan el costo de cada cambio.
-4. **Frontend sin linter ni tipos**: no hay ESLint configurado ni TypeScript;
+4. **Pantalla en blanco ante cualquier error de la API** — **CORREGIDO en
+   su mayor parte (Sprint 73), con dos archivos pendientes.** El patrón
+   `setCosas(data.results || data)` estaba repetido en 40 puntos y da por
+   hecho que la petición fue bien. Cuando no lo es, el cuerpo sigue siendo
+   JSON válido pero es un objeto, así que entra en el estado y el
+   `cosas.map(...)` de más abajo lanza «map is not a function»: React
+   derriba el árbol y la pantalla se queda **en blanco**, sin dato, sin
+   aviso y sin pista. No es hipotético: el límite es de 60 peticiones por
+   minuto y por usuario, y basta con recorrer las pestañas de
+   Configuración deprisa para provocarlo. Encontrado usando la aplicación
+   con un navegador real, no con los tests ni con `next build`.
+   Corregidos los 14 archivos que se podían tocar, con `readList()` /
+   `readObject()` en `lib/api.js`. **Siguen cayendo** `lib/ClinicalTabs.js`
+   (Plan de tratamiento, Documentos y Consentimientos) y
+   `lib/periodontal/PeriodontalMatrix.js`, que el usuario pidió no
+   modificar: son 6 puntos y basta aplicarles el mismo cambio de una línea.
+
+5. **Frontend sin linter ni tipos**: no hay ESLint configurado ni TypeScript;
    el CI solo compila. Los bugs de los Sprints 41–42 (tupla vs. objeto de
    `useConfirm`) son exactamente la clase de error que estas herramientas
    atrapan.
-5. **Throttle de OTP aproximado**: la ventana exacta de 10 minutos quedó
+6. **Throttle de OTP aproximado**: la ventana exacta de 10 minutos quedó
    anotada como pendiente en `settings.py:187`.
-6. **Duplicidad latente `full_name` vs. `first_name/last_name`** entre `User`
+7. **Duplicidad latente `full_name` vs. `first_name/last_name`** entre `User`
    (full_name) y `Patient` (first/last) — no es un bug, pero obliga a
    formatear en cada vista.
-7. ~~**UI faltante para convenios y tarifarios**~~ **RESUELTO (Sprint 71).**
+8. ~~**UI faltante para convenios y tarifarios**~~ **RESUELTO (Sprint 71).**
    El diagnóstico se quedaba corto: faltaba la pantalla, sí, pero además
    `Agreement` y `Tariff` **no los leía nadie**. El presupuesto se calculaba
    siempre con `Treatment.base_price`, así que una clínica podía cargar el

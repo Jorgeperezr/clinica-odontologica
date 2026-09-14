@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { api } from "../../../lib/api";
+import { api, readList } from "../../../lib/api";
 
 const ORDER_OPTIONS = [
   ["name_asc", "Nombre (A-Z)"],
@@ -34,8 +34,7 @@ export default function PacientesPage() {
       if (q) params.set("search", q);
       params.set("ordering", order);
       const resp = await api(`/patients/?${params.toString()}`);
-      const data = await resp.json();
-      setPatients(data.results || data);
+      setPatients(await readList(resp));
     } catch {
       setError("No se pudo cargar la lista de pacientes.");
     } finally {
@@ -206,11 +205,7 @@ function PatientForm({ onSaved }) {
   // pedir «particular o convenio» donde solo existe una respuesta.
   useEffect(() => {
     api("/config/agreements/")
-      .then(async (r) => {
-        const data = await r.json();
-        const list = data.results || data;
-        setAgreements(Array.isArray(list) ? list.filter((a) => a.is_active) : []);
-      })
+      .then(async (r) => setAgreements((await readList(r)).filter((a) => a.is_active)))
       .catch(() => setAgreements([]));
   }, []);
 
