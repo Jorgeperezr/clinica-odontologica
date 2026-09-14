@@ -17,10 +17,26 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # El compose de desarrollo tenía esta sonda y el de producción no, así
+    # que aquí `depends_on: postgres` solo esperaba a que el contenedor
+    # arrancara. En un arranque en frío o tras reiniciar el host, `migrate`
+    # se ejecutaba contra una base que todavía no aceptaba conexiones: el
+    # contenedor moría, `restart: unless-stopped` lo reintentaba y acababa
+    # levantando, pero con un ciclo de caídas y el registro lleno de ruido.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   django-api:
     build: ./django-api
@@ -34,8 +50,17 @@ services:
     volumes:
       - media_data:/app/media
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # La imagen es python:3.12-slim y no trae curl ni wget; urllib sí.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/ready/', timeout=5).status == 200 else 1)\""]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 60s
 
   celery-worker:
     build: ./django-api
@@ -43,8 +68,10 @@ services:
     env_file: .env
     command: celery -A config worker -l info --concurrency 2
     depends_on:
-      - django-api
-      - redis
+      django-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery-beat:
     build: ./django-api
@@ -52,8 +79,10 @@ services:
     env_file: .env
     command: celery -A config beat -l info
     depends_on:
-      - django-api
-      - redis
+      django-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   whatsapp-gateway:
     build: ./whatsapp-gateway
@@ -85,8 +114,10 @@ services:
       - frontend_static:/usr/share/nginx/html:ro
       - media_data:/app/media:ro
     depends_on:
-      - django-api
-      - whatsapp-gateway
+      django-api:
+        condition: service_healthy
+      whatsapp-gateway:
+        condition: service_started
 
 volumes:
   postgres_data:

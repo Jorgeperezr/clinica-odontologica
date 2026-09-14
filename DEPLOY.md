@@ -161,6 +161,44 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 (Las migraciones corren solas en el arranque.)
 
+## Sondas de salud y orden de arranque
+
+Django expone dos rutas **públicas y sin autenticación** (un monitor no
+tiene credenciales):
+
+| Ruta | Pregunta | Toca la base de datos |
+|---|---|---|
+| `GET /api/v1/health/` | ¿Está vivo el proceso? | No |
+| `GET /api/v1/ready/` | ¿Puede atender? | Sí (`SELECT 1`) |
+
+Son dos preguntas distintas y conviene no mezclarlas. Si `/ready/`
+devuelve 503, el proceso está sano pero le falta la base: hay que sacarlo
+del reparto de tráfico, **no reiniciarlo**. Reiniciar procesos sanos
+porque la base tiene un mal momento convierte una incidencia en una
+caída.
+
+Ninguna de las dos revela versión, motor, nombre de clínica ni cuentas:
+el detalle del error va al registro, porque el mensaje de la base lleva
+host, puerto y usuario.
+
+**Orden de arranque.** `docker-compose.prod.yml` no tenía sonda en
+Postgres —el de desarrollo sí—, así que `depends_on: postgres` solo
+esperaba a que el contenedor arrancara. En un arranque en frío o tras
+reiniciar el host, `migrate` corría contra una base que aún no aceptaba
+conexiones; el contenedor moría, `restart: unless-stopped` lo reintentaba
+y acababa levantando, pero con un ciclo de caídas. Ahora:
+
+- `postgres` y `redis` tienen sonda propia.
+- `django-api` espera a que ambas estén sanas y publica la suya
+  (`/api/v1/ready/`, consultada con `urllib`: la imagen `python:3.12-slim`
+  no trae `curl` ni `wget`).
+- `celery-worker`, `celery-beat` y `nginx` esperan a que Django **atienda**,
+  no a que exista. Antes subían mientras aún corrían `migrate` y
+  `collectstatic`, y las primeras peticiones devolvían 502.
+
+Para monitorización externa (uptime, alertas), la ruta a vigilar es
+`/api/v1/ready/`.
+
 ## Google Calendar — estado y Fase 2
 
 **Fase 1 (ya funciona, sin credenciales):** cada doctor tiene un feed
