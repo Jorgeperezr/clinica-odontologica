@@ -174,7 +174,7 @@ class PayInstallmentView(APIView):
             patient=installment.patient,
             amount=amount,
             method=serializer.validated_data["method"],
-            date=serializer.validated_data.get("date") or timezone.now().date(),
+            date=serializer.validated_data.get("date") or timezone.localdate(),
             registered_by=request.user,
         )
 
@@ -199,7 +199,7 @@ class PatientAccountStatementView(APIView):
             Patient, pk=pk, tenant=request.tenant, is_active=True
         )
         installments = Installment.objects.filter(patient=patient, tenant=request.tenant)
-        today = timezone.now().date()
+        today = timezone.localdate()
 
         total = sum((i.amount for i in installments), start=Decimal("0.00"))
         paid = sum(
@@ -281,7 +281,7 @@ class DelinquencyReportView(APIView):
         from apps.billing.services import get_delinquency_days
 
         threshold = get_delinquency_days(request.tenant)
-        today = timezone.now().date()
+        today = timezone.localdate()
 
         overdue = (
             Installment.objects.filter(tenant=request.tenant, due_date__lt=today)

@@ -90,7 +90,7 @@ def send_payment_reminders():
     from apps.billing.models import Installment
     from apps.whatsapp.gateway_client import send_whatsapp_template
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     soon = today + timedelta(days=3)
     sent = 0
 

@@ -211,7 +211,7 @@ class AgendaViewList(generics.ListAPIView):
     def get_queryset(self):
         mode = self.request.query_params.get("mode", "daily")
         date_str = self.request.query_params.get("date")
-        anchor = parse_date(date_str) if date_str else timezone.now().date()
+        anchor = parse_date(date_str) if date_str else timezone.localdate()
 
         if mode == "weekly":
             start = anchor - timedelta(days=anchor.weekday())

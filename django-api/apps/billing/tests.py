@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.urls import reverse
 from rest_framework import status
@@ -7,7 +8,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 from apps.agenda.models import Doctor
-from apps.billing.models import Budget, Installment, PaymentPlan
+from apps.billing.models import Budget, Installment, Payment, PaymentPlan
 from apps.common.models import Tenant
 from apps.configuration.models import Treatment
 from apps.patients.models import Patient
@@ -406,3 +407,97 @@ class BirthdayEdgeCaseTests(APITestCase):
 
         nombres = [r["full_name"] for r in self._birthdays(date(2026, 6, 15), days=0)]
         self.assertEqual(nombres, ["Hoy Cumple"])
+
+
+class FechaLocalDeLaClinicaTests(APITestCase):
+    """
+    La fecha que manda es la de la CLÍNICA, no la del servidor (Sprint 74).
+
+    El Sprint 70 corrigió esto en el listado de cumpleaños y dejó los otros
+    diez sitios donde se usaba `timezone.now().date()`, que devuelve la
+    fecha UTC y no la del huso configurado. El efecto no es teórico: en
+    Guayaquil (UTC−5) la fecha UTC va un día por delante entre las 19:00 y
+    medianoche, así que **todos los días, durante cinco horas**, una cuota
+    que vence HOY se contaba como vencida. La clínica reclamaría a un
+    paciente que todavía no debe nada.
+
+    Se comprueba con la fecha simulada en vez de esperar a esa franja: así
+    se verifica en cada ejecución y no cinco horas al día.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Clínica Husos", ruc="1790000009001")
+        self.reception = User.objects.create_user(
+            email="recep@husos.ec", password="superseguro123",
+            role="reception", tenant=self.tenant,
+        )
+        self.patient = Patient.objects.create(
+            tenant=self.tenant, first_name="Zoe", last_name="Luna",
+            national_id="0900900900",
+        )
+        self.client.force_authenticate(user=self.reception)
+
+    def _estado_de_cuenta(self):
+        return self.client.get(
+            reverse("account-statement", kwargs={"pk": self.patient.id})
+        )
+
+    def _cuota(self, due_date):
+        budget = Budget.objects.create(
+            tenant=self.tenant, patient=self.patient, status=Budget.Status.APPROVED,
+            total_amount=Decimal("100.00"),
+        )
+        plan = PaymentPlan.objects.create(
+            tenant=self.tenant, budget=budget, patient=self.patient,
+            total_amount=Decimal("100.00"), installment_count=1,
+        )
+        return Installment.objects.create(
+            tenant=self.tenant, payment_plan=plan, patient=self.patient,
+            number=1, due_date=due_date, amount=Decimal("100.00"),
+        )
+
+    def test_una_cuota_que_vence_hoy_no_esta_vencida_aunque_en_utc_sea_manana(self):
+        """
+        Guayaquil a las 20:00 = 01:00 UTC del día siguiente. Con la fecha
+        UTC, la cuota de hoy salía vencida cinco horas antes de tiempo.
+        """
+        hoy_en_la_clinica = date(2026, 3, 10)
+        self._cuota(due_date=hoy_en_la_clinica)
+        with patch("apps.billing.views.timezone.localdate", return_value=hoy_en_la_clinica):
+            resp = self._estado_de_cuenta()
+        self.assertEqual(resp.data["overdue_count"], 0,
+                         "una cuota que vence hoy no puede estar vencida")
+
+    def test_una_cuota_de_ayer_si_esta_vencida(self):
+        """El otro lado: la corrección no puede dejar de contar lo vencido."""
+        hoy_en_la_clinica = date(2026, 3, 10)
+        self._cuota(due_date=hoy_en_la_clinica - timedelta(days=1))
+        with patch("apps.billing.views.timezone.localdate", return_value=hoy_en_la_clinica):
+            resp = self._estado_de_cuenta()
+        self.assertEqual(resp.data["overdue_count"], 1)
+
+    def test_el_pago_sin_fecha_se_registra_con_la_del_dia_de_la_clinica(self):
+        """
+        Un cobro de las 20:00 en Guayaquil quedaba con la fecha del día
+        siguiente: descuadra el cierre de caja y el estado de cuenta.
+        """
+        budget = Budget.objects.create(
+            tenant=self.tenant, patient=self.patient, status=Budget.Status.APPROVED,
+            total_amount=Decimal("100.00"),
+        )
+        plan = PaymentPlan.objects.create(
+            tenant=self.tenant, budget=budget, patient=self.patient,
+            total_amount=Decimal("100.00"), installment_count=1,
+        )
+        cuota = Installment.objects.create(
+            tenant=self.tenant, payment_plan=plan, patient=self.patient,
+            number=1, due_date=date(2026, 3, 10), amount=Decimal("100.00"),
+        )
+        hoy_en_la_clinica = date(2026, 3, 10)
+        with patch("apps.billing.views.timezone.localdate", return_value=hoy_en_la_clinica):
+            resp = self.client.post(
+                reverse("installment-pay", kwargs={"pk": cuota.id}),
+                {"amount": "100.00", "method": "cash"},
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        self.assertEqual(Payment.objects.get().date, hoy_en_la_clinica)
