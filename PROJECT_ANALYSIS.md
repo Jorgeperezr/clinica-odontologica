@@ -240,8 +240,19 @@ ocurren.
    escribirlas apareció un fallo real: una excepción inesperada al procesar un
    evento devolvía 500, y Meta acaba desactivando el webhook de la cuenta ante
    los 5xx repetidos.
-5. **Sin observabilidad**: no hay Sentry/alertas ni logging estructurado;
-   en producción los errores solo quedan en stdout de los contenedores.
+5. **Sin observabilidad** — **CORREGIDO en su parte crítica (Sprint 75).**
+   El diagnóstico era optimista: no es que los errores «solo quedaran en
+   stdout», es que **no quedaban en ninguna parte**. Comprobado con un 500
+   real y `DEBUG=False`: sin bloque `LOGGING`, el manejador `console` de
+   Django está filtrado por `require_debug_true` y `mail_admins` necesita
+   `ADMINS`, que estaba vacío; la traza no llegaba ni a la salida estándar.
+   Ahora hay registro estructurado en JSON con id de correlación
+   (`X-Request-ID`), una línea por petición y la traza completa de cada
+   500, con redacción de datos personales — incluidos los valores de la
+   cadena de consulta, que en `?search=` llevan apellidos de pacientes.
+   **Queda pendiente** la otra mitad: alertas (Sentry o equivalente) y un
+   monitor externo que vigile `/api/v1/ready/`. Eso necesita una cuenta y
+   una decisión de hosting, no código.
 6. **Backups**: scripts cifrados existen (`scripts/backup.sh`), pero no hay
    evidencia de programación automática (cron) ni de prueba de restauración
    periódica — crítico con datos de salud.

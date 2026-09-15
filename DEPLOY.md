@@ -199,6 +199,64 @@ y acababa levantando, pero con un ciclo de caídas. Ahora:
 Para monitorización externa (uptime, alertas), la ruta a vigilar es
 `/api/v1/ready/`.
 
+## Registro y diagnóstico
+
+**El problema que había.** El proyecto no tenía bloque `LOGGING`, y eso no
+significaba «el de Django por defecto»: significaba **silencio**.
+Comprobado con un 500 real y `DEBUG=False` — el cliente recibe su 500 y la
+traza no aparece en ningún sitio, ni en la salida estándar. El único
+logger que trae Django es `django`, con el manejador `console` filtrado
+por `require_debug_true` (callado en producción) y `mail_admins`, que
+necesita `ADMINS` y un backend de correo; `ADMINS` estaba vacío. Cuando el
+panel fallaba, nadie llegaba a enterarse de por qué.
+
+**Cómo queda.** Una línea por petición a la salida estándar, que es donde
+la recoge Docker:
+
+```
+DJANGO_LOG_FORMAT=json   # por defecto con DEBUG=False
+DJANGO_LOG_FORMAT=plain  # por defecto en desarrollo
+DJANGO_LOG_LEVEL=INFO
+```
+
+```json
+{"ts":"...","level":"ERROR","logger":"apps.request","msg":"Excepción no controlada",
+ "request_id":"34cb3d80bf9f4d4d","method":"GET","path":"/api/v1/patients/",
+ "query_keys":["search"],"user_id":"...","tenant_id":"...",
+ "exc_type":"RuntimeError","traceback":"..."}
+```
+
+**Correlación.** Cada petición lleva un `request_id` que va también en la
+cabecera `X-Request-ID` de la respuesta. Si un usuario reporta un fallo y
+da ese código, la incidencia se encuentra sin buscar por hora y a ojo.
+Si nginx o el gateway mandan ya un `X-Request-ID`, se respeta, de modo que
+una petición se sigue de punta a punta.
+
+**Qué NO va al registro.** Esto es un sistema de datos de salud y un
+registro se copia a un agregador, se conserva meses y lo lee gente que no
+tiene por qué ver la historia de nadie:
+
+| Sí | No |
+|---|---|
+| método, ruta, estado, duración | nombres, cédulas, teléfonos, correos |
+| id de usuario, rol, id de clínica | contraseñas, tokens, cabeceras de auth |
+| tipo de excepción y traza | contenido de notas clínicas |
+| **nombres** de los parámetros de consulta | **valores** de esos parámetros |
+
+Esa última fila importa más de lo que parece: `/api/v1/patients/?search=Pérez`
+lleva un apellido dentro de la URL. Se registra `query_keys: ["search"]` y
+nunca su contenido. Por el mismo motivo se descarta el logger
+`django.request`, que pasa el objeto de petición en `extra` y cuyo repr
+incluye la cadena de consulta entera.
+
+Los UUID sí se registran: son seudónimos, sin la base de datos no dicen
+quién es nadie, y sin ellos no se puede reconstruir qué pasó.
+
+**Qué monitorizar.** Alertar sobre líneas con `level: ERROR` del logger
+`apps.request`, y sobre `/api/v1/ready/` devolviendo 503. Las sondas de
+salud no se registran a propósito: un balanceador las pide cada diez
+segundos y ahogarían todo lo demás.
+
 ## Google Calendar — estado y Fase 2
 
 **Fase 1 (ya funciona, sin credenciales):** cada doctor tiene un feed
