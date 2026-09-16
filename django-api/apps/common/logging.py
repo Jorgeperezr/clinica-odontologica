@@ -96,6 +96,31 @@ REDACTADO = "«redactado»"
 _CORREO = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 _DIGITOS = re.compile(r"\b\d{7,}\b")
 
+# Los UUID se respetan enteros, y no es un detalle menor. Un identificador
+# tiene cinco grupos hexadecimales; cuando a uno le tocan solo cifras
+# —el de ocho y el de doce son bastante largos para que pase— la regla de
+# «siete dígitos seguidos» lo tomaba por una cédula y lo tapaba a medias:
+#
+#     06912074-5718-4771-9ae7-a60f85d4fee6
+#     «redactado»-5718-4771-9ae7-a60f85d4fee6
+#
+# El registro seguía saliendo, pero el identificador con el que se rastrea
+# al usuario o a la clínica quedaba inservible, y solo unas veces de cada
+# cien: justo la clase de fallo que no se ve hasta que hace falta seguir
+# el rastro de una incidencia concreta. Un UUID además no identifica a
+# nadie por sí solo —sin la base de datos es un seudónimo—, así que no
+# había nada que tapar.
+_UUID = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+    r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
+
+
+def _tapar(texto):
+    """Aplica las reglas de redacción a un fragmento sin UUID."""
+    texto = _CORREO.sub(REDACTADO, texto)
+    return _DIGITOS.sub(REDACTADO, texto)
+
 
 def redactar(valor):
     """
@@ -108,8 +133,15 @@ def redactar(valor):
     """
     if not isinstance(valor, str):
         return valor
-    valor = _CORREO.sub(REDACTADO, valor)
-    return _DIGITOS.sub(REDACTADO, valor)
+    # Se parte por los UUID y solo se redacta lo que queda entre ellos.
+    trozos = []
+    fin = 0
+    for encaje in _UUID.finditer(valor):
+        trozos.append(_tapar(valor[fin:encaje.start()]))
+        trozos.append(encaje.group(0))
+        fin = encaje.end()
+    trozos.append(_tapar(valor[fin:]))
+    return "".join(trozos)
 
 
 def limpiar_dict(datos):

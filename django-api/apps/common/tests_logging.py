@@ -163,6 +163,36 @@ class NoSeFiltranDatosPersonalesTests(SimpleTestCase):
         """No pasarse: un id de pieza dental o un código de estado son útiles."""
         self.assertEqual(redactar("pieza 36, estado 404"), "pieza 36, estado 404")
 
+    def test_un_uuid_con_un_grupo_de_solo_cifras_sale_entero(self):
+        """
+        Este caso apareció solo: la suite falló una vez con un usuario
+        cuyo identificador empezaba por ocho cifras. La regla de «siete
+        dígitos seguidos» lo tomaba por una cédula y dejaba
+
+            «redactado»-5718-4771-9ae7-a60f85d4fee6
+
+        es decir, el registro salía pero el identificador con el que se
+        rastrea al usuario ya no servía. Y pasaba unas pocas veces de
+        cada cien, según qué UUID tocara: por eso se fija aquí con uno
+        escrito a mano, para que no vuelva a depender de la suerte.
+        """
+        uuid_con_cifras = "06912074-5718-4771-9ae7-a60f85d4fee6"
+        self.assertEqual(redactar(uuid_con_cifras), uuid_con_cifras)
+        self.assertEqual(
+            redactar(f"usuario {uuid_con_cifras} sin permiso"),
+            f"usuario {uuid_con_cifras} sin permiso",
+        )
+
+    def test_el_uuid_no_sirve_de_escondite_para_una_cedula(self):
+        """Respetar los UUID no puede abrir la puerta a lo de al lado."""
+        salida = redactar("06912074-5718-4771-9ae7-a60f85d4fee6 cedula 0102030405")
+        self.assertIn("06912074-5718-4771-9ae7-a60f85d4fee6", salida)
+        self.assertNotIn("0102030405", salida)
+
+    def test_un_grupo_largo_de_cifras_que_no_es_uuid_si_se_redacta(self):
+        """Doce cifras seguidas sin forma de UUID son un teléfono o una cuenta."""
+        self.assertNotIn("099123456789", redactar("contacto 099123456789"))
+
 
 class MiddlewareDePeticionTests(APITestCase):
     def setUp(self):

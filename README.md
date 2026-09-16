@@ -1,14 +1,50 @@
 # Sistema de Gestión — Clínica Odontológica
 
+## Primeros pasos en una máquina nueva
+
+```bash
+git clone https://github.com/Jorgeperezr/clinica-odontologica.git
+cd clinica-odontologica
+bash scripts/comprobar-entorno.sh
+```
+
+`comprobar-entorno.sh` no instala ni arranca nada: mira qué hay en la
+máquina —openssl, PostgreSQL, Python, Node, puertos ocupados— y, para
+cada cosa que falte, dice qué hacer. Conviene pasarlo antes que nada
+porque varios fallos del arranque se explican fatal por sí solos: en
+macOS, por ejemplo, `openssl` es en realidad LibreSSL y su `enc` puede
+no aceptar `-pbkdf2`, con lo que las copias de seguridad hechas en ese
+Mac no podrían descifrar las hechas en el servidor. Eso se descubriría
+el día de restaurar.
+
+Con la revisión en verde:
+
+```bash
+bash scripts/start-local.sh          # PostgreSQL + Django :8000 + Next :3000
+```
+
+Y en el navegador **http://localhost:3000** — con `localhost`, no con
+`127.0.0.1`: para CORS son orígenes distintos y solo el primero está
+permitido, así que desde `127.0.0.1` el login falla sin decir por qué.
+
+> Los comandos de este README no llevan comentarios con `?` ni `*` al
+> final de la línea. En zsh —la consola por defecto de macOS— esos
+> caracteres se expanden como comodines y la línea entera se aborta con
+> `zsh: no matches found`, sin llegar a ejecutar el comando.
+
 ## Cómo correr los tests (comando canónico)
 
 ```bash
+# Con Docker:
 docker compose exec django-api python manage.py test --settings=config.settings_test
+
+# Sin Docker, desde django-api/:
+python manage.py test --settings=config.settings_test
 ```
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 170 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 246 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -49,7 +85,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 62 — CI reproducible (linter con versión fija)
+## Estado actual: Sprint 77 — revisión del entorno y UUID intactos en el registro
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1110,6 +1146,111 @@ para una sede en otro huso); y el CI ejecuta una segunda pasada con la
 clínica en UTC+14, donde la fecha del servidor y la local no coinciden
 nunca. Verificado: 191 tests en verde en nueve fechas frontera y cuatro
 husos.
+
+### Sprint 71 — Los convenios dejan de ser una tabla decorativa (hecho)
+
+Convenios y tarifarios existían en la base desde hacía sprints, pero no los
+usaba nadie: no había pantalla para gestionarlos, el paciente no se podía
+vincular a un convenio y el presupuesto cobraba siempre el precio base del
+catálogo. Una clínica con un convenio empresarial firmado seguía cobrando
+tarifa particular.
+
+Se centraliza la resolución del precio en un único sitio
+(`apps/configuration/pricing.py`) con un orden explícito: precio pactado
+para ese convenio → descuento porcentual del convenio → tarifario general
+→ precio de catálogo. La rejilla de precios se calcula en tres consultas y
+no crece con el número de tratamientos, lo que se fija con un test que
+compara la cuenta con una rejilla diez veces mayor.
+
+De paso se cerraron **dos agujeros de aislamiento entre clínicas**: los
+serializadores de tarifario y convenio aceptaban identificadores de otra
+clínica sin comprobarlos.
+
+### Sprint 72 — Sondas de salud y orden de arranque (hecho)
+
+`docker-compose.prod.yml` no tenía **ninguna** comprobación de salud para
+PostgreSQL, así que en un arranque en frío `migrate` se ejecutaba contra
+una base que aún no aceptaba conexiones. Se añaden sondas (`pg_isready`,
+`redis-cli ping`, y una de la API por `urllib`, porque la imagen no trae
+curl ni wget) y se condiciona el arranque de Celery y nginx a que sus
+dependencias estén sanas de verdad.
+
+Nuevos `/api/v1/health/` (vivo, cero consultas) y `/api/v1/ready/` (listo,
+`SELECT 1`, 503 si la base no responde; el detalle va al registro, no a la
+respuesta).
+
+### Sprint 73 — La pantalla dejaba de existir ante cualquier error de la API (hecho)
+
+Encontrado **usando** la aplicación con un navegador de verdad, no con
+tests ni con `next build`: los dos pasaban. El patrón `const lista = await
+resp.json()` se repetía en 40 sitios, y cuando la API devolvía un error
+—o simplemente un 429 por el límite de peticiones— lo que llegaba no era
+una lista, el `.map()` reventaba y la pestaña se quedaba **en blanco**,
+sin mensaje. Se añaden `readList()`, `readObject()` y `apiErrorMessage()`
+en `frontend/lib/api.js` y se aplican a los sitios afectados.
+
+### Sprint 74 — La fecha que manda es la de la clínica, no la del servidor (hecho)
+
+Continuación del Sprint 70: el mismo fallo estaba en otros diez sitios.
+`timezone.now().date()` da la fecha en UTC; con la clínica en Guayaquil
+(UTC−5) eso significa que **cinco horas de cada día** una cuota que vence
+hoy se contaba como vencida, y que a partir de las 19:00 la agenda del
+día mostraba la de mañana. Todos pasan a `timezone.localdate()`.
+
+### Sprint 75 — En producción, un error 500 no se registraba en ninguna parte (hecho)
+
+Comprobado con un 500 real y `DEBUG=False`: el cliente recibe su error y la
+traza no aparece por ningún lado. No había bloque `LOGGING`, y eso no es
+«el registro por defecto» sino silencio — el único logger que trae Django
+va a consola filtrada por `require_debug_true` y a un correo que necesita
+`ADMINS`, que está vacío.
+
+Se añade registro estructurado en JSON con identificador de correlación por
+petición (viaja en un `ContextVar` y vuelve en la cabecera `X-Request-ID`,
+para que un usuario pueda dar ese código al soporte). Y una regla explícita
+sobre qué se escribe: sí el método, la ruta, el estado, la duración y los
+identificadores; **no** nombres, cédulas, teléfonos ni correos. De la ruta
+se guardan los NOMBRES de los parámetros de consulta, nunca sus valores:
+`/api/v1/patients/?search=Pérez` lleva el apellido de un paciente en la URL.
+
+Durante las pruebas apareció una fuga concreta: el logger `django.request`
+de Django pasa el objeto de petición, y su `repr` contiene la cadena de
+consulta entera.
+
+### Sprint 76 — Una copia que nadie ha restaurado nunca no es una copia (hecho)
+
+`backup.sh` «verificaba» la copia con `gzip -t`, que comprueba que el
+archivo se descomprime y nada más. Se partió un volcado a la mitad a
+propósito: comprimía perfectamente y el guion lo daba por **correcto**.
+
+Ahora se comprueba que el SQL termine donde `pg_dump` lo termina, y se
+añade `verificar-backup.sh`, que restaura la copia de verdad en una base
+desechable, cuenta las filas de las tablas que importan y la destruye al
+salir (una copia con esquema pero sin datos también se restaura sin dar
+error). Los tres guiones funcionan ya **sin Docker**, usando los clientes
+locales, y el `.env` se lee sin evaluarlo: `source <(grep ...)` ejecutaba
+cada línea como un comando, y con una frase de cifrado con espacios
+—que es justo lo que uno escribe como frase— fallaba con un mensaje que
+no decía nada.
+
+### Sprint 77 — Revisión del entorno y UUID intactos en el registro (hecho)
+
+**`scripts/comprobar-entorno.sh`**: una revisión que no instala ni arranca
+nada y dice qué falta y qué hacer. Existe por un camino que no se puede
+probar en Linux: en macOS `openssl` es LibreSSL y su `enc` puede no
+aceptar `-pbkdf2`, con lo que una copia hecha en ese Mac no podría
+descifrar las del servidor — y eso se descubriría el día de restaurar.
+Comprueba además el cifrado de ida y vuelta, PostgreSQL (con Docker o sin
+él), las versiones de Python y Node, el `.env` y los puertos ocupados.
+
+**Un UUID ya no se redacta a medias.** La suite falló una vez, y no por
+casualidad: la regla que tapa «siete dígitos seguidos» —cédulas,
+teléfonos— también encajaba en un grupo de un UUID cuando le tocaban solo
+cifras, y dejaba `«redactado»-5718-4771-9ae7-a60f85d4fee6`. El registro
+salía, pero el identificador con el que se rastrea al usuario o a la
+clínica quedaba inservible, unas pocas veces de cada cien. Se respetan los
+UUID enteros —sin la base de datos son seudónimos, no identifican a
+nadie— y tres pruebas fijan el caso para que no dependa de la suerte.
 
 ## Desarrollo en GitHub Codespaces
 
