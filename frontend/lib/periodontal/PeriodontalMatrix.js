@@ -35,7 +35,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "../api";
+import { api, readList } from "../api";
 import {
   PERM_LOWER_L, PERM_LOWER_R, PERM_UPPER_L, PERM_UPPER_R,
   SURFACE_LABELS,
@@ -93,8 +93,7 @@ export default function AdvancedCompactView({
     try {
       const resp = await api(`/patients/${patientId}/periodontal-exams/`);
       if (!resp.ok) throw new Error(`No se pudo cargar la ficha (error ${resp.status}).`);
-      const data = await resp.json();
-      const filas = data.results || data;
+      const filas = await readList(resp);
       setExam(filas.length > 0 ? filas[0] : null);
     } catch (err) {
       setError(err.message);
@@ -132,8 +131,7 @@ export default function AdvancedCompactView({
       // Se recarga para traer derivados y estadísticas recalculadas
       const resp = await api(`/patients/${patientId}/periodontal-exams/`);
       if (resp.ok) {
-        const data = await resp.json();
-        const filas = data.results || data;
+        const filas = await readList(resp);
         if (filas.length > 0) setExam(filas[0]);
       }
     } catch {

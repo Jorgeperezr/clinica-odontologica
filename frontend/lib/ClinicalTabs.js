@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api, apiBase } from "./api";
+import { api, apiBase, readList } from "./api";
 import SignaturePad from "./SignaturePad";
 import DocumentPreview from "./DocumentPreview";
 import DocumentScanner from "./DocumentScanner";
@@ -36,16 +36,15 @@ export function PlanTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/treatment-plans/`);
-      const data = await resp.json();
-      setPlans(data.results || data);
+      setPlans(await readList(resp));
     } catch { setError("No se pudieron cargar los planes."); }
   }, [patientId]);
 
   useEffect(() => {
     load();
-    api("/clinical/plan-templates/").then(async (r) => {
-      if (r.ok) setTemplates(await r.json());
-    }).catch(() => {});
+    api("/clinical/plan-templates/")
+      .then(async (r) => setTemplates(await readList(r)))
+      .catch(() => {});
   }, [load]);
 
   async function applyTemplate() {
@@ -195,8 +194,7 @@ export function DocumentsTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/documents/`);
-      const data = await resp.json();
-      setDocs(data.results || data);
+      setDocs(await readList(resp));
     } catch { setError("No se pudieron cargar los documentos."); }
   }, [patientId]);
 
@@ -433,16 +431,14 @@ export function ConsentsTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/consents/`);
-      const data = await resp.json();
-      setConsents(data.results || data);
+      setConsents(await readList(resp));
     } catch { setError("No se pudieron cargar los consentimientos."); }
   }, [patientId]);
 
   const loadTemplates = useCallback(async () => {
     try {
       const resp = await api("/consent-templates/");
-      const data = await resp.json();
-      setTemplates(data.results || data);
+      setTemplates(await readList(resp));
     } catch { /* opcional */ }
   }, []);
 

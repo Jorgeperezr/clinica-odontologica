@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 81 — el panel se puede usar sin chocar con el límite de peticiones
+## Estado actual: Sprint 82 — sin pantallas en blanco ante un error de la API
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1396,6 +1396,40 @@ objeto de error donde debía ir una lista y el `.map()` posterior revienta
 la pantalla. Este sprint quita el disparador más fácil de todos, pero no
 la fragilidad: un 500 o un 403 seguirían dejándola en blanco. Eso vive en
 archivos protegidos y espera permiso.
+
+### Sprint 82 — La pantalla en blanco, cerrada de raíz (hecho)
+
+Con permiso expreso para tocar dos archivos protegidos, se cierra lo que
+el Sprint 81 solo había hecho menos probable.
+
+El patrón era siempre el mismo, en siete sitios:
+
+```js
+const data = await resp.json();
+setPlans(data.results || data);      // ← si `data` es un error, guarda el error
+```
+
+Cuando la API contesta un error, `data.results || data` guarda el objeto
+`{detail: "…"}` donde debía ir una lista, y el `.map()` del render tumba
+la pantalla ENTERA — no la pestaña: la pantalla—. El `catch` de al lado no
+lo ve, porque la excepción ocurre al dibujar, no al pedir.
+
+Pasa a `readList(resp)`, la misma función que el Sprint 73 puso en los
+otros cuarenta sitios: comprueba el estado, devuelve siempre un array y
+convierte el error en un mensaje.
+
+**Verificado en el navegador**, haciendo que `/treatment-plans/` conteste
+500 y dejando el límite de peticiones en su valor real:
+
+| | antes | después |
+|---|---|---|
+| texto en pantalla | **0 caracteres** | 357 caracteres |
+| lo que se lee | nada | «No se pudieron cargar los planes.» |
+| errores de JavaScript | `TypeError: plans.map is not a function` | ninguno |
+
+No se ha tocado lógica clínica, ni la sincronización entre odontogramas,
+ni el trazado de rayos, ni historia, ni tratamientos: el diff son 11
+líneas añadidas y 17 quitadas, todas de manejo de respuestas.
 
 ## Desarrollo en GitHub Codespaces
 
