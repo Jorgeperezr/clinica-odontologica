@@ -157,15 +157,47 @@ export async function readObject(resp) {
  * envoltorio propio (`error.details`) y DRF usa `detail`; los errores de
  * validación llegan como {campo: ["mensaje"]}.
  */
+/** Primer texto aprovechable de un objeto {campo: ["mensaje"]}. */
+function primerMensaje(objeto) {
+  if (!objeto || typeof objeto !== "object") return "";
+  for (const valor of Object.values(objeto)) {
+    const texto = Array.isArray(valor) ? valor[0] : valor;
+    if (typeof texto === "string" && texto) return texto;
+  }
+  return "";
+}
+
 export async function apiErrorMessage(resp) {
   const data = await resp.json().catch(() => null);
   if (resp.status === 429) {
     return "Demasiadas peticiones seguidas. Espera unos segundos y vuelve a intentarlo.";
   }
-  const detail = data?.error?.details || data?.detail || data;
-  if (!detail) return `No se pudo completar la operación (error ${resp.status}).`;
-  if (typeof detail === "string") return detail;
-  const first = Object.values(detail)[0];
-  const mensaje = Array.isArray(first) ? first[0] : first;
-  return typeof mensaje === "string" ? mensaje : `Error ${resp.status}`;
+
+  // Toda la API envuelve sus errores así (05-APIs, sección 1):
+  //
+  //     { "error": { "code", "message", "details": { campo: [...] } } }
+  //
+  // La versión anterior leía `error.details` y NUNCA `error.message`, que
+  // es justo donde vive el texto. Como `details` suele ser `{}` —y un
+  // objeto vacío es cierto en JavaScript— acababa siempre en el último
+  // recurso. Resultado: el backend escribía «Usted no tiene permiso para
+  // realizar esta acción» y el panel enseñaba «Error 403». En los
+  // cuarenta y pico sitios que pasan por aquí.
+  //
+  // `details` primero porque, cuando trae algo, son los errores POR CAMPO
+  // de un formulario y dicen más que el mensaje general.
+  const sobre = data?.error;
+  if (sobre) {
+    const porCampo = primerMensaje(sobre.details);
+    if (porCampo) return porCampo;
+    if (typeof sobre.message === "string" && sobre.message) return sobre.message;
+  }
+
+  // Respuestas que no pasan por el manejador de la API.
+  if (typeof data?.detail === "string") return data.detail;
+  const suelto = primerMensaje(data);
+  if (suelto) return suelto;
+  if (typeof data === "string" && data) return data;
+
+  return `No se pudo completar la operación (error ${resp.status}).`;
 }

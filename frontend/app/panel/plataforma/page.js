@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, readList } from "../../../lib/api";
+import { api, apiErrorMessage, readList } from "../../../lib/api";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 
 const TABS = [
@@ -47,9 +47,19 @@ export default function PlataformaPage() {
 
 function DashboardTab() {
   const [data, setData] = useState(null);
+  // `error` separado de `data` a propósito: sin él, `r.ok && setData(...)`
+  // se traga el fallo y la pantalla se queda diciendo «Cargando…» para
+  // siempre. Pasa de verdad —entrar aquí con un usuario que administra
+  // una clínica da 403, porque esto es del superadministrador— y quien lo
+  // ve no tiene forma de saber si está cargando, si se cayó algo o si no
+  // le corresponde entrar.
+  const [error, setError] = useState("");
   useEffect(() => {
-    api("/platform/overview/").then(async (r) => r.ok && setData(await r.json())).catch(() => {});
+    api("/platform/overview/")
+      .then(async (r) => (r.ok ? setData(await r.json()) : setError(await apiErrorMessage(r))))
+      .catch(() => setError("No se pudo contactar con el servidor."));
   }, []);
+  if (error) return <div className="error-box">{error}</div>;
   if (!data) return <div className="empty">Cargando…</div>;
   return (
     <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -416,12 +426,14 @@ const ACTION_LABELS = {
 
 function AuditTab() {
   const [logs, setLogs] = useState(null);
+  const [error, setError] = useState("");
   useEffect(() => {
-    api("/platform/audit/").then(async (r) => {
-      if (r.ok) { const d = await r.json(); setLogs(d.results || []); }
-    }).catch(() => setLogs([]));
+    api("/platform/audit/")
+      .then(async (r) => (r.ok ? setLogs(await readList(r)) : setError(await apiErrorMessage(r))))
+      .catch(() => setError("No se pudo contactar con el servidor."));
   }, []);
 
+  if (error) return <div className="error-box">{error}</div>;
   if (logs === null) return <div className="empty">Cargando…</div>;
 
   return (
@@ -460,9 +472,12 @@ function ConfigTab() {
   const [okMsg, setOkMsg] = useState("");
 
   useEffect(() => {
-    api("/platform/config/").then(async (r) => r.ok && setConfig(await r.json())).catch(() => {});
+    api("/platform/config/")
+      .then(async (r) => (r.ok ? setConfig(await r.json()) : setError(await apiErrorMessage(r))))
+      .catch(() => setError("No se pudo contactar con el servidor."));
   }, []);
 
+  if (error) return <div className="error-box">{error}</div>;
   if (!config) return <div className="empty">Cargando…</div>;
 
   async function save(e) {

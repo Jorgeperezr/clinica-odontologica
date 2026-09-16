@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 82 — sin pantallas en blanco ante un error de la API
+## Estado actual: Sprint 83 — los errores de la API se leen como están escritos
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1430,6 +1430,47 @@ convierte el error en un mensaje.
 No se ha tocado lógica clínica, ni la sincronización entre odontogramas,
 ni el trazado de rayos, ni historia, ni tratamientos: el diff son 11
 líneas añadidas y 17 quitadas, todas de manejo de respuestas.
+
+### Sprint 83 — El panel enseñaba «Error 403» teniendo el mensaje escrito (hecho)
+
+Tres cosas encontradas recorriendo el panel con un navegador.
+
+**1. `apiErrorMessage` no leía el mensaje.** La API envuelve sus errores
+como dice el documento 05-APIs:
+
+```json
+{ "error": { "code": "...", "message": "...", "details": { } } }
+```
+
+La función leía `error.details` y **nunca** `error.message`. Como
+`details` suele ser `{}` —y un objeto vacío es cierto en JavaScript—
+acababa siempre en el último recurso. El backend escribía «Usted no tiene
+permiso para realizar esta acción» y el panel enseñaba «Error 403». En
+los cuarenta y pico sitios que pasan por esta función.
+
+**2. Plataforma se quedaba en «Cargando…» para siempre.** Tres pestañas
+hacían `r.ok && setData(...)`: si la respuesta no era buena, el estado
+seguía nulo y la pantalla seguía diciendo que cargaba. Le pasa a
+cualquiera que administre una clínica, porque esa sección es del
+superadministrador. Ahora se lee el motivo real.
+
+**3. `next dev` y `next build` se pisaban.** Los dos escribían en `.next`,
+así que lanzar la validación obligatoria con el servidor en marcha le
+cambiaba la compilación por debajo: el panel seguía respondiendo pero
+`NEXT_PUBLIC_API_URL` llegaba vacía y el login moría con «Failed to
+fetch» sin una sola petición en la pestaña de red. La validación pasa a
+`.next-build`.
+
+Ese último cambio estuvo a punto de romper producción y se libró por
+comprobarlo: `docker-compose.prod.yml` copia el sitio desde `out/`, y al
+cambiar el directorio de salida ese `out/` dejaba de crearse **mientras
+la compilación seguía diciendo que todo fue bien**. El apaño se limita
+ahora a la compilación de validación; la exportación queda exactamente
+como estaba, con sus 14 páginas en `out/`.
+
+**Corrección.** Dije que la página de firma no avisaba al fallar. Es
+falso: sí muestra el error de la API. Lo único discutible es que el
+formulario siga siendo utilizable debajo, y eso no es un fallo.
 
 ## Desarrollo en GitHub Codespaces
 
