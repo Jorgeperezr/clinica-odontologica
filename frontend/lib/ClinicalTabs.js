@@ -12,7 +12,7 @@ import { api, apiBase } from "./api";
 import SignaturePad from "./SignaturePad";
 import DocumentPreview from "./DocumentPreview";
 import DocumentScanner from "./DocumentScanner";
-import { fileSrc } from "./theme";
+import AuthImage from "./AuthImage";
 import { useConfirm } from "./ConfirmDialog";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
@@ -362,8 +362,8 @@ export function DocumentsTab({ patientId }) {
               <button onClick={() => setPreview(d)}
                       style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}>
               {isImage(d) ? (
-                <img src={fileSrc(d.file_url)} alt={d.description}
-                     style={{ width: "100%", height: 130, objectFit: "cover", borderRadius: 8, marginBottom: 8 }} />
+                <AuthImage path={d.file_url} alt={d.description}
+                           style={{ width: "100%", height: 130, objectFit: "cover", borderRadius: 8, marginBottom: 8 }} />
               ) : (
                 <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center",
                               background: "var(--petrol-soft)", borderRadius: 8, marginBottom: 8, fontSize: 34 }}>📄</div>

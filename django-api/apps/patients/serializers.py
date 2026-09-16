@@ -34,7 +34,18 @@ class PatientDocumentSerializer(serializers.ModelSerializer):
         extra_kwargs = {"file": {"write_only": True}}
 
     def get_file_url(self, obj):
-        return obj.file.url if obj.file else None
+        """
+        Ruta de la API que entrega el archivo, no la de /media/.
+
+        Devolver `obj.file.url` obligaba a publicar /media/ para que la
+        imagen se viera, y ahí dentro hay radiografías y documentos de
+        pacientes: cualquiera con la URL se los llevaba, sin sesión y sin
+        dejar rastro. Esta ruta pasa por `PatientDocumentFileView`, que
+        valida clínica, paciente y permisos antes de entregar el binario.
+        """
+        if not obj.file:
+            return None
+        return f"/api/v1/patients/{obj.patient_id}/documents/{obj.id}/file/"
 
     def get_file_name(self, obj):
         import os

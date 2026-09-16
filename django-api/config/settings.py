@@ -206,6 +206,12 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:3000", cast=Csv())
 
+# En producción el panel y la API comparten origen tras nginx, pero en
+# desarrollo el panel corre en otro puerto y el navegador oculta las
+# cabeceras de respuesta que no se declaren aquí. Sin esto, una descarga
+# generada por la API llega sin su nombre de archivo.
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]
+
 # --------------------------------------------------------------------------
 # Celery / Redis (recordatorios, tareas programadas — ver Arquitectura v1.2)
 # --------------------------------------------------------------------------
@@ -225,9 +231,18 @@ INTERNAL_SERVICE_TOKEN = config("INTERNAL_SERVICE_TOKEN", default="dev-only-shar
 # Almacenamiento de archivos (Cloud Storage en producción — ver Arquitectura)
 # --------------------------------------------------------------------------
 USE_CLOUD_STORAGE = config("USE_CLOUD_STORAGE", default=False, cast=bool)
+
+# MEDIA_URL y MEDIA_ROOT se definen SIEMPRE: los FieldFile construyen su
+# ruta con ellos incluso cuando el backend es un bucket, y dejarlos solo
+# en la rama local hacía que con Cloud Storage salieran rutas vacías.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 if USE_CLOUD_STORAGE:
-    DEFAULT_FILE_STORAGE = "storages.backends.gcloud.GoogleCloudStorage"
+    # Django 5 configura el almacenamiento por STORAGES. Aquí se usaba
+    # además DEFAULT_FILE_STORAGE, y las dos formas son EXCLUYENTES: con
+    # USE_CLOUD_STORAGE=True el proyecto ni siquiera arrancaba
+    # (ImproperlyConfigured). Nadie lo había notado porque el interruptor
+    # todavía no se ha encendido en ningún despliegue.
+    STORAGES["default"] = {"BACKEND": "storages.backends.gcloud.GoogleCloudStorage"}
     GS_BUCKET_NAME = config("GS_BUCKET_NAME", default="")
-else:
-    MEDIA_URL = "media/"
-    MEDIA_ROOT = BASE_DIR / "media"

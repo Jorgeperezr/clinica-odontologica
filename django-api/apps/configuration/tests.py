@@ -368,3 +368,170 @@ class DocumentAppearanceTests(APITestCase):
         source = inspect.getsource(form033_pdf)
         self.assertNotIn("document_style", source)
         self.assertNotIn("get_document_style", source)
+
+
+class TenantBackupTests(APITestCase):
+    """
+    Copia de seguridad cifrada de la clínica (Sprint 65).
+
+    Lo que más importa comprobar aquí no es que el archivo se genere,
+    sino QUIÉN puede generarlo: la administradora de la clínica sí, y el
+    Super Administrador de la plataforma no, porque no es titular de
+    esos datos.
+    """
+
+    def setUp(self):
+        from apps.patients.models import Patient
+
+        self.tenant = Tenant.objects.create(name="Clínica Sonrisa", ruc="1790012345001")
+        self.other = Tenant.objects.create(name="Clínica Ajena", ruc="1790099999001")
+
+        self.admin = User.objects.create_user(
+            email="admin@sonrisa.ec", password="superseguro123", role="admin", tenant=self.tenant,
+        )
+        self.reception = User.objects.create_user(
+            email="recep@sonrisa.ec", password="superseguro123", role="reception", tenant=self.tenant,
+        )
+        self.doctor = User.objects.create_user(
+            email="doc@sonrisa.ec", password="superseguro123", role="doctor", tenant=self.tenant,
+        )
+        self.superadmin = User.objects.create_user(
+            email="super@plataforma.ec", password="superseguro123",
+            role="superadmin", tenant=None, is_superuser=True, is_staff=True,
+        )
+        self.other_admin = User.objects.create_user(
+            email="admin@ajena.ec", password="superseguro123", role="admin", tenant=self.other,
+        )
+
+        Patient.objects.create(
+            tenant=self.tenant, first_name="María", last_name="Torres", national_id="1712345678",
+        )
+        Patient.objects.create(
+            tenant=self.other, first_name="Ajeno", last_name="Paciente", national_id="0999999999",
+        )
+
+        self.url = reverse("tenant-backup")
+        self.decrypt_url = reverse("tenant-backup-decrypt")
+        self.phrase = "frase-larga-de-prueba"
+
+    def _backup(self, user=None):
+        self.client.force_authenticate(user=user or self.admin)
+        resp = self.client.post(self.url, {"passphrase": self.phrase,
+                                           "passphrase_confirm": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return b"".join(resp.streaming_content) if resp.streaming else resp.content
+
+    # ── Quién puede ──
+    def test_clinic_admin_can_create_backup(self):
+        blob = self._backup()
+        self.assertTrue(blob.startswith(b"CLINICABK"))
+
+    def test_superadmin_cannot_create_backup(self):
+        self.client.force_authenticate(user=self.superadmin)
+        resp = self.client.post(self.url, {"passphrase": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_cannot_decrypt_backup(self):
+        blob = self._backup()
+        self.client.force_authenticate(user=self.superadmin)
+        resp = self.client.post(self.decrypt_url, {"file": self._as_file(blob),
+                                                   "passphrase": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_reception_and_doctor_cannot_create_backup(self):
+        for user in (self.reception, self.doctor):
+            self.client.force_authenticate(user=user)
+            resp = self.client.post(self.url, {"passphrase": self.phrase})
+            self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    # ── Frase de cifrado ──
+    def test_short_passphrase_rejected(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(self.url, {"passphrase": "corta"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_passphrase_confirmation_must_match(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(self.url, {"passphrase": self.phrase,
+                                           "passphrase_confirm": "otra-frase-distinta"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # ── Contenido ──
+    def test_backup_only_contains_own_clinic(self):
+        from apps.common.tenant_backup import read_encrypted
+
+        payload = read_encrypted(self._backup(), self.phrase)
+        ids = {r["fields"].get("national_id") for r in payload["records"]
+               if r["model"] == "patients.patient"}
+        self.assertIn("1712345678", ids)
+        self.assertNotIn("0999999999", ids)
+
+    def test_backup_does_not_carry_password_hashes(self):
+        from apps.common.tenant_backup import read_encrypted
+
+        payload = read_encrypted(self._backup(), self.phrase)
+        users = [r for r in payload["records"] if r["model"] == "accounts.user"]
+        self.assertTrue(users)
+        for row in users:
+            self.assertNotIn("password", row["fields"])
+
+    # ── Descifrado desde el panel ──
+    def _as_file(self, blob, name="respaldo.clinicabk"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(name, blob, content_type="application/octet-stream")
+
+    def test_admin_decrypts_own_backup(self):
+        blob = self._backup()
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(self.decrypt_url,
+                                {"file": self._as_file(blob), "passphrase": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["manifest"]["tenant"]["id"], str(self.tenant.id))
+        self.assertGreater(resp.data["manifest"]["total_records"], 0)
+
+    def test_wrong_passphrase_reveals_nothing(self):
+        blob = self._backup()
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(self.decrypt_url,
+                                {"file": self._as_file(blob), "passphrase": "frase-equivocada"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertNotIn("records", resp.data)
+
+    def test_tampered_file_is_rejected(self):
+        blob = bytearray(self._backup())
+        blob[-1] ^= 0xFF          # un solo bit basta: AES-GCM está autenticado
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(self.decrypt_url,
+                                {"file": self._as_file(bytes(blob)), "passphrase": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_foreign_file_is_rejected(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(self.decrypt_url,
+                                {"file": self._as_file(b"esto no es una copia" * 10),
+                                 "passphrase": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_backup_of_another_clinic_cannot_be_opened(self):
+        """Aun con la frase correcta: cada administración descifra lo suyo."""
+        foreign = self._backup(user=self.other_admin)
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(self.decrypt_url,
+                                {"file": self._as_file(foreign), "passphrase": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_operations_are_audited_without_the_passphrase(self):
+        from apps.accounts.models import AuditLog
+
+        blob = self._backup()
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(self.decrypt_url,
+                         {"file": self._as_file(blob), "passphrase": self.phrase})
+
+        actions = list(AuditLog.objects.filter(entity_type="TenantBackup")
+                       .values_list("action", flat=True))
+        self.assertIn("create_backup", actions)
+        self.assertIn("decrypt_backup", actions)
+        for log in AuditLog.objects.filter(entity_type="TenantBackup"):
+            self.assertNotIn(self.phrase, str(log.metadata))

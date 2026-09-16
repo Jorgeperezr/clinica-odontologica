@@ -85,11 +85,15 @@ async function refreshAccess() {
 }
 
 export async function api(path, options = {}) {
+  // Con FormData el Content-Type lo pone el navegador, que es el único
+  // que conoce el `boundary` del multipart; fijarlo a mano rompe la
+  // subida de archivos.
+  const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
   const doFetch = () =>
     fetch(`${apiBase()}/api/v1${path}`, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        ...(isForm ? {} : { "Content-Type": "application/json" }),
         ...(tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {}),
         ...(options.headers || {}),
       },

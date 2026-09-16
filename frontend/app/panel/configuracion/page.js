@@ -6,6 +6,7 @@ import BackButton from "../../../lib/BackButton";
 import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../../../lib/theme";
 import LogoCropper from "../../../lib/LogoCropper";
 import DocumentAppearance from "../../../lib/DocumentAppearance";
+import ClinicBackup from "../../../lib/ClinicBackup";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -26,7 +27,8 @@ export default function ConfiguracionPage() {
 
       <div className="tabs" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
         {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
-          ["documentos", "Apariencia de documentos"]].map(([k, label]) => (
+          ["documentos", "Apariencia de documentos"],
+          ["respaldo", "Copia de seguridad"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -47,6 +49,7 @@ export default function ConfiguracionPage() {
       {tab === "consentimientos" && <ConsentTemplatesTab />}
       {tab === "personalizacion" && <BrandingTab />}
       {tab === "documentos" && <DocumentAppearance />}
+      {tab === "respaldo" && <ClinicBackup />}
     </div>
   );
 }
