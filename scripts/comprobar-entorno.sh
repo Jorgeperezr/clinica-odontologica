@@ -71,6 +71,12 @@ if [ "$SO" = "Darwin" ]; then
 else
     nota "$SO $(uname -m)"
 fi
+# La versión de bash y la configuración regional se anotan porque un
+# fallo de estos guiones puede depender de las dos: macOS trae bash 3.2
+# —de 2007— y el manejo de los caracteres no ASCII cambia con la
+# configuración regional. Si algo falla solo en una máquina, esta línea
+# suele ser la primera pista.
+nota "bash ${BASH_VERSION:-?}  ·  LANG=${LANG:-sin fijar}"
 
 # ── 1. openssl y -pbkdf2 ─────────────────────────────────────────────
 titulo "Cifrado de las copias (openssl)"
@@ -243,7 +249,7 @@ if command -v lsof >/dev/null 2>&1; then
     for puerto in 3000 8000 5432; do
         QUIEN=$(lsof -nP -iTCP:"$puerto" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1}')
         if [ -n "$QUIEN" ]; then
-            aviso "$puerto ocupado por «$QUIEN»"
+            aviso "$puerto ocupado por «${QUIEN}»"
         else
             ok "$puerto libre"
         fi

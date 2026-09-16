@@ -39,7 +39,7 @@ fi
 echo "✓ La copia se descifra y está completa."
 
 echo ""
-echo "⚠  ATENCIÓN: esto REEMPLAZA los datos actuales de «$POSTGRES_DB»"
+echo "⚠  ATENCIÓN: esto REEMPLAZA los datos actuales de «${POSTGRES_DB}»"
 echo "   en $(describir_conexion)"
 echo "   con el contenido de: $1"
 read -r -p "   Escribe RESTAURAR para continuar: " CONFIRM

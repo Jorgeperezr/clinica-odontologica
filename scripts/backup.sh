@@ -35,7 +35,7 @@ STAMP=$(date +%Y-%m-%d_%H%M)
 OUTFILE="$BACKUP_DIR/clinica-$STAMP.sql.gz.enc"
 
 echo "→ Conexión: $(describir_conexion)"
-echo "→ Exportando la base «$POSTGRES_DB»…"
+echo "→ Exportando la base «${POSTGRES_DB}»…"
 
 # `set -o pipefail` ya está activo: si pg_dump falla a mitad, la tubería
 # entera falla y no se queda un archivo cifrado a medias pareciendo

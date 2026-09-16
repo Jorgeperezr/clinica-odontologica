@@ -73,6 +73,19 @@ jobs:
         working-directory: whatsapp-gateway
         run: python -m pytest tests -q
 
+  guiones:
+    # Los guiones de shell no los cubría nadie, y ahí había un fallo
+    # repetido en cinco archivos —entre ellos los tres de las copias de
+    # seguridad— que solo se manifiesta en macOS: una variable pegada a
+    # un carácter no ASCII. En el Linux del CI funciona, así que sin esta
+    # comprobación el repositorio se queda en verde mientras el guion no
+    # arranca en el portátil de quien lo use.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Revisar los guiones de shell
+        run: bash scripts/comprobar-guiones.sh
+
   frontend-build:
     runs-on: ubuntu-latest
     steps:

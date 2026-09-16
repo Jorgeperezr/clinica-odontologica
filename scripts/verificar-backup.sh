@@ -72,14 +72,14 @@ trap limpiar EXIT
 # ── 1. ¿El volcado está completo? ────────────────────────────────────
 echo "→ Comprobando que el volcado no esté truncado…"
 if ! dump_completo "$ARCHIVO"; then
-    echo "✗ El volcado NO termina con «$MARCA_FIN»." >&2
+    echo "✗ El volcado NO termina con «${MARCA_FIN}»." >&2
     echo "  Se cortó a medias. Esta copia NO es restaurable." >&2
     exit 1
 fi
 echo "✓ El volcado está completo."
 
 # ── 2. Restaurar de verdad ───────────────────────────────────────────
-echo "→ Restaurando en la base desechable «$BASE_PRUEBA»…"
+echo "→ Restaurando en la base desechable «${BASE_PRUEBA}»…"
 consultar postgres -q -c "CREATE DATABASE \"$BASE_PRUEBA\";" >/dev/null
 
 ERRORES=$(mktemp)
@@ -130,5 +130,5 @@ cat <<FIN
 ✓ COPIA VERIFICADA — se restauró de verdad, no solo se descomprimió.
   Archivo : $ARCHIVO ($TAMANO)
   Clínicas: $CLINICAS
-  La base desechable «$BASE_PRUEBA» se destruye al salir.
+  La base desechable «${BASE_PRUEBA}» se destruye al salir.
 FIN

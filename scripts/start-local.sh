@@ -127,7 +127,7 @@ fi
 
 VENV="$RAIZ/.venv"
 if [ ! -x "$VENV/bin/python" ]; then
-    echo "  Creando entorno virtual con $INTERPRETE…"
+    echo "  Creando entorno virtual con ${INTERPRETE}…"
     "$INTERPRETE" -m venv "$VENV"
 fi
 PY="$VENV/bin/python"
@@ -165,7 +165,7 @@ if ! escuchando; then
         # dar por supuesto uno.
         for servicio in postgresql@16 postgresql@15 postgresql@14 postgresql; do
             if brew services list 2>/dev/null | grep -q "^$servicio "; then
-                echo "  Arrancando $servicio…"
+                echo "  Arrancando ${servicio}…"
                 brew services start "$servicio" >/dev/null 2>&1 || true
                 break
             fi
@@ -220,7 +220,7 @@ elif PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" \
     :
 else
     cat >&2 <<FIN
-✗ PostgreSQL responde, pero no se pudo crear el rol «$POSTGRES_USER».
+✗ PostgreSQL responde, pero no se pudo crear el rol «${POSTGRES_USER}».
 
   No hay forma de conectarse como superusuario: ni como root por el
   usuario del sistema «postgres» (Linux) ni directamente (macOS).

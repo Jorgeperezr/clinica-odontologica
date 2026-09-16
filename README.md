@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 78 — el arranque local funciona también en macOS
+## Estado actual: Sprint 79 — guiones revisados en el CI (el fallo que solo salía en macOS)
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1292,6 +1292,41 @@ probado nunca.
 
 Verificado de extremo a extremo con un `.venv` recién creado sobre 3.12:
 migraciones, catálogos, login real contra la API y el panel respondiendo.
+
+### Sprint 79 — Una variable pegada a unos puntos suspensivos (hecho)
+
+`start-local.sh` murió en la primera línea que imprimía, en un Mac, con
+un mensaje que no se parece a su causa:
+
+```
+scripts/start-local.sh: line 130: INTERPRETE?: unbound variable
+```
+
+La línea era `echo "  Creando entorno virtual con $INTERPRETE…"`. El
+nombre de una variable termina donde termina lo que bash considera parte
+de un identificador, y eso depende de la biblioteca del sistema y de la
+configuración regional. Cuando los bytes del carácter que sigue —aquí
+los tres de «…», pero vale cualquier letra acentuada, `«` o `✓`— cuentan
+como parte del nombre, la variable que se busca ya no es `$INTERPRETE`
+sino otra que no existe; con `set -u` eso es muerte inmediata, y el
+mensaje nombra esa otra variable.
+
+**No era un sitio: eran nueve, en cinco guiones**, entre ellos los tres
+de las copias de seguridad. Ninguno se manifiesta en Linux, así que el
+CI llevaba tiempo en verde sobre guiones que no arrancaban en un
+portátil. Las llaves lo cierran sin ambigüedad: `"${INTERPRETE}…"`.
+
+**Para que no vuelva:** `scripts/comprobar-guiones.sh` revisa la sintaxis
+de todos los guiones y busca este patrón, y el CI lo ejecuta en un
+trabajo nuevo. Comprobado que **falla** al reintroducir el fallo a
+propósito y que pasa al corregirlo — una comprobación que no puede
+fallar no comprueba nada.
+
+Verificado además compilando **bash 3.2**, el que trae macOS, y pasando
+por él los guiones enteros: arranque completo, migraciones, login real
+contra la API y el panel respondiendo. La revisión del entorno anota
+ahora la versión de bash y la configuración regional, que es la primera
+pista cuando algo falla en una sola máquina.
 
 ## Desarrollo en GitHub Codespaces
 
