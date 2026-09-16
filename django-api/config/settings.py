@@ -191,7 +191,24 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        "user": "60/min",
+        # 60/min era demasiado poco, y no por teoría: recorriendo el panel
+        # con un navegador de verdad, abrir UNA ficha clínica y mirar sus
+        # pestañas gasta unas treinta peticiones. En una sesión ya
+        # empezada bastaron 22 más para recibir un 429, y entonces la
+        # pestaña de planes se quedaba EN BLANCO —la pantalla entera pasó
+        # de 2053 caracteres a cero—. Es decir: el límite pensado para
+        # frenar un abuso estaba frenando a la recepcionista al segundo
+        # paciente de la mañana.
+        #
+        # 600/min son diez peticiones por segundo sostenidas: ninguna
+        # persona se acerca, y un bucle desbocado o un token robado
+        # siguen teniendo techo. Quien de verdad protege el login es el
+        # límite de anónimo, que no se toca.
+        #
+        # Si algún día el panel deja de pedir treinta cosas por ficha,
+        # este número puede bajar. Mientras las pida, bajarlo es romper
+        # la aplicación a propósito.
+        "user": "600/min",
         "anon": "20/min",
         "otp": "5/min",  # aprox. válida; ventana exacta de 10 min se afina en Sprint 10
     },

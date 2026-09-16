@@ -54,7 +54,7 @@ python manage.py test --settings=config.settings_test
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 246 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 249 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 80 — el arranque local, comprobado de punta a punta
+## Estado actual: Sprint 81 — el panel se puede usar sin chocar con el límite de peticiones
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1362,6 +1362,40 @@ estaba en el registro desde el primer segundo y nadie lo miraba.
 
 Verificado el ciclo entero: arranque, API en 200, panel en 200, `--stop`
 y puertos libres en un segundo, sin procesos huérfanos.
+
+### Sprint 81 — El límite de peticiones bloqueaba al segundo paciente (hecho)
+
+Con el panel por fin en marcha en una máquina local, se recorrió **usando
+un navegador de verdad**, que es como aparecieron los fallos del Sprint
+73 y los que `next build` y la suite no ven.
+
+El hallazgo: `"user": "60/min"`. Abrir **una** ficha clínica y mirar sus
+pestañas gasta unas treinta peticiones. En una sesión ya empezada
+bastaron 22 más para recibir un 429 — es decir, **dos pacientes y la
+recepcionista queda bloqueada**. Y al llegar el 429 la pestaña de planes
+no mostraba un aviso: la pantalla entera pasaba de 2053 caracteres a
+cero, con `TypeError: plans.map is not a function`.
+
+El límite pensado para frenar un abuso estaba frenando el trabajo. Pasa a
+600/min: diez peticiones por segundo sostenidas, a las que ninguna
+persona se acerca, mientras un bucle desbocado o un token robado siguen
+teniendo techo. **El límite de anónimo no se toca**, porque es el que
+protege el login contra fuerza bruta; una prueba nueva lo comprueba
+intentando cuarenta contraseñas seguidas.
+
+Verificado en el navegador: la misma secuencia que dejaba la pantalla en
+blanco ahora no llega al 429 en setenta peticiones y la pestaña se dibuja
+entera, sin un solo error de JavaScript.
+
+**Corrección a lo que se venía diciendo.** El análisis daba por hecho que
+esas tres pestañas —Plan de tratamiento, Documentos, Consentimientos— se
+veían siempre en blanco. No es así: con la API sana se dibujan bien, con
+sus formularios y su «Sin planes de tratamiento». Se rompen **solo**
+cuando la API contesta un error, porque `data.results || data` guarda el
+objeto de error donde debía ir una lista y el `.map()` posterior revienta
+la pantalla. Este sprint quita el disparador más fácil de todos, pero no
+la fragilidad: un 500 o un 403 seguirían dejándola en blanco. Eso vive en
+archivos protegidos y espera permiso.
 
 ## Desarrollo en GitHub Codespaces
 
