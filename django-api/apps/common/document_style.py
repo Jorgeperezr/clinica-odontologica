@@ -42,10 +42,13 @@ configuración.
 from datetime import datetime
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, LEGAL, LETTER, landscape
+from reportlab.lib.pagesizes import A4, A5, LEGAL, LETTER, landscape
 from reportlab.lib.units import mm
 
-_PAGE_SIZES = {"A4": A4, "LETTER": LETTER, "LEGAL": LEGAL}
+_PAGE_SIZES = {"A4": A4, "LETTER": LETTER, "LEGAL": LEGAL, "A5": A5}
+
+# Equivalentes de las familias de reportlab en las hojas de cálculo.
+_XLSX_FONTS = {"Helvetica": "Arial", "Times": "Times New Roman", "Courier": "Courier New"}
 
 # Familias tipográficas incorporadas en reportlab. No se admiten fuentes
 # arbitrarias porque habría que registrar el .ttf y distribuirlo; las
@@ -221,7 +224,7 @@ class DocumentStyle:
         return line_y - self.block_spacing
 
     # ── Pie ───────────────────────────────────────────────────────────
-    def draw_footer(self, c, page_number=None, total_pages=None):
+    def draw_footer(self, c, page_number=None, total_pages=None, clinic=None):
         f = self.s["footer"]
         if not f.get("enabled", True):
             return
@@ -231,6 +234,12 @@ class DocumentStyle:
         c.line(self.content_left, y + 6 * mm, self.content_right, y + 6 * mm)
 
         bits = []
+        # El pie institucional (nombre, dirección, teléfono) lo escribía
+        # cada generador por su cuenta; ahora sale de aquí, de modo que
+        # todos los documentos lo muestran igual y se puede desactivar.
+        if f.get("show_clinic", True) and clinic:
+            bits += [str(clinic[k]) for k in ("name", "address", "phone", "email")
+                     if clinic.get(k)]
         if f.get("text"):
             bits.append(f["text"])
         if f.get("show_date", True):
@@ -273,6 +282,79 @@ class DocumentStyle:
             c.restoreState()
         except Exception:
             pass       # la marca de agua jamás debe impedir emitir el documento
+
+    # ── Firmas ────────────────────────────────────────────────────────
+    def draw_signature(self, c, y, slots):
+        """
+        Dibuja uno o varios bloques de firma y devuelve la Y por debajo.
+
+        `slots` es una lista de diccionarios
+        {caption, full_name, license_number, specialty, image}. Con un
+        solo bloque se respeta `signature.position`; con dos o más se
+        reparten a lo ancho del contenido, que es lo que necesita el
+        consentimiento (paciente y profesional).
+
+        Antes cada generador dibujaba su propia línea de firma con
+        medidas y colores escritos a mano, así que la firma era lo único
+        del documento que no seguía la configuración de la clínica.
+        """
+        sg = self.s["signature"]
+        slots = [s for s in slots if s]
+        if not slots:
+            return y
+
+        iw = float(sg.get("width_mm", 45)) * mm
+        ih = float(sg.get("height_mm", 18)) * mm
+        line_w = max(iw + 15 * mm, 55 * mm)
+        if len(slots) > 1:
+            line_w = min(line_w, (self.content_width - 10 * mm) / len(slots))
+            gap = (self.content_width - line_w * len(slots)) / (len(slots) - 1)
+            xs = [self.content_left + i * (line_w + gap) for i in range(len(slots))]
+        else:
+            pos = sg.get("position", "right")
+            if pos == "left":
+                x0 = self.content_left
+            elif pos == "center":
+                x0 = self.content_left + (self.content_width - line_w) / 2
+            else:
+                x0 = self.content_right - line_w
+            xs = [x0]
+
+        line_y = y - ih - 2 * mm
+        lowest = line_y
+        for x0, slot in zip(xs, slots):
+            if sg.get("show_image", True) and slot.get("image") is not None:
+                try:
+                    c.drawImage(slot["image"], x0 + (line_w - iw) / 2, line_y + 1.5 * mm,
+                                width=iw, height=ih, preserveAspectRatio=True, mask="auto")
+                except Exception:
+                    pass       # una firma ilegible no debe romper el documento
+            c.setStrokeColor(self.ink)
+            c.setLineWidth(0.6)
+            c.line(x0, line_y, x0 + line_w, line_y)
+
+            rows = []
+            if slot.get("caption"):
+                rows.append((True, slot["caption"]))
+            if sg.get("show_name", True) and slot.get("full_name"):
+                rows.append((not slot.get("caption"), slot["full_name"]))
+            detail = []
+            if sg.get("show_specialty", True) and slot.get("specialty"):
+                detail.append(str(slot["specialty"]))
+            if sg.get("show_license", True) and slot.get("license_number"):
+                detail.append(f"Reg. {slot['license_number']}")
+            if detail:
+                rows.append((False, " · ".join(detail)))
+
+            ty = line_y - 5 * mm
+            for bold, text in rows:
+                c.setFont(self.font_bold if bold else self.font,
+                          self.size - (0.5 if bold else 1.5))
+                c.setFillColor(self.ink if bold else self.secondary)
+                c.drawCentredString(x0 + line_w / 2, ty, text)
+                ty -= self.size + 1
+            lowest = min(lowest, ty)
+        return lowest - 2 * mm
 
     # ── Soporte para generadores con Platypus ─────────────────────────
     #
@@ -327,7 +409,7 @@ class DocumentStyle:
         """
         def draw(c, doc):
             self.draw_watermark(c)
-            self.draw_footer(c, page_number=doc.page)
+            self.draw_footer(c, page_number=doc.page, clinic=clinic)
         return draw
 
     def header_flowables(self, clinic=None, professional=None):
@@ -391,6 +473,9 @@ class DocumentStyle:
         header_text = _color(pal.get("table_header_text"), "#ffffff")
         border = _color(t.get("border_color") or pal.get("separator"), "#d1d5db")
         pad = float(t.get("cell_padding_mm", 2)) * mm
+        # El aire entre filas se suma al relleno vertical: es la forma de
+        # conseguirlo en reportlab, que no tiene separación de filas.
+        vpad = pad * 0.6 + float(t.get("row_spacing_mm", 0)) * mm
 
         cmds = [
             ("FONTNAME", (0, 0), (-1, header_rows - 1), self.font_bold),
@@ -400,8 +485,8 @@ class DocumentStyle:
             ("TEXTCOLOR", (0, header_rows), (-1, -1), self.ink),
             ("LEFTPADDING", (0, 0), (-1, -1), pad),
             ("RIGHTPADDING", (0, 0), (-1, -1), pad),
-            ("TOPPADDING", (0, 0), (-1, -1), pad * 0.6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), pad * 0.6),
+            ("TOPPADDING", (0, 0), (-1, -1), vpad),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), vpad),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]
         if t.get("shaded", True):
@@ -412,6 +497,53 @@ class DocumentStyle:
             cmds.append(("ROWBACKGROUNDS", (0, header_rows), (-1, -1),
                          [colors.white, _color(t.get("zebra_color"), "#f9fafb")]))
         return TableStyle(cmds)
+
+    # ── Hojas de cálculo ──────────────────────────────────────────────
+    def xlsx_theme(self):
+        """
+        La misma apariencia, traducida a lo que entiende openpyxl.
+
+        Los reportes en Excel son documentos de la clínica como cualquier
+        otro: si la cabecera de las tablas del PDF es del color de la
+        marca, la del .xlsx tiene que serlo también. openpyxl quiere los
+        colores en 'RRGGBB' sin almohadilla y nombres de fuente reales,
+        de ahí la traducción.
+        """
+        t = self.s["tables"]
+        pal = self.s["palette"]
+        ty = self.s["typography"]
+
+        def hex6(value, fallback):
+            raw = str(value or "").strip() or fallback
+            raw = raw.lstrip("#")
+            return raw.upper() if len(raw) == 6 else fallback.lstrip("#").upper()
+
+        primary = pal.get("primary") or self.brand.get("primary") or _FALLBACK_PRIMARY
+        return {
+            "header_bg": hex6(t.get("header_bg") or pal.get("table_header_bg") or primary,
+                              _FALLBACK_PRIMARY),
+            "header_text": hex6(pal.get("table_header_text"), "#FFFFFF"),
+            "body_text": hex6(ty.get("color"), "#1F2937"),
+            "zebra": bool(t.get("zebra", True)),
+            "zebra_bg": hex6(t.get("zebra_color"), "#F9FAFB"),
+            "font": _XLSX_FONTS.get(ty.get("family"), "Calibri"),
+            "size": float(ty.get("size_pt", 10)),
+        }
+
+    # ── Estilo derivado ───────────────────────────────────────────────
+    def for_page(self, size, orientation=None):
+        """
+        El mismo estilo sobre otra hoja. Lo necesitan los documentos cuyo
+        formato de papel forma parte de su naturaleza —la receta se
+        imprime en talonario— sin que por ello dejen de seguir la
+        identidad configurada por la clínica.
+        """
+        settings = dict(self.s)
+        settings["page"] = dict(self.s["page"])
+        settings["page"]["size"] = size
+        if orientation:
+            settings["page"]["orientation"] = orientation
+        return DocumentStyle(settings, brand=self.brand)
 
 
 def default_settings():
@@ -441,6 +573,44 @@ def get_document_style(tenant=None, brand=None):
     if brand is None and tenant is not None:
         brand = _brand_of(tenant)
     return DocumentStyle(settings, brand=brand)
+
+
+def clinic_snapshot(tenant):
+    """
+    Datos de la clínica para el encabezado y el pie: nombre, dirección,
+    contacto y el logotipo ya abierto como ImageReader.
+
+    Cada vista que emitía un documento repetía este bloque, con el
+    resultado de que la historia clínica se quedó sin membrete porque
+    allí nadie lo copió. Con un único punto, cualquier documento nuevo lo
+    obtiene con una línea.
+    """
+    if tenant is None:
+        return {}
+    try:
+        from apps.configuration.models import ClinicBranding
+
+        branding = ClinicBranding.objects.filter(tenant=tenant).first()
+    except Exception:
+        branding = None
+
+    logo_reader = None
+    if branding and branding.logo:
+        try:
+            from reportlab.lib.utils import ImageReader
+
+            logo_reader = ImageReader(branding.logo.path)
+        except Exception:
+            logo_reader = None      # logotipo ilegible: el documento sale igual
+
+    return {
+        "name": (branding.display_name if branding and branding.display_name
+                 else getattr(tenant, "name", "")),
+        "logo_reader": logo_reader,
+        "address": branding.address if branding else "",
+        "phone": branding.phone if branding else "",
+        "email": branding.email if branding else "",
+    }
 
 
 def _brand_of(tenant):

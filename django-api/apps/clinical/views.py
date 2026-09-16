@@ -370,11 +370,12 @@ class ConsentSignView(generics.GenericAPIView):
 
         # Generar el PDF con la firma incrustada
         # Apariencia configurada por la clínica (Sprint 60)
-        from apps.common.document_style import get_document_style
+        from apps.common.document_style import clinic_snapshot, get_document_style
 
         pdf_bytes = generate_consent_pdf(
             consent, consent.signature_image.path,
             style=get_document_style(request.tenant),
+            clinic=clinic_snapshot(request.tenant),
         )
         pdf_name = f"consent_{consent.id}.pdf"
         consent.pdf_file.save(pdf_name, ContentFile(pdf_bytes), save=True)
@@ -412,11 +413,12 @@ class ClinicalHistoryExportView(generics.GenericAPIView):
             patient=patient, tenant=request.tenant
         ).prefetch_related("items", "items__treatment")
 
-        from apps.common.document_style import get_document_style
+        from apps.common.document_style import clinic_snapshot, get_document_style
 
         pdf_bytes = generate_clinical_history_pdf(
             patient, evolutions, diagnoses, plans,
             style=get_document_style(request.tenant),
+            clinic=clinic_snapshot(request.tenant),
         )
         _audit(request, "export_clinical_history", "ClinicalRecord", patient.id)
 

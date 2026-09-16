@@ -366,6 +366,7 @@ class NewPatientsReportView(APIView):
         from django.utils.dateparse import parse_date
 
         from apps.billing.report_export import build_xlsx
+        from apps.common.document_style import get_document_style
         from apps.patients.models import Patient
 
         patients = Patient.objects.filter(tenant=request.tenant, is_active=True)
@@ -386,6 +387,7 @@ class NewPatientsReportView(APIView):
                 "Pacientes nuevos",
                 ["Nombre", "Identificación", "Teléfono", "Fecha de registro"],
                 rows,
+                style=get_document_style(request.tenant),
             )
             response = HttpResponse(
                 xlsx,
@@ -415,6 +417,7 @@ class InventoryReportView(APIView):
         from django.http import HttpResponse
 
         from apps.billing.report_export import build_xlsx
+        from apps.common.document_style import get_document_style
         from apps.inventory.models import Product
 
         products = Product.objects.filter(
@@ -431,6 +434,7 @@ class InventoryReportView(APIView):
                 "Inventario",
                 ["Producto", "Unidad", "Stock actual", "Stock mínimo", "Stock bajo"],
                 rows,
+                style=get_document_style(request.tenant),
             )
             response = HttpResponse(
                 xlsx,

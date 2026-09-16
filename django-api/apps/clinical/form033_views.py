@@ -376,7 +376,6 @@ class ExamRequestPDFView(APIView):
 
         from apps.clinical.exam_request_pdf import _age_from_birth, build_exam_request_pdf
         from apps.clinical.models import ExamRequest
-        from apps.configuration.models import ClinicBranding
 
         patient = _get_patient(request, pk)
         exam = ExamRequest.objects.filter(
@@ -386,16 +385,6 @@ class ExamRequestPDFView(APIView):
             return Response({"detail": "Solicitud no encontrada."}, status=404)
 
         doctor, prof = _professional_snapshot(request)
-        branding = ClinicBranding.objects.filter(tenant=request.tenant).first()
-
-        # Logo (si existe) como ImageReader
-        logo_reader = None
-        if branding and branding.logo:
-            try:
-                from reportlab.lib.utils import ImageReader
-                logo_reader = ImageReader(branding.logo.path)
-            except Exception:
-                logo_reader = None
 
         specialty = ""
         signature_b64 = None
@@ -404,23 +393,14 @@ class ExamRequestPDFView(APIView):
             signature_b64 = doctor.signature_image or None
 
         sex_map = {"H": "Masculino", "M": "Femenino", "hombre": "Masculino", "mujer": "Femenino"}
-        clinic_name = (branding.display_name if branding and branding.display_name
-                       else request.tenant.name)
 
-        # Apariencia configurada por la clínica (Sprint 60): el generador
-        # no decide colores ni márgenes, los recibe ya resueltos.
-        from apps.common.document_style import get_document_style
-        doc_style = get_document_style(request.tenant)
+        # Apariencia y datos de la clínica configurados (Sprint 60/64): el
+        # generador no decide colores ni márgenes, los recibe resueltos.
+        from apps.common.document_style import clinic_snapshot, get_document_style
 
         pdf_bytes = build_exam_request_pdf(
-            style=doc_style,
-            clinic={
-                "name": clinic_name,
-                "logo_reader": logo_reader,
-                "address": branding.address if branding else "",
-                "phone": branding.phone if branding else "",
-                "email": branding.email if branding else "",
-            },
+            style=get_document_style(request.tenant),
+            clinic=clinic_snapshot(request.tenant),
             professional={
                 "full_name": prof.get("full_name"),
                 "specialty": specialty,
@@ -467,7 +447,6 @@ class ConsentPDFView(APIView):
         from apps.clinical.consent_pdf import build_consent_pdf
         from apps.clinical.exam_request_pdf import _age_from_birth
         from apps.clinical.models import InformedConsent
-        from apps.configuration.models import ClinicBranding
 
         consent = InformedConsent.objects.filter(tenant=request.tenant, pk=pk).first()
         if consent is None:
@@ -475,15 +454,6 @@ class ConsentPDFView(APIView):
         patient = consent.patient
 
         doctor, prof = _professional_snapshot(request)
-        branding = ClinicBranding.objects.filter(tenant=request.tenant).first()
-
-        logo_reader = None
-        if branding and branding.logo:
-            try:
-                from reportlab.lib.utils import ImageReader
-                logo_reader = ImageReader(branding.logo.path)
-            except Exception:
-                logo_reader = None
 
         specialty = ""
         signature_b64 = None
@@ -502,19 +472,12 @@ class ConsentPDFView(APIView):
                 patient_sig_b64 = None
 
         sex_map = {"H": "Masculino", "M": "Femenino"}
-        clinic_name = (branding.display_name if branding and branding.display_name
-                       else request.tenant.name)
 
-        from apps.common.document_style import get_document_style
+        from apps.common.document_style import clinic_snapshot, get_document_style
 
         pdf_bytes = build_consent_pdf(
             style=get_document_style(request.tenant),
-            clinic={
-                "name": clinic_name, "logo_reader": logo_reader,
-                "address": branding.address if branding else "",
-                "phone": branding.phone if branding else "",
-                "email": branding.email if branding else "",
-            },
+            clinic=clinic_snapshot(request.tenant),
             professional={
                 "full_name": prof.get("full_name"), "specialty": specialty,
                 "license_number": prof.get("license_number"), "signature_b64": signature_b64,

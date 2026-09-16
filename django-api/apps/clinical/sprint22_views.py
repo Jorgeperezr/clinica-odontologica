@@ -193,23 +193,18 @@ class FollowUpAlertsView(APIView):
 
 class PrescriptionPDFView(APIView):
     """
-    GET /api/v1/evolutions/{pk}/prescription-pdf/ — receta profesional:
-    membrete de la clínica (nombre, RUC, dirección, teléfono), datos del
-    doctor con su registro profesional, paciente, contenido Rx y bloque
-    de firma.
+    GET /api/v1/evolutions/{pk}/prescription-pdf/ — receta profesional.
 
-    firmaEC (Fase 2): la firma electrónica legal requiere el certificado
-    .p12 del doctor emitido por una entidad acreditada (Registro Civil,
-    ANF, etc.). El PDF generado aquí queda listo para ese proceso — ver
-    DEPLOY.md.
+    La vista resuelve los datos; el dibujo lo hace
+    `apps.clinical.prescription_pdf` con la apariencia configurada por la
+    clínica, igual que el resto de documentos (Sprint 64).
     """
 
     permission_classes = [CAN_VIEW_CLINICAL]
 
     def get(self, request, pk):
-        from reportlab.lib.pagesizes import A5
-        from reportlab.lib.units import mm
-        from reportlab.pdfgen import canvas as pdf_canvas
+        from apps.clinical.prescription_pdf import build_prescription_pdf
+        from apps.common.document_style import clinic_snapshot, get_document_style
 
         try:
             evolution = Evolution.objects.select_related(
@@ -218,90 +213,30 @@ class PrescriptionPDFView(APIView):
         except Evolution.DoesNotExist:
             raise Http404
 
-        tenant = evolution.tenant
-        buffer = io.BytesIO()
-        c = pdf_canvas.Canvas(buffer, pagesize=A5)
-        width, height = A5
-
-        # ── Membrete ──
-        c.setFillColorRGB(0.055, 0.353, 0.369)  # petrol
-        c.rect(0, height - 26 * mm, width, 26 * mm, fill=1, stroke=0)
-        c.setFillColorRGB(1, 1, 1)
-        c.setFont("Helvetica-Bold", 15)
-        c.drawString(12 * mm, height - 12 * mm, tenant.name)
-        c.setFont("Helvetica", 8)
-        line2 = " · ".join(filter(None, [
-            f"RUC {tenant.ruc}" if tenant.ruc else "",
-            tenant.address, tenant.phone, tenant.email,
-        ]))
-        c.drawString(12 * mm, height - 18 * mm, line2[:95])
-        c.setFont("Helvetica-Bold", 11)
-        c.drawRightString(width - 12 * mm, height - 12 * mm, "RECETA")
-
-        y = height - 36 * mm
-        c.setFillColorRGB(0.09, 0.16, 0.17)
-
-        # ── Doctor y paciente ──
         doctor = evolution.doctor
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(12 * mm, y, doctor.full_name if doctor else "—")
-        c.setFont("Helvetica", 8)
-        if doctor and doctor.license_number:
-            c.drawString(12 * mm, y - 4.5 * mm, f"Reg. profesional: {doctor.license_number}")
-        c.drawRightString(width - 12 * mm, y, f"Fecha: {evolution.date.strftime('%d/%m/%Y')}")
+        specialty = ""
+        if doctor:
+            specialty = ", ".join(s.name for s in doctor.specialties.all()) or ""
 
-        y -= 12 * mm
-        c.setFont("Helvetica", 9)
-        c.drawString(12 * mm, y, f"Paciente: {evolution.patient.full_name}")
-        c.drawString(12 * mm, y - 5 * mm, f"CI: {evolution.patient.national_id}")
-        c.line(12 * mm, y - 9 * mm, width - 12 * mm, y - 9 * mm)
-
-        # ── Rx ──
-        y -= 18 * mm
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(12 * mm, y, "Rx.")
-        y -= 8 * mm
-        c.setFont("Helvetica", 10)
-        for raw_line in evolution.notes.splitlines() or [""]:
-            # partir líneas largas
-            line = raw_line
-            while line:
-                c.drawString(16 * mm, y, line[:70])
-                line = line[70:]
-                y -= 6 * mm
-                if y < 42 * mm:
-                    break
-            if y < 42 * mm:
-                break
-
-        # ── Bloque de firma ──
-        # Estampar la firma manuscrita del doctor si la registró
-        if doctor and doctor.signature_image:
-            try:
-                import base64 as _b64
-
-                from reportlab.lib.utils import ImageReader
-
-                _, b64data = doctor.signature_image.split(",", 1)
-                sig = ImageReader(io.BytesIO(_b64.b64decode(b64data)))
-                c.drawImage(sig, width / 2 - 24 * mm, 27 * mm,
-                            width=48 * mm, height=16 * mm,
-                            preserveAspectRatio=True, mask="auto")
-            except Exception:
-                pass  # firma corrupta: el PDF sale sin estampa, no falla
-        c.line(width / 2 - 28 * mm, 26 * mm, width / 2 + 28 * mm, 26 * mm)
-        c.setFont("Helvetica", 8)
-        c.drawCentredString(width / 2, 21 * mm, doctor.full_name if doctor else "")
-        c.drawCentredString(width / 2, 17 * mm, "Firma y sello")
-        c.setFont("Helvetica-Oblique", 6.5)
-        c.drawCentredString(
-            width / 2, 9 * mm,
-            f"Documento generado por {tenant.name}. Verificación: {evolution.id}",
+        pdf_bytes = build_prescription_pdf(
+            clinic=clinic_snapshot(request.tenant),
+            professional={
+                "full_name": doctor.full_name if doctor else "",
+                "specialty": specialty,
+                "license_number": doctor.license_number if doctor else "",
+                "signature_b64": doctor.signature_image if doctor else None,
+            },
+            patient={
+                "full_name": evolution.patient.full_name,
+                "national_id": evolution.patient.national_id,
+            },
+            prescription={
+                "date": evolution.date.strftime("%d/%m/%Y"),
+                "notes": evolution.notes,
+                "reference": str(evolution.id),
+            },
+            style=get_document_style(request.tenant),
         )
-
-        c.showPage()
-        c.save()
-        buffer.seek(0)
 
         AuditLog.objects.create(
             tenant=request.tenant, user=request.user,
@@ -310,7 +245,7 @@ class PrescriptionPDFView(APIView):
             metadata={"patient_id": str(evolution.patient_id)},
         )
         return FileResponse(
-            buffer, as_attachment=True,
+            io.BytesIO(pdf_bytes), as_attachment=True,
             filename=f"receta-{evolution.patient.national_id}-{evolution.date}.pdf",
             content_type="application/pdf",
         )
