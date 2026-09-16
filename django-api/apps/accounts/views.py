@@ -239,12 +239,26 @@ class UserListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save(tenant=self.request.tenant)
-        # Si el nuevo usuario es doctor, crear su perfil Doctor para que
-        # aparezca en la agenda y pueda registrar actos clínicos atribuidos.
-        if user.role == User.Role.DOCTOR:
-            from apps.agenda.models import Doctor
+        _asegurar_ficha_de_doctor(self.request.tenant, user)
 
-            Doctor.objects.get_or_create(tenant=self.request.tenant, user=user)
+
+def _asegurar_ficha_de_doctor(tenant, user):
+    """
+    Un usuario con rol de doctor necesita su ficha `Doctor` para existir
+    en la agenda y para que los actos clínicos queden atribuidos a
+    alguien. Se crea si falta, tanto al dar de alta como al cambiar el
+    rol.
+
+    No se hace lo contrario —borrar la ficha al quitarle el rol— a
+    propósito: de ella cuelgan citas e historia clínica, y perderlas por
+    un cambio de puesto sería mucho peor que tener una ficha de más. Para
+    eso está desactivarla.
+    """
+    if user.role != User.Role.DOCTOR:
+        return
+    from apps.agenda.models import Doctor
+
+    Doctor.objects.get_or_create(tenant=tenant, user=user)
 
 
 class UserDetailView(generics.RetrieveUpdateAPIView):
@@ -255,6 +269,15 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         return User.objects.filter(tenant=self.request.tenant)
+
+    def perform_update(self, serializer):
+        # La ficha de doctor se creaba solo al DAR DE ALTA el usuario, no
+        # al cambiarle el rol después. Ascender a alguien a doctor lo
+        # dejaba con rol de doctor en la lista de usuarios y sin ficha: no
+        # salía en la agenda, no se le podía citar, y nada explicaba por
+        # qué. Ahora se comprueba también aquí.
+        user = serializer.save()
+        _asegurar_ficha_de_doctor(self.request.tenant, user)
 
 
 class AuditLogListView(generics.ListAPIView):

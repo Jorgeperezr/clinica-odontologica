@@ -260,6 +260,24 @@ usuario.role, usuario.tenant = "admin", tenant
 usuario.set_password(os.environ["ADMIN_PASSWORD"])
 usuario.save()
 print(f"✓ Administrador: {correo} / {os.environ['ADMIN_PASSWORD']} — clínica «{tenant.name}»")
+
+# Un doctor con su ficha. Sin al menos uno, el desplegable «Doctor» del
+# formulario de cita está vacío y NO se puede agendar nada: el módulo de
+# agenda entero queda fuera de alcance en un entorno recién levantado.
+from apps.agenda.models import Doctor                # noqa: E402
+
+doctora, _ = User.objects.get_or_create(
+    email="doctora@demo.ec",
+    defaults={"full_name": "Dra. Valeria Núñez"},
+)
+doctora.role, doctora.tenant = "doctor", tenant
+doctora.set_password(os.environ["ADMIN_PASSWORD"])
+doctora.save()
+ficha, _ = Doctor.objects.get_or_create(tenant=tenant, user=doctora)
+if not ficha.license_number:
+    ficha.license_number = "MSP-00123"
+    ficha.save(update_fields=["license_number"])
+print(f"✓ Doctora: {doctora.email} / {os.environ['ADMIN_PASSWORD']}")
 FIN_PY
 
 # ── 4. Datos de ejemplo (opcional) ───────────────────────────────────

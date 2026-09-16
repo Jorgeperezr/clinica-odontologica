@@ -54,7 +54,7 @@ python manage.py test --settings=config.settings_test
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 257 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 262 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 84 — el plan y el presupuesto dicen la misma cifra
+## Estado actual: Sprint 85 — la ficha de doctor sigue al rol del usuario
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1520,6 +1520,48 @@ Queda también una cifra de catálogo en el desplegable de plantillas
 muestra dentro de la ficha de un paciente concreto. Arreglarla exige que
 el panel mande el paciente al pedir las plantillas, y eso es el mismo
 archivo protegido.
+
+### Sprint 85 — Ascender a alguien a doctor no lo hacía existir (hecho)
+
+Siguiendo el recorrido del panel, al intentar agendar una cita el
+desplegable **«Doctor» estaba vacío**. La causa resultó ser más general
+que la semilla de desarrollo.
+
+La ficha `Doctor` se creaba al **dar de alta** un usuario con ese rol,
+pero `UserDetailView` no tenía `perform_update`: **cambiarle el rol a un
+usuario que ya existía no le creaba nada**. En una clínica eso es
+ascender a alguien a doctor, verlo en la lista de usuarios como doctor, y
+que en la agenda no exista. No se le puede citar y nada dice por qué.
+
+Ahora las dos rutas —alta y cambio de rol— pasan por la misma función.
+**Lo contrario no se hace a propósito**: quitarle el rol no borra la
+ficha, porque de ella cuelgan citas e historia clínica y perderlas por un
+cambio de puesto sería mucho peor que tener una ficha de más.
+
+**Orden estable en el listado de doctores.** Se paginaba sin ordenar, que
+es quedarse a merced de lo que devuelva la base: una misma fila puede
+salir dos veces o no salir en ninguna página. Django lo avisaba y el
+aviso estaba a la vista en la salida de las pruebas.
+
+**La semilla crea ahora una doctora**, porque sin ninguna el módulo de
+agenda entero queda fuera de alcance en un entorno recién levantado.
+
+### Lo que se recorrió y salió bien
+
+No todo fueron fallos. Comprobado en el navegador, de punta a punta:
+
+- **Plan → presupuesto → aprobación → cuotas → cobro**, con el arreglo
+  del Sprint 84 visible: el presupuesto lista $153.00 y $260.00, los
+  precios del convenio.
+- **El reparto de las cuotas cuadra al céntimo**: $413.00 en tres queda
+  137.67 + 137.67 + **137.66**. La última absorbe el resto, en vez de
+  dejar un céntimo suelto que mantendría al paciente como moroso para
+  siempre.
+- **El cobro cuadra en todas partes**: $137.67 aparece igual en el panel
+  de inicio y en reportes.
+- **El bloqueo por morosidad funciona**: con una cuota vencida hace 40
+  días, agendar devuelve 409, el panel explica el motivo y ofrece la
+  excepción manual, que crea la cita.
 
 ## Desarrollo en GitHub Codespaces
 

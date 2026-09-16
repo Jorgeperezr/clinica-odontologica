@@ -25,9 +25,14 @@ class DoctorListView(generics.ListAPIView):
     permission_classes = [CAN_VIEW_AGENDA]
 
     def get_queryset(self):
+        # El `order_by` no es cosmético: sin un orden estable, paginar un
+        # conjunto es quedarse a merced de lo que devuelva la base, y una
+        # misma fila puede salir dos veces o no salir en ninguna página.
+        # Django lo avisa («UnorderedObjectListWarning») y aquí se veía en
+        # la salida de las pruebas.
         return Doctor.objects.filter(
             tenant=self.request.tenant, is_active=True
-        ).select_related("user")
+        ).select_related("user").order_by("user__full_name", "user__email")
 
 
 class AppointmentListCreateView(generics.ListCreateAPIView):
