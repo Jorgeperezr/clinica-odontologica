@@ -134,34 +134,86 @@ for prog in psql pg_dump; do
 done
 
 # ── 3. Python ────────────────────────────────────────────────────────
+#
+# Aquí hay techo, y no es una manía. Django 5.0.9 declara soporte para
+# 3.10, 3.11 y 3.12 y nada más; el contenedor del proyecto y el CI usan
+# 3.12. Un Python más nuevo instala igual —`Requires-Python: >=3.10` no
+# pone límite— y luego falla por su cuenta, en sitios que no se parecen
+# a la causa.
+#
+# Una comprobación con mínimo y sin techo no es una comprobación: avisa
+# de lo viejo y calla ante lo que nadie ha probado nunca. Esta revisión
+# daba «✓ python3 3.14» tan contenta.
+#
+# Y no basta con mirar a qué apunta `python3`: lo que importa es si hay
+# ALGÚN intérprete servible en la máquina, porque start-local.sh busca
+# uno compatible antes de caer en el de por defecto.
+PY_BUENO="3.12"
 titulo "Python (la API)"
-if command -v python3 >/dev/null 2>&1; then
+PY_ELEGIDO=""
+# Se deja sobrescribir para poder probar el camino del «no hay ninguno»
+# sin desmontar la máquina, y para quien tenga los intérpretes con otro
+# nombre (pyenv, asdf).
+for cmd in ${PY_CANDIDATOS:-python3.12 python3.11 python3.10}; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        PY_ELEGIDO="$cmd"
+        break
+    fi
+done
+
+if [ -n "$PY_ELEGIDO" ]; then
+    ok "$PY_ELEGIDO $("$PY_ELEGIDO" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null)"
+    nota "start-local.sh usará este, no el de por defecto."
+    # En Debian y derivados `venv` viene en un paquete aparte, y su
+    # ausencia se descubre a mitad del arranque con un error que habla
+    # de `ensurepip`. Mejor saberlo ahora.
+    if ! "$PY_ELEGIDO" -c 'import venv, ensurepip' >/dev/null 2>&1; then
+        falta "$PY_ELEGIDO no puede crear entornos virtuales"
+        nota "Linux:  apt install ${PY_ELEGIDO}-venv"
+        nota "Sin eso no hay dónde instalar las dependencias."
+    fi
+elif command -v python3 >/dev/null 2>&1; then
     PY=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)
-    if version_minima "$PY" 3.11; then
-        ok "python3 $PY"
+    if ! version_minima "$PY" 3.10; then
+        falta "python3 $PY — Django 5.0 necesita 3.10 o superior"
+        nota "macOS:  brew install python@$PY_BUENO"
+    elif version_minima "$PY" 3.13; then
+        falta "python3 $PY — por encima de lo que soporta Django 5.0 (hasta 3.12)"
+        nota "No hay ningún 3.10, 3.11 ni 3.12 en la máquina, así que"
+        nota "start-local.sh no tendría con qué trabajar."
+        nota "macOS:  brew install python@$PY_BUENO"
+        nota "No hace falta quitar el $PY: conviven, y el guion elige."
     else
-        falta "python3 $PY — el proyecto usa 3.12 (mínimo 3.11)"
-        nota "macOS:  brew install python@3.12"
+        ok "python3 $PY"
     fi
 else
     falta "No hay python3."
+    nota "macOS:  brew install python@$PY_BUENO"
 fi
 
 # ── 4. Node ──────────────────────────────────────────────────────────
+NODE_BUENO="20"
 titulo "Node (el panel)"
 if command -v node >/dev/null 2>&1; then
     NODE=$(node -v 2>/dev/null | tr -d 'v')
-    # Next 14 pide 18.17+; por debajo compila a ratos y falla en otros,
-    # que es peor que fallar siempre.
-    if version_minima "$NODE" 18.17; then
-        ok "node $NODE"
-    else
+    if ! version_minima "$NODE" 18.17; then
         falta "node $NODE — Next.js 14 necesita 18.17 o superior"
-        nota "macOS:  brew install node@20"
+        nota "macOS:  brew install node@$NODE_BUENO"
+    elif version_minima "$NODE" 23; then
+        # Aviso y no bloqueo: Next 14 no declara techo y con Node nuevo
+        # suele funcionar. Pero el par probado es otro, así que si el
+        # panel hace algo raro conviene saber por dónde empezar a mirar
+        # en vez de buscar el fallo en el código.
+        aviso "node $NODE — funciona, pero el par probado es Node $NODE_BUENO"
+        nota "Next.js 14 es de antes que esta versión de Node y no la"
+        nota "declara. Si el panel falla al compilar o al arrancar, prueba:"
+        nota "  brew install node@$NODE_BUENO"
+    else
+        ok "node $NODE"
     fi
 else
     falta "No hay node."
-    nota "macOS:  brew install node@20"
+    nota "macOS:  brew install node@$NODE_BUENO"
 fi
 
 # ── 5. Configuración ─────────────────────────────────────────────────

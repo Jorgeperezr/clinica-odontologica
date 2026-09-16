@@ -14,10 +14,26 @@
 # Este script levanta lo mismo con los servicios instalados en la
 # máquina:
 #
+#   0. Intérprete compatible y entorno virtual con las dependencias.
 #   1. PostgreSQL local (arranca el clúster, crea rol y base).
 #   2. Migraciones y catálogos sembrados.
 #   3. Usuario administrador de demostración.
 #   4. Django en :8000 y Next.js en :3000.
+#
+# Funciona en Linux y en macOS. Las tres cosas que lo impedían en macOS
+# estaban aquí, no en la máquina de nadie:
+#
+#   · Llamaba a `python3` a secas. En un Mac al día eso es 3.14, y
+#     Django 5.0 declara soporte hasta 3.12. El paquete se instala
+#     igual —`Requires-Python: >=3.10` no pone techo— y luego falla por
+#     su cuenta, lejos de la causa.
+#   · No instalaba las dependencias en ninguna parte: daba por hecho un
+#     Django ya presente. En un clon recién hecho eso es
+#     `ModuleNotFoundError: No module named django`.
+#   · Arrancaba PostgreSQL con `pg_ctlcluster` y creaba el rol con
+#     `su postgres`: las dos cosas son de Linux y la segunda pedía raíz.
+#     En macOS no se creaba el rol y `migrate` moría con «role "clinica"
+#     does not exist», que tampoco se parece a la causa.
 #
 # Uso:   bash scripts/start-local.sh            # arranca
 #        bash scripts/start-local.sh --stop     # para los servidores
@@ -70,41 +86,162 @@ if [ "${1:-}" = "--stop" ]; then
     exit 0
 fi
 
+# ── 0. Intérprete y entorno virtual ──────────────────────────────────
+echo "▶ Python…"
+
+# Se busca un intérprete que Django 5.0 declare soportado (3.10 a 3.12)
+# ANTES de mirar el de por defecto, que en un Mac al día es más nuevo de
+# lo que nadie ha probado. La lista se puede sobrescribir para pyenv o
+# asdf, donde los intérpretes tienen otro nombre.
+INTERPRETE=""
+for cmd in ${PY_CANDIDATOS:-python3.12 python3.11 python3.10}; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        INTERPRETE="$cmd"
+        break
+    fi
+done
+
+if [ -z "$INTERPRETE" ]; then
+    # No hay ninguno con nombre de versión. Se acepta el de por defecto
+    # solo si cae dentro del rango; fuera de él se para aquí, que es
+    # mucho mejor que fallar dentro de Django media hora después.
+    if command -v python3 >/dev/null 2>&1 && python3 -c \
+            'import sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] <= (3,12) else 1)' \
+            2>/dev/null; then
+        INTERPRETE="python3"
+    else
+        VISTO=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null \
+                || echo "ninguno")
+        cat >&2 <<FIN
+✗ No hay un Python compatible. Visto: $VISTO
+  Django 5.0 soporta 3.10, 3.11 y 3.12; el CI y el contenedor usan 3.12.
+
+  macOS:  brew install python@3.12
+  Linux:  apt install python3.12-venv
+
+  No hace falta desinstalar el que tengas: conviven y este guion elige.
+FIN
+        exit 1
+    fi
+fi
+
+VENV="$RAIZ/.venv"
+if [ ! -x "$VENV/bin/python" ]; then
+    echo "  Creando entorno virtual con $INTERPRETE…"
+    "$INTERPRETE" -m venv "$VENV"
+fi
+PY="$VENV/bin/python"
+
+# En macOS el pip de Homebrew se niega a instalar fuera de un entorno
+# virtual (PEP 668, «externally-managed-environment»), así que el venv
+# no es una comodidad: es la única forma de que esto funcione.
+#
+# Se reinstala cuando requirements.txt cambia, y para saberlo se guarda
+# su suma junto al entorno. `cksum` y no `sha256sum` porque en macOS ese
+# comando no existe; aquí se trata de notar una edición, no de resistir
+# a nadie.
+SUMA_ACTUAL=$(cksum "$RAIZ/django-api/requirements.txt" | awk '{print $1, $2}')
+MARCA="$VENV/.requirements.cksum"
+if [ ! -f "$MARCA" ] || [ "$(cat "$MARCA")" != "$SUMA_ACTUAL" ]; then
+    echo "  Instalando dependencias (la primera vez tarda)…"
+    "$PY" -m pip install --quiet --upgrade pip
+    "$PY" -m pip install --quiet -r "$RAIZ/django-api/requirements.txt"
+    echo "$SUMA_ACTUAL" > "$MARCA"
+fi
+echo "✓ $("$PY" -V) en .venv, dependencias al día."
+
 # ── 1. PostgreSQL ────────────────────────────────────────────────────
 echo "▶ PostgreSQL…"
-if ! (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
+
+escuchando() { (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; }
+
+if ! escuchando; then
     if command -v pg_ctlcluster >/dev/null 2>&1; then
         version=$(ls /usr/lib/postgresql | sort -rn | head -1)
         pg_ctlcluster "$version" main start 2>/dev/null || true
+    elif command -v brew >/dev/null 2>&1; then
+        # macOS con Homebrew. El servicio se llama distinto según cómo se
+        # instalara, así que se prueban los nombres habituales en vez de
+        # dar por supuesto uno.
+        for servicio in postgresql@16 postgresql@15 postgresql@14 postgresql; do
+            if brew services list 2>/dev/null | grep -q "^$servicio "; then
+                echo "  Arrancando $servicio…"
+                brew services start "$servicio" >/dev/null 2>&1 || true
+                break
+            fi
+        done
+        # `brew services` devuelve antes de que el servidor acepte
+        # conexiones; sin esta espera el primer psql falla y parecería
+        # que no hay PostgreSQL.
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+            escuchando && break
+            sleep 1
+        done
     else
         service postgresql start >/dev/null 2>&1 || true
     fi
 fi
-if ! (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
-    echo "✗ No se pudo arrancar PostgreSQL. Instálalo o levántalo a mano." >&2
+
+if ! escuchando; then
+    cat >&2 <<FIN
+✗ No se pudo arrancar PostgreSQL en 127.0.0.1:5432.
+
+  macOS:  brew install postgresql@16 && brew services start postgresql@16
+  Linux:  sudo service postgresql start
+FIN
     exit 1
 fi
 
-# `su postgres` necesita raíz; si no la hay se asume que el rol ya existe.
-if [ "$(id -u)" = "0" ]; then
-    su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER'\"" \
-        | grep -q 1 \
-        || su postgres -c "psql -q -c \"CREATE ROLE $POSTGRES_USER LOGIN PASSWORD '$POSTGRES_PASSWORD' SUPERUSER;\""
-    su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$POSTGRES_DB'\"" \
-        | grep -q 1 \
-        || su postgres -c "createdb -O $POSTGRES_USER $POSTGRES_DB"
+# Creación del rol y la base. Dos caminos, porque las dos instalaciones
+# habituales no se parecen en nada:
+#
+#   · Linux/Debian: los datos son del usuario del sistema `postgres` y
+#     hay que pasar por él, lo que exige raíz.
+#   · macOS/Homebrew: no existe ese usuario del sistema; quien instaló
+#     es ya superusuario de la base y se conecta directamente.
+crear_rol_y_base() {
+    local ejecutar="$1"
+    $ejecutar "SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER'" | grep -q 1 \
+        || $ejecutar "CREATE ROLE $POSTGRES_USER LOGIN PASSWORD '$POSTGRES_PASSWORD' SUPERUSER" >/dev/null
+    $ejecutar "SELECT 1 FROM pg_database WHERE datname='$POSTGRES_DB'" | grep -q 1 \
+        || $ejecutar "CREATE DATABASE $POSTGRES_DB OWNER $POSTGRES_USER" >/dev/null
+}
+
+como_postgres() { su postgres -c "psql -tAc \"$1\""; }
+como_yo()       { psql -d postgres -tAc "$1"; }
+
+if [ "$(id -u)" = "0" ] && id postgres >/dev/null 2>&1; then
+    crear_rol_y_base como_postgres
+elif psql -d postgres -tAc "SELECT 1" >/dev/null 2>&1; then
+    crear_rol_y_base como_yo
+elif PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" \
+        -d "$POSTGRES_DB" -tAc "SELECT 1" >/dev/null 2>&1; then
+    # El rol y la base ya existen y funcionan: no hay nada que crear.
+    :
+else
+    cat >&2 <<FIN
+✗ PostgreSQL responde, pero no se pudo crear el rol «$POSTGRES_USER».
+
+  No hay forma de conectarse como superusuario: ni como root por el
+  usuario del sistema «postgres» (Linux) ni directamente (macOS).
+
+  Créalos a mano y vuelve a lanzar esto:
+    psql -d postgres -c "CREATE ROLE $POSTGRES_USER LOGIN PASSWORD '$POSTGRES_PASSWORD' SUPERUSER;"
+    psql -d postgres -c "CREATE DATABASE $POSTGRES_DB OWNER $POSTGRES_USER;"
+FIN
+    exit 1
 fi
 echo "✓ PostgreSQL en 127.0.0.1:5432, base '$POSTGRES_DB'."
 
 # ── 2. Migraciones y catálogos ───────────────────────────────────────
 echo "▶ Migraciones y catálogos…"
 cd "$RAIZ/django-api"
-python3 manage.py migrate --no-input >/dev/null
-python3 manage.py bootstrap >/dev/null
+"$PY" manage.py migrate --no-input >/dev/null
+"$PY" manage.py bootstrap >/dev/null
 echo "✓ Esquema al día y catálogos sembrados."
 
 # ── 3. Usuario administrador ─────────────────────────────────────────
-ADMIN_EMAIL="$ADMIN_EMAIL" ADMIN_PASSWORD="$ADMIN_PASSWORD" python3 - <<'PY'
+ADMIN_EMAIL="$ADMIN_EMAIL" ADMIN_PASSWORD="$ADMIN_PASSWORD" "$PY" - <<'FIN_PY'
 import os
 import django
 
@@ -123,11 +260,11 @@ usuario.role, usuario.tenant = "admin", tenant
 usuario.set_password(os.environ["ADMIN_PASSWORD"])
 usuario.save()
 print(f"✓ Administrador: {correo} / {os.environ['ADMIN_PASSWORD']} — clínica «{tenant.name}»")
-PY
+FIN_PY
 
 # ── 4. Datos de ejemplo (opcional) ───────────────────────────────────
 if [ "${1:-}" = "--semilla" ]; then
-    python3 - <<'PY'
+    "$PY" - <<'FIN_PY'
 import os
 from decimal import Decimal
 
@@ -187,7 +324,7 @@ for datos in [
 print(f"✓ Semilla: {Treatment.objects.filter(tenant=tenant).count()} tratamientos, "
       f"{Agreement.objects.filter(tenant=tenant).count()} convenios, "
       f"{Patient.objects.filter(tenant=tenant).count()} pacientes.")
-PY
+FIN_PY
 fi
 
 # ── 5. Servidores ────────────────────────────────────────────────────
@@ -195,7 +332,7 @@ parar 2>/dev/null || true
 
 echo "▶ Levantando servidores…"
 cd "$RAIZ/django-api"
-setsid python3 manage.py runserver 127.0.0.1:8000 \
+setsid "$PY" manage.py runserver 127.0.0.1:8000 \
     > "$EJECUCION/django.log" 2>&1 < /dev/null &
 echo $! > "$EJECUCION/django.pid"
 

@@ -20,7 +20,17 @@ el día de restaurar.
 Con la revisión en verde:
 
 ```bash
-bash scripts/start-local.sh          # PostgreSQL + Django :8000 + Next :3000
+bash scripts/start-local.sh
+```
+
+Levanta PostgreSQL, Django en `:8000` y Next.js en `:3000`, en Linux y en
+macOS. En la primera pasada crea `.venv` con un intérprete que Django 5.0
+soporte —busca 3.12, 3.11 y 3.10 por ese orden, **no** usa el `python3` de
+por defecto— e instala las dependencias; en las siguientes se las salta.
+Es idempotente. Para parar los servidores sin tocar la base:
+
+```bash
+bash scripts/start-local.sh --stop
 ```
 
 Y en el navegador **http://localhost:3000** — con `localhost`, no con
@@ -85,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 77 — revisión del entorno y UUID intactos en el registro
+## Estado actual: Sprint 78 — el arranque local funciona también en macOS
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1251,6 +1261,37 @@ salía, pero el identificador con el que se rastrea al usuario o a la
 clínica quedaba inservible, unas pocas veces de cada cien. Se respetan los
 UUID enteros —sin la base de datos son seudónimos, no identifican a
 nadie— y tres pruebas fijan el caso para que no dependa de la suerte.
+
+### Sprint 78 — El arranque local no funcionaba en macOS (hecho)
+
+`comprobar-entorno.sh` pasó en verde en un Mac y aun así `start-local.sh`
+no habría arrancado, por tres motivos distintos. El guion de revisión
+tenía parte de la culpa: **comprobaba mínimos y no techos**, así que dio
+por buenos un Python 3.14 y un Node 26 cuando el par probado es 3.12 y 20.
+Un mínimo sin techo avisa de lo viejo y calla ante lo que nadie ha
+probado nunca.
+
+- **El intérprete.** Se llamaba a `python3` a secas. Django 5.0.9 declara
+  soporte para 3.10, 3.11 y 3.12 y nada más, y `Requires-Python: >=3.10`
+  no pone techo: en 3.14 se instala igual y luego falla por su cuenta,
+  lejos de la causa. Ahora se busca un intérprete soportado por nombre
+  y solo se acepta el de por defecto si cae en el rango.
+- **Las dependencias no se instalaban en ninguna parte.** El guion daba
+  por hecho un Django ya presente; en un clon recién hecho eso es
+  `ModuleNotFoundError`. Ahora hay un `.venv` que además es obligatorio
+  en macOS, donde el pip de Homebrew se niega a instalar fuera de un
+  entorno virtual (PEP 668). Se reinstala solo cuando cambia
+  `requirements.txt`.
+- **PostgreSQL se arrancaba con `pg_ctlcluster` y el rol se creaba con
+  `su postgres`**: lo primero es de Linux y lo segundo pide raíz. En
+  macOS no se creaba el rol y `migrate` moría con «role "clinica" does
+  not exist», que tampoco se parece a la causa. Ahora hay camino para
+  Homebrew (`brew services`, con espera a que el servidor acepte
+  conexiones de verdad) y el rol se crea con el usuario actual, que en
+  esa instalación ya es superusuario.
+
+Verificado de extremo a extremo con un `.venv` recién creado sobre 3.12:
+migraciones, catálogos, login real contra la API y el panel respondiendo.
 
 ## Desarrollo en GitHub Codespaces
 
