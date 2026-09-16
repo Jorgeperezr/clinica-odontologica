@@ -95,10 +95,24 @@ class ApplyTemplateView(APIView):
             created_by=_get_doctor(request), status="active",
             notes=f"Creado desde la plantilla: {template.name}",
         )
+        # El precio que se guarda es el que le corresponde a ESTE paciente,
+        # no el de catálogo. Antes se copiaba `base_price` y el resultado
+        # era que el plan y el presupuesto decían cifras distintas: con un
+        # paciente de convenio, el plan sumaba 580 y el presupuesto cobraba
+        # 413. El odontólogo lee el plan delante del paciente, así que la
+        # cifra equivocada era justo la que se decía en voz alta.
+        convenio = getattr(patient, "agreement", None)
+        # El convenio va como segundo argumento a propósito: sin él,
+        # `prefetch_tariffs` devuelve solo los tarifarios GENERALES y la
+        # tarifa pactada para ese convenio no aparece. Lo pillaron las
+        # pruebas —el plan decía 240 y el presupuesto 200— antes de que
+        # saliera de aquí.
+        tarifas = prefetch_tariffs(request.tenant, convenio)
         for item in template.items.all():
             TreatmentPlanItem.objects.create(
                 treatment_plan=plan, treatment=item.treatment,
-                order=item.order, estimated_price=item.treatment.base_price,
+                order=item.order,
+                estimated_price=price_for(item.treatment, convenio, tariffs=tarifas),
             )
         AuditLog.objects.create(
             tenant=request.tenant, user=request.user,
@@ -113,17 +127,17 @@ def _item_price(item, agreement, tariffs):
     """
     Precio de una línea del plan al pasarla a presupuesto.
 
-    Un `estimated_price` escrito a mano manda sobre el tarifario: si el
-    odontólogo pactó una cifra con el paciente, el convenio no debe
-    reescribirla por la espalda. Lo que sí se sustituye es el valor que el
-    propio sistema puso por defecto —vacío, o copiado del precio base al
-    aplicar una plantilla—, porque eso no lo decidió nadie.
+    Un precio escrito a mano manda sobre el tarifario: si el odontólogo
+    pactó una cifra con el paciente, el convenio no debe reescribirla por
+    la espalda. Lo que sí se recalcula es lo que puso el propio sistema,
+    porque eso no lo decidió nadie.
+
+    Quién lo puso ya no se adivina comparando importes —ver el comentario
+    de `TreatmentPlanItem.price_is_manual`—: lo dice el campo.
     """
-    estimated = item.estimated_price
-    auto = not estimated or estimated == item.treatment.base_price
-    if auto:
-        return price_for(item.treatment, agreement, tariffs=tariffs)
-    return estimated
+    if item.price_is_manual and item.estimated_price:
+        return item.estimated_price
+    return price_for(item.treatment, agreement, tariffs=tariffs)
 
 
 class PlanToBudgetView(APIView):

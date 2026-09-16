@@ -274,6 +274,9 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from apps.common.models import Tenant                              # noqa: E402
+from apps.clinical.models import (                                   # noqa: E402
+    TreatmentPlanTemplate, TreatmentPlanTemplateItem,
+)
 from apps.configuration.models import Agreement, Tariff, Treatment  # noqa: E402
 from apps.patients.models import Patient                            # noqa: E402
 from apps.specialties.models import Specialty                       # noqa: E402
@@ -321,9 +324,31 @@ for datos in [
     Patient.objects.get_or_create(
         tenant=tenant, national_id=datos.pop("national_id"), defaults=datos)
 
+# Plantillas de plan. Sin al menos una, la pestaña «Plan de tratamiento»
+# de la ficha NO deja crear nada: su único control es «Crear plan desde
+# plantilla», y con el desplegable vacío no hay camino. Y sin plan no hay
+# presupuesto, ni cuotas, ni cobro: la ruta del dinero entera queda fuera
+# de alcance. Se siembran dos para poder recorrerla.
+protocolos = [
+    ("Rehabilitación básica", ["Profilaxis dental", "Resina simple", "Resina compuesta"]),
+    ("Corona sobre endodoncia", ["Endodoncia unirradicular", "Corona de zirconio"]),
+]
+for nombre, pasos in protocolos:
+    plantilla, _ = TreatmentPlanTemplate.objects.get_or_create(
+        tenant=tenant, name=nombre,
+        defaults={"description": "Protocolo de ejemplo para desarrollo."},
+    )
+    for orden, tratamiento in enumerate(pasos, start=1):
+        TreatmentPlanTemplateItem.objects.get_or_create(
+            template=plantilla,
+            treatment=Treatment.objects.get(tenant=tenant, name=tratamiento),
+            defaults={"order": orden},
+        )
+
 print(f"✓ Semilla: {Treatment.objects.filter(tenant=tenant).count()} tratamientos, "
       f"{Agreement.objects.filter(tenant=tenant).count()} convenios, "
-      f"{Patient.objects.filter(tenant=tenant).count()} pacientes.")
+      f"{Patient.objects.filter(tenant=tenant).count()} pacientes, "
+      f"{TreatmentPlanTemplate.objects.filter(tenant=tenant).count()} plantillas de plan.")
 FIN_PY
 fi
 

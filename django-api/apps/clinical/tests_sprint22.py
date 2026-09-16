@@ -836,13 +836,14 @@ class BudgetUnderAgreementTests(Sprint22Base):
         )
         self.client.force_authenticate(user=self.admin)
 
-    def _plan_con(self, treatment, estimated_price=None):
+    def _plan_con(self, treatment, estimated_price=None, price_is_manual=False):
         """Plan de un solo ítem, para aislar el precio que se está midiendo."""
         from apps.clinical.models import TreatmentPlan, TreatmentPlanItem
 
         plan = TreatmentPlan.objects.create(tenant=self.tenant, patient=self.patient)
         TreatmentPlanItem.objects.create(
             treatment_plan=plan, treatment=treatment, order=1,
+            price_is_manual=price_is_manual,
             estimated_price=(
                 treatment.base_price if estimated_price is None else estimated_price
             ),
@@ -879,10 +880,19 @@ class BudgetUnderAgreementTests(Sprint22Base):
         Si el odontólogo pactó una cifra con el paciente, el tarifario no
         debe reescribirla por la espalda. Solo se sustituye el valor que
         puso el propio sistema.
+
+        El `price_is_manual=True` es del Sprint 84 y no es ruido: antes,
+        «lo puso una persona» se deducía de que el importe no coincidiera
+        con el de catálogo. Esta prueba construye el ítem por el ORM, así
+        que ahora tiene que declarar la intención, que es justamente lo
+        que el campo hace explícito. Por la API se deduce sola de que
+        venga un precio en la petición.
         """
         self.patient.agreement = self.agreement
         self.patient.save()
-        plan = self._plan_con(self.t1, estimated_price=Decimal("120.00"))
+        plan = self._plan_con(
+            self.t1, estimated_price=Decimal("120.00"), price_is_manual=True,
+        )
         self.assertEqual(self._presupuestar(plan)["total_amount"], "120.00")
 
     def test_un_convenio_de_otra_clinica_no_se_puede_asignar(self):

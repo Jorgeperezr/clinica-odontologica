@@ -138,7 +138,15 @@ class TreatmentPlanItemCreateView(generics.CreateAPIView):
         plan = generics.get_object_or_404(
             TreatmentPlan, pk=self.kwargs["pk"], tenant=self.request.tenant
         )
-        serializer.save(treatment_plan=plan)
+        # Misma regla que al editar: si en la petición viene un precio, lo
+        # ha decidido una persona y el tarifario no volverá a tocarlo. Sin
+        # esto, añadir una línea con un precio pactado y presupuestar
+        # después la reescribía con la tarifa del convenio. Lo cazó una
+        # prueba del Sprint 71 que ya existía.
+        serializer.save(
+            treatment_plan=plan,
+            price_is_manual="estimated_price" in self.request.data,
+        )
 
 
 class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
@@ -156,7 +164,15 @@ class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
         )
 
     def perform_update(self, serializer):
-        item = serializer.save()
+        # Que alguien mande `estimated_price` en un PATCH significa que una
+        # persona ha decidido esa cifra, y a partir de ahí el tarifario no
+        # vuelve a tocarla. Se deduce aquí y no en el panel para que valga
+        # igual venga del panel, de la app o de la propia API.
+        if "estimated_price" in self.request.data:
+            serializer.save(price_is_manual=True)
+        else:
+            serializer.save()
+        item = serializer.instance
         # Si el ítem pasa a 'done' y el tratamiento consume insumos, se
         # descuenta el stock automáticamente (RF-INV-05). El descuento es
         # resiliente: un fallo de inventario no revierte el cambio de estado.

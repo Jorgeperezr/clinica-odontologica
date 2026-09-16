@@ -54,7 +54,7 @@ python manage.py test --settings=config.settings_test
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 249 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 257 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 83 — los errores de la API se leen como están escritos
+## Estado actual: Sprint 84 — el plan y el presupuesto dicen la misma cifra
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1471,6 +1471,55 @@ como estaba, con sus 14 páginas en `out/`.
 **Corrección.** Dije que la página de firma no avisaba al fallar. Es
 falso: sí muestra el error de la API. Lo único discutible es que el
 formulario siga siendo utilizable debajo, y eso no es un fallo.
+
+### Sprint 84 — El plan decía 580 y el presupuesto cobraba 413 (hecho)
+
+Encontrado **usando** el panel, no leyendo código: se aplicó una plantilla
+a una paciente con convenio y salieron dos cifras distintas para lo mismo,
+con un clic de diferencia.
+
+| | antes | ahora |
+|---|---|---|
+| Plan de tratamiento | **$580.00** | $413.00 |
+| Presupuesto generado | $413.00 | $413.00 |
+
+El presupuesto tenía razón —180 menos el 15 % del convenio son 153, más
+una corona con tarifa pactada de 260—. Lo que estaba mal era el plan:
+`ApplyTemplateView` guardaba `estimated_price=treatment.base_price`, el
+precio de catálogo, ignorando el convenio del paciente. **Y el plan es lo
+que el odontólogo lee en voz alta delante del paciente**, línea por línea.
+
+**Dejar de adivinar quién puso el precio.** Al presupuestar hay que saber
+si un importe lo escribió una persona —y entonces no se toca— o lo puso
+el sistema —y se recalcula con el tarifario—. Eso se deducía comparando
+con el precio de catálogo, y esa regla ya fallaba sola: un odontólogo que
+tecleara justo el precio de catálogo quedaba marcado como automático.
+Sembrar con el precio del convenio la rompía del todo. Ahora hay un campo
+explícito, `price_is_manual`, que la API pone cuando la petición trae un
+precio. La migración marca las filas que ya existen con la regla vieja,
+para no cambiarle el importe a ningún presupuesto en marcha.
+
+**Dos errores míos que cazaron las pruebas antes de salir de aquí:**
+
+- `prefetch_tariffs(tenant)` sin el convenio devuelve solo los tarifarios
+  **generales**, así que la tarifa pactada no aparecía: el plan decía 240
+  y el presupuesto 200.
+- Marcar el precio al **editar** no bastaba: faltaba al **crear** la
+  línea. Lo cazó una prueba del Sprint 71 que ya existía, y que ahora
+  declara su intención con el campo en vez de con un importe.
+
+**Un hueco de producto, sin tocar:** la pestaña «Plan de tratamiento» solo
+ofrece *crear plan desde plantilla*. Sin plantillas no hay forma de crear
+un plan desde el panel —y sin plan no hay presupuesto, ni cuotas, ni
+cobro—, aunque la API sí lo permite (`TreatmentPlanListCreateView`). La
+semilla de desarrollo crea ahora dos protocolos para que la ruta se pueda
+recorrer, pero el botón que falta vive en un archivo protegido.
+
+Queda también una cifra de catálogo en el desplegable de plantillas
+(«2 tratamientos · $580.00»): es correcta como total de catálogo, pero se
+muestra dentro de la ficha de un paciente concreto. Arreglarla exige que
+el panel mande el paciente al pedir las plantillas, y eso es el mismo
+archivo protegido.
 
 ## Desarrollo en GitHub Codespaces
 
