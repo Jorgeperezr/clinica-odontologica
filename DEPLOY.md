@@ -115,8 +115,11 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 #   puede descifrar.
 ```
 
-Backup manual: `COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh`
-(incluye verificación de integridad automática al terminar).
+Copia manual: `COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh`
+
+Los guiones funcionan **con Docker y sin él**: si no hay demonio usan el
+`pg_dump` / `psql` de la máquina. Eso permite hacer y comprobar copias
+desde un portátil sin Docker Desktop.
 
 Cron diario:
 ```bash
@@ -124,10 +127,64 @@ Cron diario:
 0 2 * * * root cd /ruta/al/repo && COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh >> /var/log/backup-clinica.log 2>&1
 ```
 
-Restauración ante un error:
+### Verificación: una copia sin restaurar no es una copia
+
+`backup.sh` comprueba al terminar que el volcado **está completo** —que
+el SQL termina donde `pg_dump` lo cierra—. Eso descarta el fallo más
+común y más silencioso: que la exportación se corte a la mitad porque se
+llenó el disco o se reinició el contenedor.
+
+Antes esa comprobación era `gzip -t`, que solo prueba que el archivo se
+descomprime. **Un volcado partido por la mitad comprime perfectamente y
+pasaba la prueba**: se anunciaba «correcto» una copia irrecuperable.
+Verificado cortando un volcado a propósito.
+
+Pero que el archivo esté entero no significa que se pueda restaurar. Eso
+solo lo dice restaurarlo:
+
+```bash
+./scripts/verificar-backup.sh            # la copia más reciente
+./scripts/verificar-backup.sh <archivo>  # una concreta
+```
+
+Descifra, **restaura de verdad en una base desechable**, cuenta las filas
+de las tablas que importan y la destruye al salir. Nunca toca la base
+real: el nombre de la base de prueba se genera con marca de tiempo y el
+guion aborta si coincidiera con la de producción.
+
+Devuelve `0` si la copia sirve y distinto de `0` si no, para poder
+avisar. Comprobado que **falla** ante los cuatro casos que importan: un
+volcado truncado, uno con esquema pero sin datos, la frase de cifrado
+equivocada y un archivo inexistente.
+
+Semanal:
+```bash
+# /etc/cron.d/verificar-backup-clinica  (domingos a las 03:00)
+0 3 * * 0 root cd /ruta/al/repo && COMPOSE_FILE=docker-compose.prod.yml ./scripts/verificar-backup.sh >> /var/log/verificar-backup.log 2>&1 || mail -s "FALLO: la copia de la clinica NO es restaurable" tu@correo.ec
+```
+
+### En macOS
+
+macOS trae **LibreSSL**, no OpenSSL, y su `enc` no siempre acepta
+`-pbkdf2`. Sin esa opción el cifrado caería a una derivación de clave
+mucho más débil y —lo grave— no podría descifrar las copias hechas en el
+servidor. Los tres guiones lo comprueban antes de escribir nada y
+explican qué hacer:
+
+```bash
+brew install openssl@3
+export PATH="$(brew --prefix openssl@3)/bin:$PATH"
+```
+
+### Restauración ante un error real
+
 ```bash
 COMPOSE_FILE=docker-compose.prod.yml ./scripts/restore.sh backups/clinica-2026-07-09_0200.sql.gz.enc
 ```
+
+Comprueba que la copia esté completa **antes** de tocar la base: descubrir
+que estaba truncada después de haberla borrado es la peor secuencia
+posible, y era la que permitía el guion anterior.
 
 Copiar `backups/` a un destino EXTERNO (rclone a Google Drive, disco USB
 rotado). Un backup que vive en la misma máquina no es backup. Y probar la

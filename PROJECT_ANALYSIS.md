@@ -253,9 +253,22 @@ ocurren.
    **Queda pendiente** la otra mitad: alertas (Sentry o equivalente) y un
    monitor externo que vigile `/api/v1/ready/`. Eso necesita una cuenta y
    una decisión de hosting, no código.
-6. **Backups**: scripts cifrados existen (`scripts/backup.sh`), pero no hay
-   evidencia de programación automática (cron) ni de prueba de restauración
-   periódica — crítico con datos de salud.
+6. **Backups** — **CORREGIDO (Sprint 76).** Aquí el análisis se pasaba de
+   pesimista en un punto y se quedaba corto en otro. La programación
+   automática **sí** estaba documentada (DEPLOY.md traía la línea de cron
+   diaria); lo que faltaba de verdad era la prueba de restauración. Y
+   había algo peor que no estaba anotado: la «verificación de integridad»
+   de `backup.sh` era un `gzip -t`, que solo prueba que el archivo se
+   descomprime. Un volcado cortado a la mitad —disco lleno, contenedor
+   reiniciado— comprime perfectamente y pasaba la prueba: el guion
+   anunciaba «correcto» una copia irrecuperable. Comprobado cortando un
+   volcado a propósito.
+   Ahora `backup.sh` comprueba que el volcado termine donde `pg_dump` lo
+   cierra, y `scripts/verificar-backup.sh` lo **restaura de verdad** en
+   una base desechable, cuenta filas y la destruye; devuelve un código de
+   salida para que cron pueda avisar. Verificado que falla ante volcado
+   truncado, esquema sin datos y frase de cifrado equivocada. Los guiones
+   funcionan además sin Docker.
 
 ### 6.2 Deuda técnica y limpieza
 
