@@ -51,7 +51,15 @@ import { toothFamily, isUpper } from "./ToothArt";
 
 const RADIAL = 30;        // secciones alrededor del eje
 const CROWN_RINGS = 11;   // anillos de la corona
-const CAP_RINGS = 5;      // anillos de la mesa oclusal
+/* Anillos de la mesa oclusal. Con 5 y reparto agrupado, los radios
+   muestreados eran 0.90, 0.65, 0.35, 0.10 y 0; las cúspides caen en
+   radio ≈ 0.76, o sea JUSTO ENTRE dos anillos, así que la malla no podía
+   representarlas por mucho que se afinara el campo de alturas. Ese era
+   el verdadero techo del relieve oclusal, y explica por qué el intento
+   del Sprint 59 no se notaba: se estaba ajustando algo que no llegaba a
+   la geometría. Aquí el reparto además es UNIFORME —no agrupado— porque
+   el detalle está en la corona de la mesa, no en su centro. */
+const CAP_RINGS = 14;
 const ROOT_RINGS = 9;     // anillos de cada raíz
 
 /**
@@ -415,36 +423,110 @@ function occlusalField(fam, code) {
        la oclusión y son más altas y romas; en la mandíbula lo son las
        vestibulares. La diferencia de altura entre unas y otras es un
        rasgo clínico, no un adorno. */
+    /* La tabla se escribe en términos ANATÓMICOS: +u es mesial y +w
+       vestibular. Al evaluar se proyecta al eje local con `ms`, que sabe
+       hacia dónde cae mesial en cada cuadrante.
+
+       Antes las posiciones iban directamente en el eje local sin `ms`, y
+       eso ponía del revés todo lo que distingue mesial de distal: en el
+       molar superior la cúspide dominante quedaba en distopalatino en
+       vez de mesiopalatino, la cresta oblicua corría por la diagonal
+       contraria y la quinta cúspide del primer molar inferior —que es
+       DISTAL— aparecía en mesial. Se veía en un solo lado de la boca,
+       porque en el otro el signo coincidía por casualidad. */
     const cusps = up
-      ? [{ u: -0.54, w: 0.54, a: 0.90 }, { u: 0.50, w: 0.50, a: 0.84 },
-         { u: -0.52, w: -0.54, a: 1.08 }, { u: 0.52, w: -0.48, a: 0.96 }]
-      : [{ u: -0.54, w: 0.52, a: 1.06 }, { u: 0.46, w: 0.54, a: 1.00 },
-         { u: -0.52, w: -0.52, a: 0.88 }, { u: 0.50, w: -0.50, a: 0.82 }];
-    if (!up && n === 6) cusps.push({ u: 0.84, w: 0.10, a: 0.82 });
+      ? [{ u: 0.54, w: 0.54, a: 0.90 },    // mesiovestibular
+         { u: -0.50, w: 0.50, a: 0.84 },   // distovestibular
+         { u: 0.52, w: -0.52, a: 1.08 },   // mesiopalatina: la mayor del superior
+         { u: -0.52, w: -0.48, a: 0.96 }]  // distopalatina
+      : [{ u: 0.54, w: 0.52, a: 1.06 },    // mesiovestibular
+         { u: -0.46, w: 0.54, a: 1.00 },   // distovestibular
+         { u: 0.52, w: -0.52, a: 0.88 },   // mesiolingual
+         { u: -0.50, w: -0.50, a: 0.82 }]; // distolingual
+    // Quinta cúspide DISTAL del primer molar inferior (patrón "Y5").
+    const fifth = !up && n === 6;
+    if (fifth) cusps.push({ u: -0.78, w: 0.08, a: 0.86 });
+
+    // Ejes de las crestas triangulares: de cada cúspide hacia la fosa.
+    const ridges = cusps.map((c) => {
+      const len = Math.hypot(c.u, c.w) || 1;
+      return { dx: c.u / len, dy: c.w / len, len, a: c.a };
+    });
+
     return (u, w) => {
-      let h = 0;
-      for (const c of cusps) h += c.a * gauss((u - c.u) ** 2 + (w - c.w) ** 2, 0.24);
+      const um = u * ms;                    // eje mesio-distal anatómico
 
-      // Rebordes marginales mesial y distal
-      h += 0.46 * gauss((Math.abs(u) - 0.88) ** 2, 0.038) * (1 - 0.5 * w * w);
+      /* 1. RELIEVE POSITIVO. Cúspides algo más estrechas que antes: con
+         σ² = 0.24 se desbordaban hasta el perímetro y se fundían con los
+         rebordes marginales, de modo que un molar de cuatro cúspides
+         producía seis lomos y el de cinco solo cuatro. */
+      let relief = 0;
+      for (const c of cusps) relief += c.a * gauss((um - c.u) ** 2 + (w - c.w) ** 2, 0.185);
 
-      // Surcos de desarrollo principales, en cruz
-      h -= 0.34 * gauss(u * u, 0.013);
-      h -= 0.30 * gauss(w * w, 0.013);
+      /* Crestas triangulares: cada cúspide manda una hacia la fosa. Van
+         estrechas y se apagan al acercarse al centro, para no rellenarla. */
+      for (const r of ridges) {
+        const t = um * r.dx + w * r.dy;               // avance hacia la cúspide
+        if (t <= 0.06 || t >= r.len) continue;
+        const d = um * r.dy - w * r.dx;               // separación del eje
+        relief += 0.17 * r.a * gauss(d * d, 0.011) * (t / r.len) ** 1.4;
+      }
 
-      /* NOTA (Sprint 59). Se intentó ampliar el relieve molar con crestas
-         triangulares, surco vestibular, fositas accesorias y fisuras
-         secundarias. El conjunto RESTA legibilidad en vez de sumarla: las
-         crestas rellenan los valles entre cúspides y el resultado es una
-         mesa oclusal más plana que la de partida, comprobado en la vista
-         oclusal. Se vuelve al relieve anterior —cúspides, fosa central,
-         surcos en cruz, rebordes marginales y cresta oblicua—, que sí se
-         lee. Queda pendiente rehacerlo midiendo el efecto de cada término
-         por separado en vez de sumarlos todos a la vez. */
+      /* Rebordes marginales: un reborde es un RIBETE del perímetro, no un
+         montículo. Estrecho y empujado al borde para que no invada las
+         cúspides, que es lo que ocurría con el anterior. */
+      const rim = fifth && um < 0 ? 0.16 : 0.40;   // la quinta cúspide ocupa el reborde distal
+      relief += rim * gauss((Math.abs(um) - 0.95) ** 2, 0.017) * gauss(w * w, 0.30);
 
-      // Cresta oblicua del molar superior: une la mesiolingual con la distovestibular
-      if (up) h += 0.26 * gauss((u * 0.7 + w * 0.7) ** 2, 0.042);
-      return h;
+      // Cresta oblicua del superior: une la mesiopalatina con la distovestibular.
+      if (up) relief += 0.24 * gauss((um * 0.7 + w * 0.7) ** 2, 0.040);
+
+      /* 2. SURCOS, TALLADOS AL FINAL Y DE FORMA MULTIPLICATIVA. Esta es la
+         diferencia con el intento del Sprint 59: restando una cantidad
+         fija, cualquier relieve que se añadiera encima volvía a rellenar
+         el surco y la mesa oclusal salía más plana que sin adornos.
+         Atenuando lo que haya, el surco se lee siempre. */
+      /* Los surcos MUEREN en las fositas triangulares; no siguen hasta el
+         borde ni cruzan el reborde marginal. Sin ese tope, el surco
+         central pasaba justo por encima de la quinta cúspide del primer
+         molar inferior y la borraba: el patrón "Y5" se quedaba en cuatro
+         cúspides. */
+      const fade = (x, edge) => gauss(Math.max(0, Math.abs(x) - edge) ** 2, 0.045);
+      /* El surco central recorre la mesa de mesial a distal ENTRE las
+         cúspides, así que tiene que llegar hasta las fositas (|um| ≈ 0.7);
+         cortarlo antes dejaba liso justo el tramo que separa las cúspides
+         vestibulares de las linguales. La excepción es el lado distal del
+         molar de cinco cúspides, donde el surco muere antes para no
+         borrar la quinta. */
+      const central = gauss(w * w, 0.011) * fade(um, fifth && um < 0 ? 0.46 : 0.70);
+      let vestibular = gauss(um * um, 0.011) * fade(w, 0.66);
+      // En el superior la cresta oblicua INTERRUMPE el surco por palatino.
+      if (up && w < 0) vestibular *= 0.30;
+
+      /* Surco distovestibular del patrón "Y5": es lo que separa la quinta
+         cúspide de la distovestibular. Sin él las dos forman un solo lomo
+         —medido: prominencia 0.10— y el molar vuelve a leerse con cuatro
+         cúspides pese a tener cinco. */
+      let y5 = 0;
+      if (fifth) {
+        /* Se probó alargarlo hacia lingual para que separase también la
+           distolingual: MEDIDO, empeora —esa cúspide pasa de 0.19 a 0.13
+           de prominencia y aparece un lomo suelto en el reborde distal—,
+           así que el surco se queda corto, entre la distovestibular y la
+           quinta, que es donde de verdad está. */
+        const mx = -0.62, my = 0.31;              // punto medio entre ambas cúspides
+        const nx = -0.571, ny = -0.821;           // eje que las enfrenta
+        const across = (um - mx) * nx + (w - my) * ny;
+        const along = (um - mx) * -ny + (w - my) * nx;
+        y5 = 0.85 * gauss(across * across, 0.009) * gauss(along * along, 0.15);
+      }
+
+      const g = Math.min(1, central + vestibular + y5);
+
+      // Fositas triangulares mesial y distal, por dentro de los rebordes.
+      const pits = 0.55 * gauss((Math.abs(um) - 0.66) ** 2, 0.012) * gauss(w * w, 0.10);
+
+      return relief * (1 - 0.45 * g) - 0.30 * g - 0.16 * pits;
     };
   }
 
@@ -703,15 +785,29 @@ export function buildToothGeometry(THREE, code) {
   const rimFn = crownRing(1);
   let prevCap = crownStarts[CROWN_RINGS];
   for (let k = 1; k <= CAP_RINGS; k++) {
-    const r = 1 - clustered(k, CAP_RINGS);
+    const r = 1 - k / CAP_RINGS;
+    /* Coordenadas del campo: el contorno de la mesa se lleva al CÍRCULO
+       UNIDAD antes de consultar H. Dividiendo solo por los semiejes, las
+       esquinas de la mesa daban |u|,|w| de hasta 1.4 —fuera del dominio
+       donde el campo está definido, y donde todas sus gaussianas ya valen
+       cero—: el borde de la cara oclusal salía liso y el poco relieve que
+       quedaba se apelotonaba en el centro, justo al revés de un molar.
+       Medido sobre la malla: la variación angular máxima estaba en radio
+       0.25 y no en 0.43, que es donde van las cúspides. */
+    const fieldAt = (theta) => {
+      const [rx, , rz] = rimFn(theta);
+      const eu = rx / rimA, ew = rz / rimB;
+      const len = Math.hypot(eu, ew) || 1;
+      return [(r * eu) / len, (r * ew) / len];
+    };
     const fn = (theta) => {
       const [rx, , rz] = rimFn(theta);
-      const x = rx * r, z = rz * r;
-      return [x, ch + H(x / rimA, z / rimB) * relief, z];
+      const [u, w] = fieldAt(theta);
+      return [rx * r, ch + H(u, w) * relief, rz * r];
     };
     const start = addRing(fn, 1, (theta) => {
-      const [x, , z] = fn(theta);
-      return crownShade(1, H(x / rimA, z / rimB), theta);
+      const [u, w] = fieldAt(theta);
+      return crownShade(1, H(u, w), theta);
     });
     stitch(prevCap, start);
     prevCap = start;

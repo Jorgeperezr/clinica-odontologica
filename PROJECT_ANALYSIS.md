@@ -240,11 +240,14 @@ ocurren.
 
 ### 6.2 Deuda técnica y limpieza
 
-1. **Código muerto de los Sprints 50–51**: `frontend/lib/odontogram/CompactView.js`,
-   `AdvancedCompactView.js` y `advanced/AdvancedCompactView.js` ya no están
-   referenciados (el registro usa `periodontal/PeriodontalMatrix`). Además,
-   `PeriodontalMatrix.js` exporta una función llamada `AdvancedCompactView`
-   (nombre heredado que confunde).
+1. ~~**Código muerto de los Sprints 50–51**~~ **RESUELTO (Sprint 67).**
+   Eliminados `frontend/lib/odontogram/CompactView.js`,
+   `AdvancedCompactView.js` y `advanced/AdvancedCompactView.js`: 948 líneas
+   sin un solo importador. Queda pendiente, y a propósito, renombrar la
+   función que `PeriodontalMatrix.js` exporta por defecto (se sigue llamando
+   `AdvancedCompactView`, nombre heredado que confunde): es un cambio
+   puramente cosmético dentro de un archivo que el usuario pidió no tocar,
+   así que no compensa el riesgo hasta que haya otro motivo para abrirlo.
 2. **README desactualizado en tres puntos**: dice "132 tests" (son 161); la
    línea final de la sección de estado conserva un texto residual del Sprint 0
    ("Lo que no está implementado todavía: … pacientes, agenda, …") que
@@ -294,10 +297,11 @@ recorre todos los módulos; accesibilidad (WCAG AA verificado, reduced-motion).
 ### P0 — Estabilización (esfuerzo bajo, riesgo que ya existe)
 1. Corregir el test flaky de medianoche (congelar el tiempo en los tests de
    `waiting`/`birthdays` o crear las citas con fecha local controlada).
-2. Verificar y corregir el servido de `/media/` en producción (añadir en nginx
-   un `location /media/` con `root` al volumen, o servirlo vía endpoint).
-3. Eliminar el código muerto de los Sprints 50–51 y renombrar el export de
-   `PeriodontalMatrix`.
+2. ~~Verificar y corregir el servido de `/media/` en producción.~~ Hecho en el
+   Sprint 66, aunque no como se proponía aquí: servirlo entero habría expuesto
+   radiografías y documentos clínicos (ver 6.1).
+3. ~~Eliminar el código muerto de los Sprints 50–51~~ (Sprint 67). Queda el
+   renombrado del export de `PeriodontalMatrix`.
 4. Actualizar el README: contador de tests (161), texto residual del estado,
    secciones 50–51; opcionalmente extraer el changelog.
 

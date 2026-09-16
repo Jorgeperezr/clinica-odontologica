@@ -965,6 +965,76 @@ salto de directorio (`..`, `%2e%2e`, `..%2f`), 404 también.
 **Tests:** 186 (2 nuevos y uno reescrito — afirmaba que `file_url` empezaba
 por `/media/`, que es precisamente el contrato que había que cambiar).
 
+### Sprint 67 — Fuera el código muerto de los Sprints 50–51 (hecho)
+
+948 líneas en tres archivos que no importaba nadie:
+`odontogram/CompactView.js` (Sprint 46), `odontogram/AdvancedCompactView.js`
+(Sprint 51) y `odontogram/advanced/AdvancedCompactView.js` (Sprint 50) —los
+dos últimos, dos intentos de la misma idea—. El registro sirve la vista
+«Compacto» desde `periodontal/PeriodontalMatrix` desde el Sprint 52.
+
+Comprobado antes de borrar, no después: ningún import los alcanza (ni
+estático ni dinámico), `ToothArt` —lo único que usaban— sigue vivo para las
+vistas anatómica y periodontal, y la atribución a los proyectos originales
+(Dorisoy.PeriodontalChart.JavaFX y PeriodontalCharting) está también en la
+cabecera de `PeriodontalMatrix.js`, así que no se pierde el crédito.
+
+Tras el borrado, los cuatro modelos del registro siguen resolviendo
+(clásico, anatómico, compacto y 3D) y el tamaño del bundle no cambia, que es
+la confirmación de que ese código nunca llegaba al navegador.
+
+### Sprint 68 — Relieve oclusal del molar, esta vez con instrumento (hecho)
+
+El Sprint 59 dejó anotado que había que rehacer el relieve oclusal
+«midiendo el efecto de cada término por separado». Eso es lo que se hizo,
+y el instrumento encontró bastante más de lo que se buscaba.
+
+**Dos errores anatómicos de lado.** Las posiciones de las cúspides iban
+escritas en el eje local sin aplicar `mesialSign`, que es quien sabe hacia
+dónde cae mesial en cada cuadrante. Consecuencia, en media boca: la
+cúspide dominante del molar superior salía en distopalatino en vez de
+mesiopalatino, la cresta oblicua corría por la diagonal contraria, y la
+quinta cúspide del primer molar inferior —que es DISTAL— aparecía en
+mesial. Ahora la tabla se escribe en términos anatómicos (+u = mesial) y
+se proyecta al eje local al evaluar. Comprobado: las piezas 36 y 46 dan
+métricas idénticas, que es lo que debe pasar con un espejo.
+
+**Cúspides que se comían los rebordes.** Medidos los máximos locales del
+campo: el molar superior daba 6 lomos en vez de 4 y el inferior de cinco
+cúspides solo 4. El reborde marginal era un montículo ancho a |u| = 0.88
+que se fundía con las cúspides. Ahora es un ribete estrecho en el
+perímetro, y las cúspides son algo más ceñidas. Resultado: 4, 4 y 5 picos
+prominentes, los que corresponden.
+
+**Surcos que se rellenaban solos.** Se restaban con una cantidad fija, así
+que cualquier relieve añadido encima los tapaba —exactamente lo que hundió
+el intento del Sprint 59—. Ahora se tallan al final y de forma
+multiplicativa: atenúan lo que haya, de modo que el surco se lee siempre.
+Con esa base se pudieron añadir por fin las crestas triangulares, las
+fositas y el surco distovestibular del patrón «Y5», que es el que separa
+la quinta cúspide (su prominencia pasa de 0.10 a 0.76).
+
+**El techo real no estaba en el campo.** La mesa oclusal era un disco de 5
+anillos con reparto agrupado: los radios muestreados eran 0.90, 0.65,
+0.35, 0.10 y 0, y las cúspides caen en 0.76 —justo entre dos—. Además el
+campo se consultaba dividiendo por los semiejes, de modo que en las
+esquinas de la mesa se pedían coordenadas de hasta 1.4, fuera del dominio
+donde está definido: el borde salía liso. Ahora son 14 anillos con reparto
+uniforme y el contorno se lleva al círculo unidad antes de consultar el
+campo.
+
+**Qué se ve, con franqueza.** La mejora medida es grande, pero a simple
+vista es discreta: una cara oclusal vista desde arriba es un relieve
+genuinamente somero. No se ha subido la amplitud para forzar el efecto
+porque ya está en 0.21·altura de corona, que con el rango del campo da un
+29 % de la altura de la corona, por encima de la cifra anatómica. Lo que
+queda por ganar está en la resolución angular (`RADIAL = 30`), que afecta
+a todo el diente y no solo a la mesa.
+
+**Coste:** 16 piezas pasan de 16 930 a 21 394 vértices (+26 %) y de 65 a
+104 ms de generación. El instrumento de medida queda documentado en el
+propio módulo para que el siguiente intento no vuelva a ser a ojo.
+
 ## Desarrollo en GitHub Codespaces
 
 Este repo funciona bien en Codespaces para `django-api/`, `whatsapp-gateway/` y (más adelante) el panel Next.js — todo corre sobre Docker dentro del devcontainer. El desarrollo de la app Flutter requiere emulador con aceleración gráfica, por lo que se recomienda hacerlo en una máquina local (o dispositivo físico) en paralelo, no dentro de Codespaces.
