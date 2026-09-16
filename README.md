@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 79 — guiones revisados en el CI (el fallo que solo salía en macOS)
+## Estado actual: Sprint 80 — el arranque local, comprobado de punta a punta
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1327,6 +1327,41 @@ por él los guiones enteros: arranque completo, migraciones, login real
 contra la API y el panel respondiendo. La revisión del entorno anota
 ahora la versión de bash y la configuración regional, que es la primera
 pista cuando algo falla en una sola máquina.
+
+### Sprint 80 — `setsid` no existe en macOS (hecho)
+
+Con lo del Sprint 79 corregido, el arranque en el Mac llegó hasta el
+final —entorno virtual, `brew services start postgresql@16`, migraciones,
+catálogos, administrador— y murió en el último paso:
+
+```
+✗ Django no respondió.
+```
+
+Los servidores se lanzaban con `setsid`, que es de **util-linux y no
+existe en macOS**. El `command not found` ocurría dentro de un segundo
+plano, donde `set -e` no lo ve, así que el guion esperaba noventa
+segundos a un proceso que llevaba muerto desde el principio. El motivo
+estaba en el registro desde el primer segundo y nadie lo miraba.
+
+- **El lanzamiento** pasa a hacerse con Python, que ya hace falta y está
+  en los dos sistemas: `os.setsid()` abre la sesión y `execvp` se
+  convierte en el servidor. Va dentro de `( ... )` y con `exec` por un
+  motivo comprobado: sin ellos bash bifurca otra vez y `$!` apunta a un
+  intermediario que muere enseguida, con lo que `--stop` mata un grupo
+  vacío y deja los puertos ocupados diciendo que ha parado los
+  servidores.
+- **Cuando un servidor no arranca, el guion lo dice y enseña por qué.**
+  Comprueba si el proceso sigue vivo en cada intento, así que avisa en
+  cinco segundos en vez de noventa, y vuelca las últimas líneas de su
+  registro. Verificado escondiendo el binario de Next: sale
+  `env: './node_modules/.bin/next': No such file or directory` en la
+  propia consola.
+- **Next se invoca directamente** y no por `npx`, que metía dos procesos
+  de por medio sin aportar nada.
+
+Verificado el ciclo entero: arranque, API en 200, panel en 200, `--stop`
+y puertos libres en un segundo, sin procesos huérfanos.
 
 ## Desarrollo en GitHub Codespaces
 

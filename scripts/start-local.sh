@@ -331,8 +331,33 @@ fi
 parar 2>/dev/null || true
 
 echo "▶ Levantando servidores…"
+
+# Arranca un proceso en una sesión NUEVA, para poder matar después al
+# grupo entero: `next dev` lanza hijos y matar solo al padre deja el
+# puerto 3000 ocupado.
+#
+# Esto era `setsid`, que es de util-linux y **no existe en macOS**. Allí
+# el proceso moría al instante con «command not found» dentro de un
+# segundo plano —donde `set -e` no lo ve— y el guion se quedaba noventa
+# segundos esperando a algo que ya no estaba, para terminar diciendo
+# «Django no respondió» sin una sola pista más.
+#
+# Se hace con Python, que aquí ya hace falta y está en los dos sistemas:
+# `os.setsid()` abre la sesión y `execvp` se convierte en el servidor, de
+# modo que el PID que guardamos es el definitivo. Con `setsid` eso no
+# siempre era cierto, porque bifurca si ya era líder del grupo.
+# El `exec` y los paréntesis de quien la llama no son adorno: sin ellos
+# bash bifurca una vez más y el PID que apunta `$!` es el de un
+# intermediario que muere enseguida, no el del servidor. Entonces
+# `kill -- -$pid` apunta a un grupo vacío y `--stop` deja los puertos
+# ocupados diciendo que ha parado los servidores. Comprobado: sin `exec`,
+# $! = 589 y el proceso real era el 591.
+lanzar() {
+    exec "$PY" -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' "$@"
+}
+
 cd "$RAIZ/django-api"
-setsid "$PY" manage.py runserver 127.0.0.1:8000 \
+( lanzar "$PY" manage.py runserver 127.0.0.1:8000 ) \
     > "$EJECUCION/django.log" 2>&1 < /dev/null &
 echo $! > "$EJECUCION/django.pid"
 
@@ -340,23 +365,56 @@ cd "$RAIZ/frontend"
 [ -d node_modules ] || npm ci --no-audit --no-fund
 # La URL de la API se fija a localhost a propósito: ver la nota sobre
 # CORS en la cabecera de este archivo.
-setsid env NEXT_PUBLIC_API_URL=http://localhost:8000 npx next dev -p 3000 \
+# Se llama al binario de Next directamente y no por `npx`, que mete dos
+# procesos de por medio —`npm exec` y un `sh -c`— sin aportar nada aquí:
+# el paquete está instalado al lado. Menos intermediarios, menos sitios
+# donde perder la pista al apagar.
+( lanzar env NEXT_PUBLIC_API_URL=http://localhost:8000 \
+    ./node_modules/.bin/next dev -p 3000 ) \
     > "$EJECUCION/next.log" 2>&1 < /dev/null &
 echo $! > "$EJECUCION/next.pid"
 
 esperar() {
-    local url=$1 nombre=$2 intentos=0
+    local url=$1 nombre=$2 registro=$3 pid=$4 intentos=0
     until curl -sf -o /dev/null "$url" 2>/dev/null; do
+        # Si el proceso ya no está, no tiene sentido seguir esperando: se
+        # murió al arrancar y la razón está en su registro. Antes esto
+        # eran noventa segundos de silencio y un mensaje que no decía
+        # nada; el motivo llevaba ahí desde el primer segundo.
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "✗ $nombre se cerró nada más arrancar." >&2
+            explicar "$nombre" "$registro"
+            return 1
+        fi
         intentos=$((intentos + 1))
-        [ "$intentos" -gt 90 ] && { echo "✗ $nombre no respondió." >&2; return 1; }
+        if [ "$intentos" -gt 90 ]; then
+            echo "✗ $nombre no respondió en 90 segundos." >&2
+            explicar "$nombre" "$registro"
+            return 1
+        fi
         sleep 1
     done
     echo "✓ $nombre listo."
 }
+
+explicar() {
+    local nombre=$1 registro=$2
+    if [ -s "$registro" ]; then
+        echo "  Últimas líneas de $registro:" >&2
+        tail -25 "$registro" | sed 's/^/    /' >&2
+    else
+        echo "  Su registro ($registro) está vacío: no llegó ni a escribir." >&2
+    fi
+    echo "" >&2
+    echo "  Cuando lo hayas corregido:  bash scripts/start-local.sh" >&2
+}
+
 # /ready/ y no /health/: interesa esperar a que Django pueda ATENDER
 # (base de datos incluida), no solo a que el proceso esté arriba.
-esperar "http://localhost:8000/api/v1/ready/" "Django"
-esperar "http://localhost:3000/login" "Next.js"
+esperar "http://localhost:8000/api/v1/ready/" "Django" \
+    "$EJECUCION/django.log" "$(cat "$EJECUCION/django.pid")"
+esperar "http://localhost:3000/login" "Next.js" \
+    "$EJECUCION/next.log" "$(cat "$EJECUCION/next.pid")"
 
 cat <<FIN
 
