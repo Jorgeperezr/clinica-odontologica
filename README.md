@@ -54,7 +54,7 @@ python manage.py test --settings=config.settings_test
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 262 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 267 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 85 — la ficha de doctor sigue al rol del usuario
+## Estado actual: Sprint 86 — ningún fallo se traga sin decir por qué
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1562,6 +1562,46 @@ No todo fueron fallos. Comprobado en el navegador, de punta a punta:
 - **El bloqueo por morosidad funciona**: con una cuota vencida hace 40
   días, agendar devuelve 409, el panel explica el motivo y ofrece la
   excepción manual, que crea la cita.
+
+### Sprint 86 — Nueve fallos que nadie llegaba a ver (hecho)
+
+El backend tenía nueve `except Exception: pass`. La decisión de **no
+romper el flujo** es correcta en todos ellos: un fallo del almacén no
+puede deshacer un tratamiento que ya se hizo, ni un logotipo ilegible
+impedir que salga una receta. Pero tragárselo en silencio no es ser
+resiliente, es no enterarse.
+
+El más caro es el inventario. Si el descuento de stock falla y nadie lo
+registra, **el sistema dice que hay material y el cajón está vacío** — y
+eso se descubre abriéndolo, a mitad de un procedimiento.
+
+Cinco pasan a dejar rastro, con el contexto necesario para ir a buscar
+qué pasó:
+
+| dónde | qué se perdía en silencio |
+|---|---|
+| Descuento de inventario | el stock se desviaba de la realidad |
+| Aviso de llegada del paciente | el doctor no se enteraba de que había llegado |
+| Firma en el documento | una receta salía sin la firma del profesional |
+| Logotipo de la clínica | la clínica no veía su logo y no sabía por qué |
+| Apariencia de documentos | todo salía con el estilo de serie, sin causa visible |
+
+Los otros cuatro **siguen callados a propósito** —una marca de agua
+ausente, un color mal escrito con reserva definida, un ajuste de texto en
+una celda— y ahora lo dicen en su sitio, para que el siguiente lector
+sepa que fue una decisión y no un descuido.
+
+**Para que la regla se sostenga sola** hay una prueba nueva que recorre
+el backend y falla si aparece un `except … : pass` sin un comentario
+encima explicando por qué ese fallo puede ignorarse. Comprobado que falla
+al reintroducir uno. Si no se puede ignorar, no es un `pass`: es un
+`logger.warning(..., exc_info=True)`.
+
+**Una trampa que ya había caído antes.** `assertLogs().output` usa el
+formato por defecto de `logging` y descarta todo lo que va en `extra`,
+que es justo donde están los identificadores. La prueba pasa cada
+registro por el formateador de producción —el mismo ayudante del Sprint
+75— y así comprueba lo que de verdad se escribiría.
 
 ## Desarrollo en GitHub Codespaces
 

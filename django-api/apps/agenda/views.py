@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.utils import timezone
@@ -13,6 +14,8 @@ from apps.agenda.serializers import (
     RescheduleSerializer,
 )
 from apps.common.permissions import HasRole
+
+logger = logging.getLogger("apps.agenda")
 
 CAN_MANAGE_AGENDA = HasRole.for_roles("admin", "reception")
 CAN_VIEW_AGENDA = HasRole.for_roles("admin", "reception", "doctor", "auxiliary")
@@ -186,7 +189,15 @@ class AppointmentCheckinView(_AppointmentActionView):
 
             notify_doctor_patient_arrived.delay(str(appt.id))
         except Exception:
-            pass
+            # El registro de llegada es lo crítico y no se toca. Pero que
+            # el aviso sea secundario no lo hace invisible: si el broker
+            # lleva días caído, ningún doctor se entera de que su paciente
+            # ha llegado y con un `pass` nadie llegaba a saberlo.
+            logger.warning(
+                "No se pudo encolar el aviso de llegada al doctor",
+                exc_info=True,
+                extra={"appointment_id": str(appt.id)},
+            )
         return Response(AppointmentSerializer(appt).data)
 
 

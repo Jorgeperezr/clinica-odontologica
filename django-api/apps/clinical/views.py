@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import generics, status
 
 from apps.accounts.models import AuditLog
@@ -18,6 +20,8 @@ from apps.clinical.serializers import (
 )
 from apps.common.permissions import HasRole
 from apps.patients.models import Patient
+
+logger = logging.getLogger("apps.clinical")
 
 # Solo roles clínicos acceden a la historia clínica (matriz del SRS).
 CAN_EDIT_CLINICAL = HasRole.for_roles("admin", "doctor", "auxiliary")
@@ -184,7 +188,21 @@ class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
 
                 consume_inventory_for_treatment_item(item)
             except Exception:
-                pass
+                # No revertir el acto clínico es lo correcto: el
+                # tratamiento SE HIZO, pase lo que pase con el almacén.
+                # Pero antes esto era un `pass` a secas, y eso no es ser
+                # resiliente sino no enterarse: el descuento fallaba, el
+                # stock quedaba por encima del real y nadie lo sabía
+                # hasta abrir el cajón y encontrarlo vacío.
+                logger.warning(
+                    "No se pudo descontar el inventario de un tratamiento realizado",
+                    exc_info=True,
+                    extra={
+                        "item_id": str(item.id),
+                        "treatment_id": str(item.treatment_id),
+                        "tenant_id": str(self.request.tenant.id),
+                    },
+                )
 
 
 class OdontogramStateListView(generics.ListAPIView):

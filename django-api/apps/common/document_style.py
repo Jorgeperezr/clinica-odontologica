@@ -1,3 +1,4 @@
+
 """
 Motor global de estilos de documentos (Sprint 60).
 ────────────────────────────────────────────────────────────────────────
@@ -39,11 +40,14 @@ documentos. Ningún documento existente cambia hasta que alguien toca la
 configuración.
 """
 
+import logging
 from datetime import datetime
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, A5, LEGAL, LETTER, landscape
 from reportlab.lib.units import mm
+
+logger = logging.getLogger("apps.documentos")
 
 _PAGE_SIZES = {"A4": A4, "LETTER": LETTER, "LEGAL": LEGAL, "A5": A5}
 
@@ -63,11 +67,22 @@ _FALLBACK_PRIMARY = "#0e5c63"
 
 
 def _color(value, fallback):
-    """Convierte '#rrggbb' en un color de reportlab, con reserva."""
+    """
+    Convierte '#rrggbb' en un color de reportlab, con reserva.
+
+    Este SÍ se queda callado, y es una decisión: se llama decenas de
+    veces por página, así que registrar cada color mal escrito llenaría
+    el registro de ruido para decir siempre lo mismo. Además tiene una
+    reserva definida, de modo que el resultado es correcto y no una
+    aproximación. Lo que sí deja rastro es leer la configuración entera,
+    que es donde ese color se escribió mal.
+    """
     try:
         if value:
             return colors.HexColor(value)
     except Exception:
+        # Callado a propósito, por lo que explica el docstring: esto se
+        # llama decenas de veces por página y tiene una reserva definida.
         pass
     return colors.HexColor(fallback)
 
@@ -172,7 +187,13 @@ class DocumentStyle:
                             preserveAspectRatio=True, mask="auto")
                 c.restoreState()
             except Exception:
-                pass       # un logotipo ilegible nunca debe romper el documento
+                # El documento sale igual, que es lo correcto. Pero la
+                # clínica que subió su logotipo y no lo ve en ninguna
+                # receta merece que alguien pueda averiguar por qué.
+                logger.warning(
+                    "No se pudo dibujar el logotipo de la clínica",
+                    exc_info=True,
+                )
             if pos == "header_left":
                 x += lw + float(lg.get("gap_mm", 4)) * mm
 
@@ -281,7 +302,11 @@ class DocumentStyle:
             c.drawCentredString(0, 0, w["text"])
             c.restoreState()
         except Exception:
-            pass       # la marca de agua jamás debe impedir emitir el documento
+            # Callado a propósito: una marca de agua ausente es un detalle
+            # estético que no cambia lo que el documento dice ni quién lo
+            # firma. A diferencia del logotipo o de la firma, nadie va a
+            # preguntarse por qué falta.
+            pass
 
     # ── Firmas ────────────────────────────────────────────────────────
     def draw_signature(self, c, y, slots):
@@ -328,7 +353,13 @@ class DocumentStyle:
                     c.drawImage(slot["image"], x0 + (line_w - iw) / 2, line_y + 1.5 * mm,
                                 width=iw, height=ih, preserveAspectRatio=True, mask="auto")
                 except Exception:
-                    pass       # una firma ilegible no debe romper el documento
+                    # Que el documento salga es lo correcto; que salga SIN
+                    # LA FIRMA del profesional y sin que nadie se entere,
+                    # no. Una receta sin firma es otro documento.
+                    logger.warning(
+                        "No se pudo estampar la firma en el documento",
+                        exc_info=True,
+                    )
             c.setStrokeColor(self.ink)
             c.setLineWidth(0.6)
             c.line(x0, line_y, x0 + line_w, line_y)
@@ -568,7 +599,13 @@ def get_document_style(tenant=None, brand=None):
             if row is not None:
                 settings = row.resolved()
         except Exception:
-            pass       # la configuración nunca debe impedir emitir un documento
+            # Sin esto, un fallo al leer la configuración hacía que TODOS
+            # los documentos salieran con la apariencia por defecto y la
+            # clínica no encontrara la causa: sus ajustes «no se aplican».
+            logger.warning(
+                "No se pudo leer la apariencia de documentos; se usa la de serie",
+                exc_info=True,
+            )
 
     if brand is None and tenant is not None:
         brand = _brand_of(tenant)
@@ -622,5 +659,5 @@ def _brand_of(tenant):
         if row and isinstance(row.theme, dict):
             return {"primary": row.theme.get("primary") or ""}
     except Exception:
-        pass
+        logger.warning("No se pudo leer la marca de la clínica", exc_info=True)
     return {}

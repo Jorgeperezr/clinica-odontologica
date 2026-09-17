@@ -39,6 +39,9 @@ def _set(ws, coord, value):
         try:
             cell.alignment = cell.alignment.copy(wrap_text=True)
         except Exception:
+            # Callado a propósito: esto solo pide que el texto se ajuste
+            # dentro de la celda. Si openpyxl no puede, el VALOR sigue
+            # estando y el formulario dice lo mismo; solo se ve peor.
             pass
     else:
         cell.value = value
