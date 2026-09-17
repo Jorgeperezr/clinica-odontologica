@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 87 — el odontograma 3D cabe en tableta y teléfono
+## Estado actual: Sprint 88 — colores del odontograma según la guía VITA
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1648,6 +1648,67 @@ materiales o iluminación a partir de esas imágenes sería afinar a ciegas.
 Lo que sí es independiente del renderizador —cuántos píxeles mide el
 lienzo, si el arco cabe en el encuadre, si la página se desborda— es
 justo lo que se ha corregido.
+
+### Sprint 88 — Colores del odontograma 3D según la guía VITA (hecho)
+
+Todas las piezas compartían un único marfil, **rgb(253,247,236)**. Ese
+valor es más claro que el **B1** de la guía VITA Classical
+—rgb(208,194,168), el matiz más blanco de toda la guía—, así que la
+arcada se leía como una masa continua.
+
+Los valores salen de convertir a sRGB los L\*a\*b\* publicados de VITA y
+quedarse con las **proporciones** entre matices: el color del material se
+multiplica por el de vértice y luego lo ilumina la escena, así que poner
+el sRGB crudo daría una arcada apagada. Ahora cada familia lleva el suyo,
+siguiendo cómo se distribuye el color en una boca real:
+
+| familia | matiz | por qué |
+|---|---|---|
+| incisivos | A1 | las piezas más claras |
+| premolares | A2 | |
+| molares | A3 | algo más cromáticos |
+| **caninos** | **A3.5** | son las piezas más cromáticas de la boca |
+| temporales | B1 | más blancas y azuladas que las definitivas |
+
+**La encía estaba mal en dos cosas comprobables.** El margen libre salía
+más rojo que la encía adherida cuando en una encía sana es al revés, y la
+banda de mucosa alveolar estaba en rgb(125,51,54) —casi granate— frente a
+rgb(169,100,102) de la referencia de mucosa sana: el conjunto se leía
+como carne cruda. Las proporciones entre bandas se corrigen dejando la
+encía adherida donde estaba, que es el nivel ya ajustado contra la escena
+iluminada. No es solo estética: la unión mucogingival es una referencia
+clínica y si las bandas se parecen demasiado deja de verse dónde está.
+
+También se acentúa la **translucidez del tercio incisal**, que es de las
+señas más reconocibles de un diente natural y estaba apenas insinuada.
+
+### Lo que se midió, y lo que la medición desmintió
+
+Se localizó cada pieza usando el propio raycasting de la aplicación y se
+muestreó su color en pantalla. Dos conclusiones incómodas:
+
+1. **Las diferencias reales de VITA apenas sobreviven al sombreado.** Con
+   los matices puestos, un canino y un incisivo central daban el mismo
+   amarilleo: 20 contra 20 sobre 255. Se comprobó que el camino del
+   código SÍ funciona poniendo el canino en rojo puro a propósito: salió
+   rgb(222,88,107). El color llega; lo que pasa es que la diferencia
+   anatómica real es sutil, y exagerarla no sería realismo.
+2. **Bajar el barniz y la translucidez no servía de nada.** Se probó
+   (0.42 / 0.10) suponiendo que el reflejo tapaba el matiz. Medido: el
+   amarilleo seguía igual y toda la arcada se oscurecía ocho unidades.
+   **Se revirtió**: quedarse con un cambio cuya justificación ha fallado
+   es peor que no haberlo hecho.
+
+**La causa más probable de que se vea plano es otra.** La oclusión
+ambiental —lo que hunde las troneras y separa una pieza de la siguiente—
+**se apagaba sola y en silencio** cuando el equipo no sostenía 35 fps.
+Apagarla está bien; que nadie se entere, no. Ahora se dice debajo del
+lienzo.
+
+**Lo que sigue sin poder juzgarse desde aquí**: las capturas se hacen con
+SwiftShader, que además de no antialiasar igual **siempre** dispara esa
+desactivación. Lo que se ha tocado son números —matices, proporciones
+entre bandas— que no dependen del renderizador.
 
 ## Desarrollo en GitHub Codespaces
 

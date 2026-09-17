@@ -33,7 +33,7 @@ import {
   SURFACE_LABELS, TEMP_LOWER_L, TEMP_LOWER_R, TEMP_UPPER_L, TEMP_UPPER_R,
   dominantState, hasRecords,
 } from "./contract";
-import { toothFamily, isUpper } from "./ToothArt";
+import { toothFamily, isUpper, isDeciduous } from "./ToothArt";
 import { toothJitter, toothPose } from "./toothGeometry";
 import { createMeshProvider } from "./meshProvider";
 import { createArchCurve, distributeAlongArch } from "./archCurve";
@@ -42,6 +42,61 @@ import {
   enamelNormalTexture, enamelRoughnessTexture,
   gingivaNormalTexture, gingivaRoughnessTexture,
 } from "./dentalTextures";
+
+/* ── Color natural de cada pieza ──────────────────────────────────────
+   Todas las piezas compartían un único marfil, rgb(253,247,236). Ese
+   valor es MÁS CLARO que el B1 de la guía VITA Classical —rgb(208,194,168),
+   el matiz más blanco de toda la guía—, así que la arcada se leía como
+   una masa continua: sin diferencia de matiz, el ojo no separa una pieza
+   de la siguiente.
+
+   En una boca real el color no es uniforme y la variación no es aleatoria:
+
+     · los CANINOS son las piezas más cromáticas, típicamente uno o dos
+       matices por debajo de los incisivos;
+     · los incisivos son los más claros;
+     · premolares y molares quedan en medio, algo más saturados;
+     · la dentición TEMPORAL es más blanca y más azulada que la
+       permanente, que es justo por lo que un diente de leche al lado de
+       uno definitivo se nota a simple vista.
+
+   Los valores salen de convertir a sRGB los L*a*b* publicados de la guía
+   VITA y quedarse con las PROPORCIONES entre matices, no con los valores
+   crudos: el color del material se multiplica por el de vértice y luego
+   lo ilumina la escena, así que poner el sRGB de VITA tal cual daría una
+   arcada apagada. Las relaciones, en cambio, trasladan bien, y son las
+   que dan la distinción.
+
+   (Los L*a*b* de VITA varían algo entre estudios y geometrías de medida.
+   Se usan como referencia de las relaciones, no como calibración.) */
+const MARFIL_BASE = [253 / 255, 247 / 255, 236 / 255];   // el de antes ≈ A1
+
+const MATIZ_VITA = {
+  //            r       g       b     (proporción respecto a A1)
+  B1:   [1.015, 1.032, 1.057],
+  A1:   [1.000, 1.000, 1.000],
+  A2:   [0.995, 0.968, 0.918],
+  A3:   [0.985, 0.936, 0.843],
+  "A3.5": [0.961, 0.888, 0.761],
+};
+
+const MATIZ_POR_FAMILIA = {
+  incisivo: "A1",
+  canino: "A3.5",
+  premolar: "A2",
+  molar: "A3",
+};
+
+function matizNatural(THREE, code) {
+  const temporal = isDeciduous(code);
+  const clave = temporal ? "B1" : (MATIZ_POR_FAMILIA[toothFamily(code)] || "A2");
+  const k = MATIZ_VITA[clave];
+  return new THREE.Color(
+    Math.min(1, MARFIL_BASE[0] * k[0]),
+    Math.min(1, MARFIL_BASE[1] * k[1]),
+    Math.min(1, MARFIL_BASE[2] * k[2]),
+  );
+}
 
 /** Filtros clínicos: resaltan solo las piezas cuyo estado coincide. */
 const FILTERS = [
@@ -119,6 +174,7 @@ export default function Odontogram3D({
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [hovered, setHovered] = useState(null);
+  const [acabadoReducido, setAcabadoReducido] = useState(false);
 
   // Los callbacks cambian en cada render del contenedor; se guardan en una
   // referencia para no reconstruir la escena en cada actualización.
@@ -362,6 +418,17 @@ export default function Odontogram3D({
           /* Barniz suave y amplio. Con clearcoat casi 1 y muy liso, el
              reflejo se concentra en un punto blanco durísimo y la pieza
              pasa de esmalte a porcelana de baño. */
+          /* Barniz suave y amplio. Con clearcoat casi 1 y muy liso, el
+             reflejo se concentra en un punto blanco durísimo y la pieza
+             pasa de esmalte a porcelana de baño.
+
+             Se probó a bajarlos (0.42 / 0.10) suponiendo que el reflejo
+             del entorno tapaba el matiz propio de cada pieza. Se midió
+             el resultado y NO era así: el canino y el incisivo central
+             seguían dando el mismo amarilleo, 20 contra 20 sobre 255, y
+             lo único que cambió fue que toda la arcada se oscureció ocho
+             unidades. Se dejan donde estaban: bajarlos no compraba nada
+             y costaba realismo en el esmalte. */
           clearcoat: 0.55,
           clearcoatRoughness: 0.22,
           transmission: 0.16,       // translucidez sutil
@@ -615,6 +682,13 @@ export default function Odontogram3D({
           probeTime += dt;
           if (probeFrames === 40 && probeTime / 40 > 0.028) {   // < 35 fps
             composer = null;
+            /* Se apagaba en silencio, y eso deja al profesional mirando
+               una imagen más plana sin saber por qué: la oclusión es lo
+               que hunde las troneras y separa una pieza de la siguiente.
+               Ahora se dice, para que quien vea el modelo «raro» sepa que
+               es el equipo y no su paciente, y para que sea una pista si
+               alguien pregunta por la calidad de la imagen. */
+            setAcabadoReducido(true);
           }
         }
 
@@ -736,13 +810,13 @@ export default function Odontogram3D({
     const { THREE, teeth } = s;
     const f = FILTERS.find((x) => x.key === filter);
 
-    /* Base casi blanca: el marfil, la dentina cervical y el cemento de
-       la raíz los aporta el color de vértice de la geometría, así que
-       este color queda libre para llevar el estado clínico. */
-    const ENAMEL = new THREE.Color(0xfdf7ec);
-
     for (const t of teeth) {
       const code = t.userData.code;
+      /* El matiz de ESTA pieza, no uno común a toda la boca. El marfil
+         cervical y el cemento de la raíz los sigue aportando el color de
+         vértice de la geometría; este color queda libre para llevar
+         encima el estado clínico. */
+      const ENAMEL = matizNatural(THREE, code);
       const surfaces = surfacesByTooth[code];
       const st = dominantState(surfaces);
       const registrado = hasRecords(surfaces);
@@ -885,6 +959,14 @@ export default function Odontogram3D({
             clic en una pieza para ver su historial
             {hovered && <strong style={{ color: "var(--petrol)" }}> · pieza {hovered}</strong>}
           </p>
+          {acabadoReducido && (
+            <p style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 2 }}>
+              Este equipo no sostiene la oclusión ambiental con holgura, así que
+              se ha desactivado para mantener el giro fluido. El modelo se ve más
+              plano —menos sombra entre las piezas—, pero los datos clínicos y la
+              selección funcionan igual.
+            </p>
+          )}
         </div>
 
         {/* Panel lateral: historial de la pieza seleccionada */}

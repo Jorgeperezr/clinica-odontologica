@@ -55,12 +55,29 @@ const PROFILE = [
   { n: -0.78, y: 0.00, band: 0 },  // margen libre lingual
 ];
 
-/** Tono por banda: multiplica al color del material, nunca lo sustituye. */
+/* Tono por banda: multiplica al color del material, nunca lo sustituye.
+
+   Los valores anteriores hacían dos cosas que la mucosa real no hace.
+   El margen libre salía MÁS ROJO que la encía adherida cuando en una
+   encía sana es al revés —el margen es más pálido y rosado—, y la banda
+   de mucosa alveolar quedaba en rgb(125,51,54), casi granate, frente a
+   rgb(169,100,102) de la referencia. El conjunto se leía como carne
+   cruda y no como tejido sano.
+
+   Las proporciones de abajo salen de convertir a sRGB los L*a*b* de
+   mucosa oral sana y tomarlas RESPECTO A LA ENCÍA ADHERIDA, que se deja
+   donde estaba: así se corrige la relación entre bandas —que es lo que
+   estaba mal— sin alterar el nivel general, que ya estaba ajustado
+   contra la escena iluminada.
+
+   La diferencia entre encía adherida y mucosa alveolar no es un detalle
+   estético: la unión mucogingival es una referencia clínica, y si las
+   dos bandas se parecen demasiado deja de verse dónde está. */
 const BAND_SHADE = [
-  [1.06, 0.93, 0.92],   // margen: rosa coral, algo más luminoso
-  [1.00, 0.92, 0.91],   // encía adherida: pálida y mate
-  [0.84, 0.64, 0.67],   // unión mucogingival
-  [0.62, 0.39, 0.43],   // mucosa alveolar: más roja y oscura
+  [1.03, 1.00, 0.99],   // margen libre: más pálido y rosado que la adherida
+  [1.00, 0.92, 0.91],   // encía adherida: queda como estaba (referencia)
+  [0.94, 0.80, 0.82],   // unión mucogingival: transición
+  [0.89, 0.67, 0.69],   // mucosa alveolar: más roja, pero mucosa, no granate
 ];
 
 const SUB = 2;          // subdivisiones por tramo del perfil
