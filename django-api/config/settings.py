@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "apps.billing",
     "apps.inventory",
     "apps.whatsapp",
+    "apps.app_paciente",
     "apps.configuration",
 ]
 

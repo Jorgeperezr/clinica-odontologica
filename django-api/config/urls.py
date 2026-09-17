@@ -18,6 +18,8 @@ urlpatterns = [
     path("api/v1/", include("apps.inventory.urls")),
     path("api/v1/", include("apps.configuration.urls")),
     path("api/v1/", include("apps.whatsapp.urls")),
+    # App móvil del paciente — RF-APP-03, 04, 06
+    path("api/v1/", include("apps.app_paciente.urls")),
     path("internal/", include("apps.whatsapp.internal_urls")),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(

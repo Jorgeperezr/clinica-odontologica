@@ -54,7 +54,7 @@ python manage.py test --settings=config.settings_test
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 267 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 281 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 88 — colores del odontograma según la guía VITA
+## Estado actual: Sprint 89 — la API de la app del paciente
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1709,6 +1709,49 @@ lienzo.
 SwiftShader, que además de no antialiasar igual **siempre** dispara esa
 desactivación. Lo que se ha tocado son números —matices, proporciones
 entre bandas— que no dependen del renderizador.
+
+### Sprint 89 — La app móvil no tenía nada que consumir (hecho)
+
+Primer paso del desarrollo de la aplicación del paciente, y no es
+Flutter: es la API que la app necesita, que **no existía**.
+
+Auditado endpoint por endpoint: el rol `patient` existe, el login por OTP
+de WhatsApp funciona, el registro de token para notificaciones está
+hecho y la historia clínica tiene marcas `visible_to_patient`… pero
+**ningún endpoint de la API admitía ese rol**. Un paciente autenticado no
+podía pedir ni una cita.
+
+| pieza | estado antes |
+|---|---|
+| Login del paciente por OTP | ✅ existía |
+| Registro de token push | ✅ existía |
+| Marcas `visible_to_patient` | ✅ existían |
+| Sus citas, su saldo, sus recetas | ❌ **ningún endpoint** |
+
+Se añade `/api/v1/app/` con cuatro vistas: perfil y resumen, citas,
+saldo con el vencimiento de cada cuota, y recetas e indicaciones de
+cuidado. Es lo que describen RF-APP-03, 04 y 06.
+
+**La regla que gobierna todo esto: el paciente nunca elige de quién son
+los datos.** No hay un identificador de paciente en ninguna ruta ni en
+ninguna consulta; la ficha sale del token. Hay una prueba que manda
+`?patient=`, `?paciente=`, `?patient_id=` e `?id=` con el identificador
+de otro paciente y comprueba que no cambia nada.
+
+**Lo que NO se expone, también a propósito**: notas clínicas internas, el
+odontograma, los costes internos, las notas de una cita. La app es una
+ventana para que el paciente se organice, no una copia de su historia.
+El filtro de indicaciones es una **lista blanca de tipos**, no una
+exclusión: si mañana alguien marca por error una nota clínica como
+visible, la app no la publica. Hay prueba de eso.
+
+Y un paciente cuya cuenta no está enlazada con su ficha recibe una
+explicación, no una lista vacía: decirle «no tienes citas» sería mentirle
+—no es que no tenga, es que no lo estamos encontrando—.
+
+**Lo que queda para tu máquina:** la app Flutter en sí. Necesita emulador
+con aceleración gráfica, que aquí no hay. Pero ya tiene contra qué
+hablar.
 
 ## Desarrollo en GitHub Codespaces
 
