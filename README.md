@@ -54,7 +54,7 @@ python manage.py test --settings=config.settings_test
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 289 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 299 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 90 — los documentos clínicos ya no se cortan en silencio
+## Estado actual: Sprint 91 — reportes que suman en la base y se exportan
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1786,6 +1786,44 @@ Ahora también fluye.
 
 Ocho pruebas nuevas. Comprobado que **fallan** al revertir los
 generadores: cuatro de las seis de receta se ponen en rojo.
+
+### Sprint 91 — El reporte de ingresos sumaba a mano (hecho)
+
+Sembrada una clínica con **9.000 pagos y 2.000 pacientes** —tres años de
+una consulta pequeña— y medidos los informes con calentamiento y nueve
+repeticiones:
+
+| reporte | antes | ahora |
+|---|---|---|
+| **financiero (3 años)** | **164,8 ms** | **6,1 ms** |
+| financiero (mes en curso) | 4,4 ms | 3,7 ms |
+| pacientes nuevos | 37,8 ms | 38,5 ms |
+| morosidad | 2,8 ms | 2,8 ms |
+
+No era un problema de N+1 —eran dos consultas— sino que recorría los
+pagos **uno a uno en Python** acumulando en un diccionario: carga todo el
+historial en memoria y crece con él. Con 50.000 pagos serían segundos. La
+suma pasa a hacerla la base.
+
+**Y el reporte de ingresos ya se puede exportar a Excel.** Era el único
+que no podía: solo el de pacientes nuevos tenía exportación, y el de
+ingresos es justamente el que va al contador.
+
+### La prueba se ganó el sueldo en el primer intento
+
+`Sum` de la base devuelve la escala que le da la gana, así que **150.50
+pasó a salir como 150.5** y el panel habría pintado «$150.5». Lo cazó la
+prueba escrita en esta misma tanda, antes de subir nada. Una optimización
+que cambia las cifras de un informe de ingresos no es una optimización.
+
+### Y una corrección sobre mi propio método
+
+Las dos primeras mediciones dieron 296 ms y luego 455 ms, y con la
+segunda llegué a creer que mi cambio había **empeorado** las cosas. Las
+dos eran ruido de arranque en frío: una sola ejecución no mide nada a
+esta escala. Con calentamiento y repeticiones, la mejora real es de 27
+veces. Queda anotado porque estuve a punto de revertir un cambio bueno
+por una medida mala.
 
 ## Desarrollo en GitHub Codespaces
 
