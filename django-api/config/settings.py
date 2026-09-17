@@ -153,6 +153,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # La lista de Django está en inglés y este sistema se usa en español:
+    # `contrasena12` la pasa entera. Ver apps/accounts/password_validation.py.
+    {"NAME": "apps.accounts.password_validation.ContrasenaComunEnEspanolValidator"},
 ]
 
 # --------------------------------------------------------------------------

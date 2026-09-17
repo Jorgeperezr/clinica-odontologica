@@ -75,6 +75,11 @@ class ClinicSerializer(serializers.ModelSerializer):
         return {
             "id": str(admin.id), "email": admin.email,
             "full_name": admin.full_name, "is_active": admin.is_active,
+            # Se expone para que el panel distinga «le entregué las
+            # credenciales» de «la clínica ya tomó posesión de su cuenta».
+            # Sin esto, una clínica que nunca entró se ve igual que una que
+            # lleva meses trabajando.
+            "must_change_password": admin.must_change_password,
         }
 
     def validate_name(self, value):

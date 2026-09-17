@@ -108,7 +108,65 @@ export async function api(path, options = {}) {
     window.location.href = "/login/";
     throw new Error("Sesión expirada.");
   }
+  if (resp.status === 403 && (await esCambioDeContrasenaPendiente(resp))) {
+    window.location.href = RUTA_CAMBIO;
+    throw new Error("Debes elegir tu propia contraseña antes de usar el sistema.");
+  }
   return resp;
+}
+
+export const RUTA_CAMBIO = "/cambiar-contrasena/";
+
+/**
+ * ¿Este 403 es «cambia la contraseña» y no «no tienes permiso»?
+ *
+ * Hace falta porque el candado del backend responde a CUALQUIER ruta
+ * mientras la contraseña siga siendo la que puso otro. Sin esto, quien
+ * recibe unas credenciales recién entregadas entra al panel y ve todas
+ * las pantallas fallando a la vez con un mensaje que no puede obedecer:
+ * no hay ningún sitio al que ir a cambiarla. El bloqueo dejaría la
+ * cuenta inservible en vez de llevarla al único sitio donde puede
+ * desbloquearse ella sola.
+ *
+ * Se clona la respuesta porque leer el cuerpo lo consume, y quien llamó
+ * a `api()` todavía va a querer leerlo.
+ */
+async function esCambioDeContrasenaPendiente(resp) {
+  if (typeof window === "undefined") return false;
+  if (window.location.pathname.startsWith(RUTA_CAMBIO)) return false;  // ya está allí
+  try {
+    const data = await resp.clone().json();
+    return data?.error?.code === "password_change_required";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Elegir la propia contraseña. `actual` va vacía cuando la que hay es
+ * temporal: quien la puso no fue el usuario, así que pedírsela sería
+ * pedirle que repita el secreto de otro.
+ */
+export async function cambiarContrasena(actual, nueva) {
+  const resp = await fetch(`${apiBase()}/api/v1/auth/change-password/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {}),
+    },
+    body: JSON.stringify({
+      ...(actual ? { current_password: actual } : {}),
+      new_password: nueva,
+    }),
+  });
+  if (!resp.ok) throw new Error(await apiErrorMessage(resp));
+  // El perfil guardado traía `must_change_password: true`; si se queda
+  // así, el panel seguiría mandando a cambiarla nada más entrar.
+  const usuario = currentUser();
+  if (usuario) {
+    localStorage.setItem("user", JSON.stringify({ ...usuario, must_change_password: false }));
+  }
+  return resp.json().catch(() => ({}));
 }
 
 
