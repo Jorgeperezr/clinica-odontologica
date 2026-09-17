@@ -24,6 +24,9 @@ class StaffLoginSerializer(TokenObtainPairSerializer):
         if not self.user.is_active:
             raise serializers.ValidationError("Este usuario está desactivado.")
         data["role"] = self.user.role
+        # El panel necesita saberlo nada más entrar para llevar a la
+        # pantalla de cambio en vez de al escritorio.
+        data["must_change_password"] = self.user.must_change_password
         return data
 
 

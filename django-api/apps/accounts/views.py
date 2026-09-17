@@ -324,4 +324,5 @@ class MeView(APIView):
             "email": u.email,
             "full_name": u.full_name,
             "role": u.role,
+            "must_change_password": u.must_change_password,
         })

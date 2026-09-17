@@ -86,6 +86,23 @@ class ClinicSerializer(serializers.ModelSerializer):
         return value.strip()
 
 
+def _credencial_temporal(usuario):
+    """
+    Genera la contraseña, la deja puesta y la devuelve UNA vez.
+
+    Nadie la inventa y nadie la guarda en claro. Y se marca la cuenta
+    como pendiente de cambio: mientras no elija la suya, lo único que
+    puede hacer es elegirla. Sin esa marca, la contraseña que entrega el
+    dueño de la plataforma sigue siendo válida para siempre y él la
+    conoce, con lo que «entregar las credenciales» no entrega nada.
+    """
+    temporal = secrets.token_urlsafe(12)
+    usuario.set_password(temporal)
+    usuario.must_change_password = True
+    usuario.save()
+    return temporal
+
+
 class ClinicListCreateView(generics.ListCreateAPIView):
     serializer_class = ClinicSerializer
     permission_classes = [IS_SUPERADMIN]
@@ -103,6 +120,50 @@ class ClinicListCreateView(generics.ListCreateAPIView):
         call_command("bootstrap", tenant_name=tenant.name)
         _audit_platform(self.request, "create_clinic", "Tenant", tenant.id,
                         {"name": tenant.name})
+        self._alta_del_administrador(tenant)
+
+    def _alta_del_administrador(self, tenant):
+        """
+        Si el alta trae los datos del administrador, se crea aquí mismo.
+
+        Dar de alta una clínica eran TRES actos en dos pestañas: crear la
+        clínica, ir a «Administradores» a crear su admin inventándole una
+        contraseña, y restablecerla para obtener una generada. Son tres
+        pasos para un solo acto, y el del medio pedía a una persona que se
+        inventara un secreto, que es como se acaban poniendo contraseñas
+        como «clinica2026».
+
+        Sigue siendo opcional: quien prefiera crear la clínica ahora y su
+        administrador más tarde puede hacerlo como siempre.
+        """
+        email = str(self.request.data.get("admin_email", "")).strip()
+        full_name = str(self.request.data.get("admin_full_name", "")).strip()
+        if not email:
+            return
+        if User.objects.filter(email__iexact=email).exists():
+            # La clínica ya está creada: no se deshace, se avisa. Cancelar
+            # el alta entera por un correo repetido sería peor.
+            self._credenciales = {"error": "Ya existe un usuario con ese correo."}
+            return
+        admin = User(tenant=tenant, email=email,
+                     full_name=full_name or email, role=User.Role.ADMIN)
+        temporal = _credencial_temporal(admin)
+        _audit_platform(self.request, "create_clinic_admin", "User", admin.id,
+                        {"email": admin.email, "clinic": tenant.name})
+        self._credenciales = {
+            "email": admin.email,
+            "temporary_password": temporal,
+            "note": ("Entregar por un canal seguro. No se puede volver a "
+                     "consultar: al ingresar, la clínica deberá elegir su "
+                     "propia contraseña."),
+        }
+
+    def create(self, request, *args, **kwargs):
+        self._credenciales = None
+        respuesta = super().create(request, *args, **kwargs)
+        if self._credenciales:
+            respuesta.data["admin"] = self._credenciales
+        return respuesta
 
 
 class ClinicDetailView(generics.RetrieveUpdateAPIView):
@@ -160,20 +221,29 @@ class ClinicAdminView(APIView):
             )
         email = str(request.data.get("email", "")).strip()
         full_name = str(request.data.get("full_name", "")).strip()
-        password = str(request.data.get("password", ""))
-        if not email or not full_name or len(password) < 10:
+        if not email or not full_name:
             return Response(
-                {"detail": "email, full_name y password (10+ caracteres) son obligatorios."},
-                status=400,
+                {"detail": "email y full_name son obligatorios."}, status=400,
             )
         if User.objects.filter(email__iexact=email).exists():
             return Response({"detail": "Ya existe un usuario con ese correo."}, status=400)
         user = User(tenant=tenant, email=email, full_name=full_name, role=User.Role.ADMIN)
-        user.set_password(password)
-        user.save()
+        # La contraseña la genera el sistema y se muestra una vez. Antes se
+        # exigía que el Super Administrador escribiera una de 10+
+        # caracteres: pedirle a una persona que invente un secreto para
+        # otra es como se acaban poniendo contraseñas como «clinica2026»,
+        # y además se la queda quien la inventó.
+        temporal = _credencial_temporal(user)
         _audit_platform(request, "create_clinic_admin", "User", user.id,
                         {"email": user.email, "clinic": tenant.name})
-        return Response({"id": str(user.id), "email": user.email}, status=201)
+        return Response({
+            "id": str(user.id),
+            "email": user.email,
+            "temporary_password": temporal,
+            "note": ("Entregar por un canal seguro. No se puede volver a "
+                     "consultar: al ingresar, deberá elegir su propia "
+                     "contraseña."),
+        }, status=201)
 
     def patch(self, request, pk):
         tenant = self._tenant(pk)
@@ -222,15 +292,15 @@ class ClinicAdminResetPasswordView(APIView):
         if not admin:
             return Response({"detail": "La clínica no tiene administrador."}, status=404)
 
-        temp_password = secrets.token_urlsafe(12)
-        admin.set_password(temp_password)
-        admin.save(update_fields=["password"])
+        temp_password = _credencial_temporal(admin)
         _audit_platform(request, "reset_clinic_admin_password", "User", admin.id,
                         {"clinic": tenant.name, "email": admin.email})
         return Response({
             "email": admin.email,
             "temporary_password": temp_password,
-            "note": "Entregar por un canal seguro. No se puede volver a consultar.",
+            "note": ("Entregar por un canal seguro. No se puede volver a "
+                     "consultar: al ingresar, deberá elegir su propia "
+                     "contraseña."),
         })
 
 
