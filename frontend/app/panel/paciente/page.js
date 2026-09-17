@@ -77,7 +77,17 @@ function PatientDetail() {
       <PatientAgreement patient={patient} canEdit={role === "admin" || role === "reception"}
                         onChanged={(p) => setPatient(p)} />
 
-      <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
+      {/* Las siete pestañas no caben a lo ancho de una tableta: medido,
+          a 1024 px la última llegaba a 1189 y arrastraba a TODA la página
+          a un scroll horizontal, así que el contenido de abajo también se
+          salía. Se deja que la tira se desplace sola, que es lo que hace
+          cualquier barra de pestañas en pantalla estrecha, y se le quita
+          a los botones la posibilidad de encogerse: partir «Plan de
+          tratamiento» en dos líneas es peor que deslizar. */}
+      <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px",
+                                     borderBottom: "1px solid var(--line)",
+                                     overflowX: "auto", scrollbarWidth: "thin",
+                                     WebkitOverflowScrolling: "touch" }}>
         {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"],
@@ -86,7 +96,7 @@ function PatientDetail() {
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
-              fontWeight: 600, fontSize: 14,
+              fontWeight: 600, fontSize: 14, flexShrink: 0, whiteSpace: "nowrap",
               color: tab === key ? "var(--petrol)" : "var(--ink-soft)",
               borderBottom: tab === key ? "3px solid var(--petrol)" : "3px solid transparent",
             }}>

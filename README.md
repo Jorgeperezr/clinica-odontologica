@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 86 — ningún fallo se traga sin decir por qué
+## Estado actual: Sprint 87 — el odontograma 3D cabe en tableta y teléfono
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1602,6 +1602,52 @@ formato por defecto de `logging` y descarta todo lo que va en `extra`,
 que es justo donde están los identificadores. La prueba pasa cada
 registro por el formateador de producción —el mismo ayudante del Sprint
 75— y así comprueba lo que de verdad se escribiría.
+
+### Sprint 87 — El odontograma 3D no cabía en una tableta (hecho)
+
+Medido con un navegador de verdad emulando cada tamaño, no supuesto: el
+lienzo se quedaba en **1146×460 en todos los casos** —escritorio, tableta
+apaisada, tableta vertical y teléfono—. En una tableta de 1024 px eso
+significa que el arco es más ancho que la pantalla y **toda la página se
+va a un scroll horizontal**.
+
+| | antes | ahora |
+|---|---|---|
+| escritorio 1500 px | 1146×460 | 1146×481 |
+| tableta apaisada 1024 px | 1146×460 · desborde a 1420 | 689×320 · **sin desborde** |
+| tableta vertical 820 px | 1146×460 · desborde a 1190 | 725×320 · **sin desborde** |
+| teléfono 390 px | 1146×460 | 326×320 · **sin desborde** |
+
+**Era un bloqueo mutuo.** three.js le pone al `<canvas>` un tamaño en
+píxeles; la columna de la rejilla era `1fr`, cuyo mínimo es el contenido,
+así que el contenedor no podía encoger por debajo del lienzo; y el
+manejador de redimensionado leía el ancho de ese contenedor, que por eso
+nunca cambiaba. La columna pasa a `minmax(0,1fr)` y el ciclo se rompe.
+
+Además, el redimensionado solo escuchaba a `window.resize`, que **no se
+entera cuando lo que cambia es el contenedor**: plegar la barra lateral o
+abrir el panel de la pieza dejaban el lienzo con el tamaño anterior. Ahora
+lo observa un `ResizeObserver`.
+
+**El encuadre se corrige con la proporción.** La distancia de cámara
+pensada para una franja apaisada deja los molares fuera en un lienzo
+estrecho: el profesional veía el centro de la boca y tenía que arrastrar
+para llegar a los extremos. Ahora la distancia mínima depende de la
+relación de aspecto. Y el alto sale del ancho en vez de ser 460 fijo.
+
+**La barra de pestañas de la ficha también se salía.** Sus siete pestañas
+llegaban a 1189 px en una tableta de 1024 y arrastraban a la página
+entera. Ahora la tira se desplaza sola, como cualquier barra de pestañas
+en pantalla estrecha.
+
+**Lo que NO se ha tocado, y por qué.** Las capturas se hacen aquí con
+SwiftShader —WebGL por software—, que no antialía igual que una tarjeta
+gráfica. Los bordes dentados que se ven en ellas son del renderizador de
+pruebas, no de la aplicación: `antialias` ya estaba activado. Cambiar
+materiales o iluminación a partir de esas imágenes sería afinar a ciegas.
+Lo que sí es independiente del renderizador —cuántos píxeles mide el
+lienzo, si el arco cabe en el encuadre, si la página se desborda— es
+justo lo que se ha corregido.
 
 ## Desarrollo en GitHub Codespaces
 

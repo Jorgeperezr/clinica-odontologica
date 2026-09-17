@@ -141,8 +141,30 @@ export default function Odontogram3D({
       if (cancelled || !mountRef.current) return;
 
       const mount = mountRef.current;
-      const width = mount.clientWidth || 800;
-      const height = 460;
+
+      /* ── Tamaño del lienzo ──
+         El alto era 460 fijo. En una pantalla ancha eso deja una franja
+         apaisada con las arcadas pequeñas en el centro, y en una tableta
+         vertical o un teléfono el arco no cabe a lo ancho y se sale.
+         Se deriva del ancho para conservar una proporción legible, con
+         topes para que ni se aplaste ni se coma la pantalla entera. */
+      function medidas() {
+        const w = Math.max(260, mount.clientWidth || 800);
+        const h = Math.round(Math.min(560, Math.max(320, w * 0.42)));
+        return { w, h };
+      }
+      let { w: width, h: height } = medidas();
+
+      /* Cuánto hay que alejarse para que el arco quepa a lo ancho. Con
+         un lienzo estrecho, la distancia pensada para escritorio deja las
+         piezas de los extremos fuera del encuadre: el profesional ve el
+         centro de la boca y tiene que arrastrar para llegar a los
+         molares. Se corrige por la relación de aspecto, no por el ancho
+         en píxeles, que es lo que de verdad determina el recorte. */
+      const ASPECTO_COMODO = 2.2;
+      function distanciaMinima(aspect) {
+        return aspect >= ASPECTO_COMODO ? 11 : 11 * (ASPECTO_COMODO / Math.max(0.6, aspect));
+      }
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 200);
@@ -501,7 +523,11 @@ export default function Odontogram3D({
 
       /* ── Órbita, zoom y desplazamiento (implementación propia, para no
          depender de complementos externos al paquete) ── */
-      const state = { rotX: 0.30, rotY: 0, dist: 13.5, panX: 0, panY: 0 };
+      const state = {
+        rotX: 0.30, rotY: 0,
+        dist: Math.max(13.5, distanciaMinima(width / height)),
+        panX: 0, panY: 0,
+      };
       let dragging = null, lastX = 0, lastY = 0;
 
       const el = renderer.domElement;
@@ -630,14 +656,40 @@ export default function Odontogram3D({
       }
       loop();
 
+      /* Antes esto solo escuchaba a `window.resize` y solo cambiaba el
+         ancho. Dos problemas, los dos comprobados con el navegador
+         emulando una tableta:
+
+         · `window.resize` no se dispara cuando lo que cambia es el
+           CONTENEDOR y no la ventana: plegar la barra lateral, abrir el
+           panel lateral de la pieza o cambiar de pestaña dejaban el
+           lienzo con el tamaño anterior. `ResizeObserver` observa lo que
+           de verdad importa.
+         · Había un bloqueo mutuo. three.js le pone al `<canvas>` un
+           tamaño en píxeles, y como la columna de la rejilla era `1fr`
+           —cuyo mínimo es el contenido— el contenedor no podía encoger
+           por debajo del lienzo; el manejador leía siempre el mismo
+           ancho y no ajustaba nada. Medido: 1146×460 en escritorio, en
+           tableta apaisada, en tableta vertical y en un teléfono, con el
+           panel desbordándose a 1420 px de scroll. La columna pasa a
+           `minmax(0,1fr)` y con eso el contenedor ya puede encoger. */
+      let ultimoAncho = 0, ultimoAlto = 0;
       const onResize = () => {
-        const w = mount.clientWidth || 800;
-        camera.aspect = w / height;
+        const { w, h } = medidas();
+        if (w === ultimoAncho && h === ultimoAlto) return;
+        ultimoAncho = w; ultimoAlto = h;
+        mount.style.height = `${h}px`;
+        camera.aspect = w / h;
         camera.updateProjectionMatrix();
-        renderer.setSize(w, height);
-        composer?.setSize(w, height);
-        gtao?.setSize(w, height);
+        renderer.setSize(w, h);
+        composer?.setSize(w, h);
+        gtao?.setSize(w, h);
+        // Que no se queden los molares fuera al estrecharse el lienzo.
+        state.dist = Math.max(state.dist, distanciaMinima(w / h));
       };
+      onResize();
+      const observador = new ResizeObserver(onResize);
+      observador.observe(mount);
       window.addEventListener("resize", onResize);
 
       applyTheme();
@@ -647,6 +699,7 @@ export default function Odontogram3D({
       cleanup = () => {
         cancelAnimationFrame(raf);
         themeObserver.disconnect();
+        observador.disconnect();
         window.removeEventListener("resize", onResize);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
@@ -808,11 +861,18 @@ export default function Odontogram3D({
       </div>
 
       <div style={{ display: "grid", gap: 14,
-                    gridTemplateColumns: selectedTooth ? "minmax(0,1fr) 300px" : "1fr" }}>
+                    /* `minmax(0,1fr)` también sin selección: con `1fr` a
+                       secas el mínimo de la columna es su contenido, y el
+                       lienzo con tamaño en píxeles impedía encoger al
+                       contenedor. Ahí estaba el desbordamiento en tableta. */
+                    gridTemplateColumns: selectedTooth ? "minmax(0,1fr) minmax(0,300px)" : "minmax(0,1fr)" }}>
         {/* Lienzo 3D */}
         <div>
           <div ref={mountRef}
-               style={{ width: "100%", height: 460, borderRadius: "var(--radius)",
+               /* El alto lo ajusta el motor con el ancho real (ver
+                  `medidas`); este es solo el valor de partida mientras
+                  carga. */
+               style={{ width: "100%", height: 460, minWidth: 0, borderRadius: "var(--radius)",
                         overflow: "hidden", background: "var(--paper)",
                         border: "1px solid var(--line)", position: "relative" }}>
             {!ready && !error && (
