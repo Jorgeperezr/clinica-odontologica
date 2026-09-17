@@ -54,7 +54,7 @@ python manage.py test --settings=config.settings_test
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 281 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 289 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -95,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 89 — la API de la app del paciente
+## Estado actual: Sprint 90 — los documentos clínicos ya no se cortan en silencio
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1752,6 +1752,40 @@ explicación, no una lista vacía: decirle «no tienes citas» sería mentirle
 **Lo que queda para tu máquina:** la app Flutter en sí. Necesita emulador
 con aceleración gráfica, que aquí no hay. Pero ya tiene contra qué
 hablar.
+
+### Sprint 90 — Una receta de seis fármacos imprimía dos (hecho)
+
+Encontrado instrumentando el lienzo de dibujo y contando qué llegaba al
+papel. El cuerpo de la receta hacía `break` al llegar al pie de página:
+
+| receta de | se imprimían | se perdían |
+|---|---|---|
+| 6 fármacos con su posología | **2** | **4** |
+
+Y el daño no es que falte información: es que **no se nota que falta**.
+La hoja salía con su firma, su pie y su código de verificación, con todo
+el aspecto de estar completa. El odontólogo la entrega, el paciente
+compra dos medicamentos de seis y nadie se entera hasta que el
+tratamiento no funciona.
+
+La receta pasa a fluir a las hojas que necesite, con el mismo modismo que
+el PDF de consentimiento ya usaba. Las hojas van numeradas —«Página 1 de
+2»— porque entregar la primera y quedarse la segunda hace el mismo daño
+que el corte, y la continuación se anuncia para que quien reciba la
+segunda sepa de qué es. La firma y el código van siempre en la última.
+
+Medido después: **cero líneas perdidas** con 1, 2, 4, 6 y 12 fármacos; una
+receta corriente de uno o dos sigue cabiendo en una hoja de talonario; y
+la generación cuesta entre 3 y 7 ms con las dos pasadas incluidas.
+
+**La orden de exámenes tenía el mismo fallo con otra forma.** Su
+`paragraph` no comprobaba ningún suelo: seguía bajando la coordenada y
+escribía por debajo del papel. Medido: con 3808 caracteres de
+justificación se perdían **7 líneas**, y con 7616 se perdían **42**.
+Ahora también fluye.
+
+Ocho pruebas nuevas. Comprobado que **fallan** al revertir los
+generadores: cuatro de las seis de receta se ponen en rojo.
 
 ## Desarrollo en GitHub Codespaces
 
