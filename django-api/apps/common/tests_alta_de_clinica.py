@@ -19,6 +19,7 @@ Dos cosas estaban mal, y la segunda importa más:
 Lo que se fija aquí es que la entrega sea una entrega.
 """
 
+from django.core.cache import cache
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
@@ -104,6 +105,11 @@ class LaEntregaDeCredencialesEsDeVerdadTests(APITestCase):
     TEMPORAL = "temporal-de-fabrica-123"
 
     def setUp(self):
+        # Cada `entrar()` es una petición ANÓNIMA y el cupo de anónimo
+        # (20/min por IP) vive en la caché y sobrevive entre pruebas.
+        # Sin esto, esta clase deja el cupo gastado para lo que corra
+        # después, y el 429 aparece en OTRO archivo.
+        cache.clear()
         self.tenant = Tenant.objects.create(name="Clínica Entrega", ruc="1790000092020")
         self.admin = User.objects.create_user(
             email="admin@entrega.ec", password=self.TEMPORAL,

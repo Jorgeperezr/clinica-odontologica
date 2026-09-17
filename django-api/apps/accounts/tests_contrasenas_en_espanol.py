@@ -7,6 +7,7 @@ queja, porque la lista de contraseñas comunes de Django está en inglés.
 """
 
 from django.contrib.auth.password_validation import validate_password
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
@@ -66,6 +67,11 @@ class AlElegirLaSuyaTampocoValeUnaComunTests(APITestCase):
     """Lo mismo, pero por donde pasa de verdad: el cambio obligatorio."""
 
     def setUp(self):
+        # Cada `entrar()` es una petición ANÓNIMA y el cupo de anónimo
+        # (20/min por IP) vive en la caché y sobrevive entre pruebas.
+        # Sin esto, esta clase deja el cupo gastado para lo que corra
+        # después, y el 429 aparece en OTRO archivo.
+        cache.clear()
         tenant = Tenant.objects.create(name="Clínica Español", ruc="1790000092040")
         self.admin = User.objects.create_user(
             email="admin@espanol.ec", password="temporal-de-fabrica-123",

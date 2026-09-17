@@ -105,3 +105,48 @@ class ElLoginSigueProtegidoTests(APITestCase):
             bloqueado,
             "se pudieron probar 40 contraseñas seguidas sin que nadie lo cortara",
         )
+
+
+class LasSondasNoGastanCupoTests(APITestCase):
+    """
+    Un balanceador sondea `/ready/` cada diez segundos desde una sola IP.
+
+    Si esa sonda comparte el cupo de anónimo con el resto del tráfico sin
+    autenticar, tarde o temprano recibe un 429 —y un 429 no es «estoy
+    sano»: el balanceador saca de rotación un servidor que está
+    perfectamente bien. Es exactamente el desastre que `ready` existe
+    para evitar.
+
+    Salió del CI: la suite entera corre en once segundos, así que todas
+    las peticiones anónimas de todas las pruebas caen en la misma ventana
+    de un minuto, y las dos pruebas de las sondas se quedaban sin cupo.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        # Esta prueba AGOTA el cupo de anónimo a propósito. Si no lo
+        # devuelve, se lo deja gastado a lo que corra después y el 429
+        # reaparece en otro archivo —pasó con el webhook de WhatsApp—.
+        cache.clear()
+
+    def test_gastar_el_cupo_de_anonimo_no_tumba_las_sondas(self):
+        # Se agota el cupo de anónimo (20/min) a base de intentos de
+        # login, que es tráfico anónimo del mundo real.
+        agotado = False
+        for _ in range(30):
+            resp = self.client.post("/api/v1/auth/login/",
+                                    {"email": "nadie@x.ec", "password": "x"}, format="json")
+            if resp.status_code == 429:
+                agotado = True
+                break
+        self.assertTrue(agotado, "el cupo de anónimo no se agotó; la prueba no comprueba nada")
+
+        # Con el cupo agotado, las sondas TIENEN que seguir respondiendo.
+        for ruta in ("/api/v1/health/", "/api/v1/ready/"):
+            resp = self.client.get(ruta)
+            self.assertNotEqual(resp.status_code, 429,
+                                f"{ruta} devolvió 429: el balanceador sacaría de rotación "
+                                "un servidor sano")
+            self.assertEqual(resp.status_code, 200, ruta)

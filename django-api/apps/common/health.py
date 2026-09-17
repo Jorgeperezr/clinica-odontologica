@@ -46,6 +46,7 @@ class HealthView(APIView):
 
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = []   # ver la nota de ReadyView
 
     def get(self, request):
         return Response({"status": "ok"})
@@ -56,10 +57,26 @@ class ReadyView(APIView):
     GET /api/v1/ready/ — el servicio puede atender: la base de datos
     responde. Devuelve 503 cuando no, que es lo que un balanceador
     entiende como «no me mandes tráfico».
+
+    **Sin límite de peticiones**, y no por comodidad. Estas dos rutas son
+    anónimas, así que caían en el cupo de anónimo (20/min por IP), el
+    mismo que comparte todo el tráfico sin autenticar. Un balanceador
+    sondea cada diez segundos desde una sola IP: basta con que coincida
+    con cualquier otra cosa anónima para agotarlo, y entonces la sonda
+    recibe un 429. Un 429 no es «estoy sano»: el balanceador saca de
+    rotación un servidor que estaba perfectamente bien, que es justo el
+    desastre que esta ruta existe para evitar. No hay nada que proteger
+    aquí —`health` no consulta nada y `ready` hace un SELECT 1—, mientras
+    que quien sí necesita el cupo de anónimo es el login.
+
+    Apareció en el CI: la suite entera corre en once segundos, así que
+    todas las peticiones anónimas de todas las pruebas caen dentro de la
+    misma ventana de un minuto y estas dos se quedaban sin cupo.
     """
 
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = []
 
     def get(self, request):
         try:
