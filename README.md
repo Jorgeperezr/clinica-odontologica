@@ -1,14 +1,60 @@
 # Sistema de Gestión — Clínica Odontológica
 
+## Primeros pasos en una máquina nueva
+
+```bash
+git clone https://github.com/Jorgeperezr/clinica-odontologica.git
+cd clinica-odontologica
+bash scripts/comprobar-entorno.sh
+```
+
+`comprobar-entorno.sh` no instala ni arranca nada: mira qué hay en la
+máquina —openssl, PostgreSQL, Python, Node, puertos ocupados— y, para
+cada cosa que falte, dice qué hacer. Conviene pasarlo antes que nada
+porque varios fallos del arranque se explican fatal por sí solos: en
+macOS, por ejemplo, `openssl` es en realidad LibreSSL y su `enc` puede
+no aceptar `-pbkdf2`, con lo que las copias de seguridad hechas en ese
+Mac no podrían descifrar las hechas en el servidor. Eso se descubriría
+el día de restaurar.
+
+Con la revisión en verde:
+
+```bash
+bash scripts/start-local.sh
+```
+
+Levanta PostgreSQL, Django en `:8000` y Next.js en `:3000`, en Linux y en
+macOS. En la primera pasada crea `.venv` con un intérprete que Django 5.0
+soporte —busca 3.12, 3.11 y 3.10 por ese orden, **no** usa el `python3` de
+por defecto— e instala las dependencias; en las siguientes se las salta.
+Es idempotente. Para parar los servidores sin tocar la base:
+
+```bash
+bash scripts/start-local.sh --stop
+```
+
+Y en el navegador **http://localhost:3000** — con `localhost`, no con
+`127.0.0.1`: para CORS son orígenes distintos y solo el primero está
+permitido, así que desde `127.0.0.1` el login falla sin decir por qué.
+
+> Los comandos de este README no llevan comentarios con `?` ni `*` al
+> final de la línea. En zsh —la consola por defecto de macOS— esos
+> caracteres se expanden como comodines y la línea entera se aborta con
+> `zsh: no matches found`, sin llegar a ejecutar el comando.
+
 ## Cómo correr los tests (comando canónico)
 
 ```bash
+# Con Docker:
 docker compose exec django-api python manage.py test --settings=config.settings_test
+
+# Sin Docker, desde django-api/:
+python manage.py test --settings=config.settings_test
 ```
 
 Descubrimiento automático de TODOS los tests — el mismo comando que ejecuta
 el CI, de modo que el número local y el de GitHub Actions siempre coinciden.
-**Referencia actual: 170 tests** (si agregas tests, actualiza este número en
+**Referencia actual: 299 tests** (si agregas tests, actualiza este número en
 el mismo commit para que sirva de verificación rápida).
 
 
@@ -49,7 +95,7 @@ Si aun así la base queda vacía (por ejemplo al recrear el Codespace desde
 cero), `scripts/start-codespace.sh` lo detecta y crea la clínica y los
 usuarios de desarrollo automáticamente.
 
-## Estado actual: Sprint 62 — CI reproducible (linter con versión fija)
+## Estado actual: Sprint 91 — reportes que suman en la base y se exportan
 
 ### Sprint 0 — Fundamentos técnicos (hecho)
 
@@ -1034,6 +1080,750 @@ a todo el diente y no solo a la mesa.
 **Coste:** 16 piezas pasan de 16 930 a 21 394 vértices (+26 %) y de 65 a
 104 ms de generación. El instrumento de medida queda documentado en el
 propio módulo para que el siguiente intento no vuelva a ser a ojo.
+
+### Sprint 69 — El gateway de WhatsApp deja de ir sin red (hecho)
+
+Era el único servicio sin una sola prueba, y es el que da la cara a
+internet: recibe el webhook de Meta, valida su firma y traduce su formato
+al que entiende Django. Un fallo ahí no se ve en el panel; se ve como
+recordatorios que no llegan y confirmaciones de cita que se pierden.
+
+**30 pruebas**, por orden de importancia:
+
+- **Firma del webhook**, que es lo único que separa un evento de Meta de
+  uno inventado por cualquiera que descubra la URL pública. Se cubre la
+  firma válida, la ausente, la incorrecta y —la que de verdad importa— una
+  firma válida reutilizada con otro contenido.
+- **Parseo del formato de Meta**: mensajes de texto, respuestas por botón
+  (que es como se contesta la plantilla de recordatorio), cambios de
+  estado, los dos en el mismo sobre, varios `entry` y `changes`, tipos no
+  textuales (foto, audio, ubicación) y siete formas de sobre vacío o
+  incompleto. Meta omite claves con toda naturalidad y ninguna debe
+  provocar un `KeyError`.
+- **Verificación inicial de la URL** y **token de servicio interno**.
+- **Recorrido completo**, que es donde un bucle mal puesto no da error y
+  simplemente no avisa a nadie.
+
+**Un fallo real encontrado al escribirlas.** `notify_django` absorbe los
+errores de red, pero cualquier otra excepción llegaba hasta el manejador y
+devolvía 500. Meta reintenta ante un 5xx y acaba **desactivando el webhook
+de la cuenta**: perder un evento es malo, quedarse sin webhook es peor.
+Ahora cada evento se procesa aislado; si uno falla se registra y los demás
+siguen, con dos pruebas que lo fijan.
+
+**CI**: el trabajo pasa de llamarse `whatsapp-gateway-lint` a
+`whatsapp-gateway` y ejecuta las pruebas además del lint, con
+`requirements-dev.txt` de versiones fijas por el mismo motivo que el
+linter. También se corrige el aviso de obsolescencia de Pydantic
+(`class Config` → `SettingsConfigDict`), que desaparece en la V3.
+
+### Sprint 70 — Cumpleaños, husos y fechas frontera (hecho)
+
+El análisis daba por vivo el riesgo del «test flaky de medianoche». En vez
+de revisarlo a ojo se ejecutó la suite entera con el reloj movido a fechas
+frontera y con la clínica en varios husos. Apareció más de lo esperado, y
+no en los tests: **tres fallos de producción en las 40 líneas del listado
+de cumpleaños**.
+
+- **Quien nació un 29 de febrero desaparecía tres de cada cuatro años.** La
+  ventana se construye sumando días y salta del 28 de febrero al 1 de
+  marzo, así que el par (2, 29) no aparecía nunca y a ese paciente no se
+  le felicitaba jamás en año no bisiesto. Ahora se le atiende el 28.
+- **La edad salía mal al cruzar el fin de año.** Con la ventana a caballo
+  entre diciembre y enero, los años cumplidos se contaban sobre el año en
+  curso: a un paciente que cumplía 27 el 2 de enero el panel le ponía 26.
+- **Se usaba la fecha del servidor, no la de la clínica.** `date.today()`
+  con el contenedor en UTC y la clínica en Guayaquil (UTC−5) significa que
+  entre medianoche y las 05:00 se listaban los cumpleaños del día
+  siguiente y se perdía el de quien cumplía ese mismo día. Pasa a
+  `timezone.localdate()`.
+
+**Un aviso sobre el método.** El primer barrido dio dos fallos más que
+resultaron ser **artefactos del instrumento**: `libfaketime` congela el
+reloj si no se le pide que avance, y con el reloj parado todos los
+`created_at` salen idénticos y el orden queda indefinido. Se comprobó
+antes de «arreglar» nada; con el reloj en marcha esos dos fallos no
+existen.
+
+También se corrigió un test que mezclaba dos fuentes de fecha —creaba las
+citas con la fecha local y consultaba con la del servidor—, resto de la
+corrección a medias del Sprint 61.
+
+**Para que no vuelva a colarse:** cinco pruebas nuevas fijan estos casos
+con la fecha SIMULADA, de modo que se comprueban en cada ejecución y no un
+día al año; `TIME_ZONE` pasa a ser configurable por entorno (útil además
+para una sede en otro huso); y el CI ejecuta una segunda pasada con la
+clínica en UTC+14, donde la fecha del servidor y la local no coinciden
+nunca. Verificado: 191 tests en verde en nueve fechas frontera y cuatro
+husos.
+
+### Sprint 71 — Los convenios dejan de ser una tabla decorativa (hecho)
+
+Convenios y tarifarios existían en la base desde hacía sprints, pero no los
+usaba nadie: no había pantalla para gestionarlos, el paciente no se podía
+vincular a un convenio y el presupuesto cobraba siempre el precio base del
+catálogo. Una clínica con un convenio empresarial firmado seguía cobrando
+tarifa particular.
+
+Se centraliza la resolución del precio en un único sitio
+(`apps/configuration/pricing.py`) con un orden explícito: precio pactado
+para ese convenio → descuento porcentual del convenio → tarifario general
+→ precio de catálogo. La rejilla de precios se calcula en tres consultas y
+no crece con el número de tratamientos, lo que se fija con un test que
+compara la cuenta con una rejilla diez veces mayor.
+
+De paso se cerraron **dos agujeros de aislamiento entre clínicas**: los
+serializadores de tarifario y convenio aceptaban identificadores de otra
+clínica sin comprobarlos.
+
+### Sprint 72 — Sondas de salud y orden de arranque (hecho)
+
+`docker-compose.prod.yml` no tenía **ninguna** comprobación de salud para
+PostgreSQL, así que en un arranque en frío `migrate` se ejecutaba contra
+una base que aún no aceptaba conexiones. Se añaden sondas (`pg_isready`,
+`redis-cli ping`, y una de la API por `urllib`, porque la imagen no trae
+curl ni wget) y se condiciona el arranque de Celery y nginx a que sus
+dependencias estén sanas de verdad.
+
+Nuevos `/api/v1/health/` (vivo, cero consultas) y `/api/v1/ready/` (listo,
+`SELECT 1`, 503 si la base no responde; el detalle va al registro, no a la
+respuesta).
+
+### Sprint 73 — La pantalla dejaba de existir ante cualquier error de la API (hecho)
+
+Encontrado **usando** la aplicación con un navegador de verdad, no con
+tests ni con `next build`: los dos pasaban. El patrón `const lista = await
+resp.json()` se repetía en 40 sitios, y cuando la API devolvía un error
+—o simplemente un 429 por el límite de peticiones— lo que llegaba no era
+una lista, el `.map()` reventaba y la pestaña se quedaba **en blanco**,
+sin mensaje. Se añaden `readList()`, `readObject()` y `apiErrorMessage()`
+en `frontend/lib/api.js` y se aplican a los sitios afectados.
+
+### Sprint 74 — La fecha que manda es la de la clínica, no la del servidor (hecho)
+
+Continuación del Sprint 70: el mismo fallo estaba en otros diez sitios.
+`timezone.now().date()` da la fecha en UTC; con la clínica en Guayaquil
+(UTC−5) eso significa que **cinco horas de cada día** una cuota que vence
+hoy se contaba como vencida, y que a partir de las 19:00 la agenda del
+día mostraba la de mañana. Todos pasan a `timezone.localdate()`.
+
+### Sprint 75 — En producción, un error 500 no se registraba en ninguna parte (hecho)
+
+Comprobado con un 500 real y `DEBUG=False`: el cliente recibe su error y la
+traza no aparece por ningún lado. No había bloque `LOGGING`, y eso no es
+«el registro por defecto» sino silencio — el único logger que trae Django
+va a consola filtrada por `require_debug_true` y a un correo que necesita
+`ADMINS`, que está vacío.
+
+Se añade registro estructurado en JSON con identificador de correlación por
+petición (viaja en un `ContextVar` y vuelve en la cabecera `X-Request-ID`,
+para que un usuario pueda dar ese código al soporte). Y una regla explícita
+sobre qué se escribe: sí el método, la ruta, el estado, la duración y los
+identificadores; **no** nombres, cédulas, teléfonos ni correos. De la ruta
+se guardan los NOMBRES de los parámetros de consulta, nunca sus valores:
+`/api/v1/patients/?search=Pérez` lleva el apellido de un paciente en la URL.
+
+Durante las pruebas apareció una fuga concreta: el logger `django.request`
+de Django pasa el objeto de petición, y su `repr` contiene la cadena de
+consulta entera.
+
+### Sprint 76 — Una copia que nadie ha restaurado nunca no es una copia (hecho)
+
+`backup.sh` «verificaba» la copia con `gzip -t`, que comprueba que el
+archivo se descomprime y nada más. Se partió un volcado a la mitad a
+propósito: comprimía perfectamente y el guion lo daba por **correcto**.
+
+Ahora se comprueba que el SQL termine donde `pg_dump` lo termina, y se
+añade `verificar-backup.sh`, que restaura la copia de verdad en una base
+desechable, cuenta las filas de las tablas que importan y la destruye al
+salir (una copia con esquema pero sin datos también se restaura sin dar
+error). Los tres guiones funcionan ya **sin Docker**, usando los clientes
+locales, y el `.env` se lee sin evaluarlo: `source <(grep ...)` ejecutaba
+cada línea como un comando, y con una frase de cifrado con espacios
+—que es justo lo que uno escribe como frase— fallaba con un mensaje que
+no decía nada.
+
+### Sprint 77 — Revisión del entorno y UUID intactos en el registro (hecho)
+
+**`scripts/comprobar-entorno.sh`**: una revisión que no instala ni arranca
+nada y dice qué falta y qué hacer. Existe por un camino que no se puede
+probar en Linux: en macOS `openssl` es LibreSSL y su `enc` puede no
+aceptar `-pbkdf2`, con lo que una copia hecha en ese Mac no podría
+descifrar las del servidor — y eso se descubriría el día de restaurar.
+Comprueba además el cifrado de ida y vuelta, PostgreSQL (con Docker o sin
+él), las versiones de Python y Node, el `.env` y los puertos ocupados.
+
+**Un UUID ya no se redacta a medias.** La suite falló una vez, y no por
+casualidad: la regla que tapa «siete dígitos seguidos» —cédulas,
+teléfonos— también encajaba en un grupo de un UUID cuando le tocaban solo
+cifras, y dejaba `«redactado»-5718-4771-9ae7-a60f85d4fee6`. El registro
+salía, pero el identificador con el que se rastrea al usuario o a la
+clínica quedaba inservible, unas pocas veces de cada cien. Se respetan los
+UUID enteros —sin la base de datos son seudónimos, no identifican a
+nadie— y tres pruebas fijan el caso para que no dependa de la suerte.
+
+### Sprint 78 — El arranque local no funcionaba en macOS (hecho)
+
+`comprobar-entorno.sh` pasó en verde en un Mac y aun así `start-local.sh`
+no habría arrancado, por tres motivos distintos. El guion de revisión
+tenía parte de la culpa: **comprobaba mínimos y no techos**, así que dio
+por buenos un Python 3.14 y un Node 26 cuando el par probado es 3.12 y 20.
+Un mínimo sin techo avisa de lo viejo y calla ante lo que nadie ha
+probado nunca.
+
+- **El intérprete.** Se llamaba a `python3` a secas. Django 5.0.9 declara
+  soporte para 3.10, 3.11 y 3.12 y nada más, y `Requires-Python: >=3.10`
+  no pone techo: en 3.14 se instala igual y luego falla por su cuenta,
+  lejos de la causa. Ahora se busca un intérprete soportado por nombre
+  y solo se acepta el de por defecto si cae en el rango.
+- **Las dependencias no se instalaban en ninguna parte.** El guion daba
+  por hecho un Django ya presente; en un clon recién hecho eso es
+  `ModuleNotFoundError`. Ahora hay un `.venv` que además es obligatorio
+  en macOS, donde el pip de Homebrew se niega a instalar fuera de un
+  entorno virtual (PEP 668). Se reinstala solo cuando cambia
+  `requirements.txt`.
+- **PostgreSQL se arrancaba con `pg_ctlcluster` y el rol se creaba con
+  `su postgres`**: lo primero es de Linux y lo segundo pide raíz. En
+  macOS no se creaba el rol y `migrate` moría con «role "clinica" does
+  not exist», que tampoco se parece a la causa. Ahora hay camino para
+  Homebrew (`brew services`, con espera a que el servidor acepte
+  conexiones de verdad) y el rol se crea con el usuario actual, que en
+  esa instalación ya es superusuario.
+
+Verificado de extremo a extremo con un `.venv` recién creado sobre 3.12:
+migraciones, catálogos, login real contra la API y el panel respondiendo.
+
+### Sprint 79 — Una variable pegada a unos puntos suspensivos (hecho)
+
+`start-local.sh` murió en la primera línea que imprimía, en un Mac, con
+un mensaje que no se parece a su causa:
+
+```
+scripts/start-local.sh: line 130: INTERPRETE?: unbound variable
+```
+
+La línea era `echo "  Creando entorno virtual con $INTERPRETE…"`. El
+nombre de una variable termina donde termina lo que bash considera parte
+de un identificador, y eso depende de la biblioteca del sistema y de la
+configuración regional. Cuando los bytes del carácter que sigue —aquí
+los tres de «…», pero vale cualquier letra acentuada, `«` o `✓`— cuentan
+como parte del nombre, la variable que se busca ya no es `$INTERPRETE`
+sino otra que no existe; con `set -u` eso es muerte inmediata, y el
+mensaje nombra esa otra variable.
+
+**No era un sitio: eran nueve, en cinco guiones**, entre ellos los tres
+de las copias de seguridad. Ninguno se manifiesta en Linux, así que el
+CI llevaba tiempo en verde sobre guiones que no arrancaban en un
+portátil. Las llaves lo cierran sin ambigüedad: `"${INTERPRETE}…"`.
+
+**Para que no vuelva:** `scripts/comprobar-guiones.sh` revisa la sintaxis
+de todos los guiones y busca este patrón, y el CI lo ejecuta en un
+trabajo nuevo. Comprobado que **falla** al reintroducir el fallo a
+propósito y que pasa al corregirlo — una comprobación que no puede
+fallar no comprueba nada.
+
+Verificado además compilando **bash 3.2**, el que trae macOS, y pasando
+por él los guiones enteros: arranque completo, migraciones, login real
+contra la API y el panel respondiendo. La revisión del entorno anota
+ahora la versión de bash y la configuración regional, que es la primera
+pista cuando algo falla en una sola máquina.
+
+### Sprint 80 — `setsid` no existe en macOS (hecho)
+
+Con lo del Sprint 79 corregido, el arranque en el Mac llegó hasta el
+final —entorno virtual, `brew services start postgresql@16`, migraciones,
+catálogos, administrador— y murió en el último paso:
+
+```
+✗ Django no respondió.
+```
+
+Los servidores se lanzaban con `setsid`, que es de **util-linux y no
+existe en macOS**. El `command not found` ocurría dentro de un segundo
+plano, donde `set -e` no lo ve, así que el guion esperaba noventa
+segundos a un proceso que llevaba muerto desde el principio. El motivo
+estaba en el registro desde el primer segundo y nadie lo miraba.
+
+- **El lanzamiento** pasa a hacerse con Python, que ya hace falta y está
+  en los dos sistemas: `os.setsid()` abre la sesión y `execvp` se
+  convierte en el servidor. Va dentro de `( ... )` y con `exec` por un
+  motivo comprobado: sin ellos bash bifurca otra vez y `$!` apunta a un
+  intermediario que muere enseguida, con lo que `--stop` mata un grupo
+  vacío y deja los puertos ocupados diciendo que ha parado los
+  servidores.
+- **Cuando un servidor no arranca, el guion lo dice y enseña por qué.**
+  Comprueba si el proceso sigue vivo en cada intento, así que avisa en
+  cinco segundos en vez de noventa, y vuelca las últimas líneas de su
+  registro. Verificado escondiendo el binario de Next: sale
+  `env: './node_modules/.bin/next': No such file or directory` en la
+  propia consola.
+- **Next se invoca directamente** y no por `npx`, que metía dos procesos
+  de por medio sin aportar nada.
+
+Verificado el ciclo entero: arranque, API en 200, panel en 200, `--stop`
+y puertos libres en un segundo, sin procesos huérfanos.
+
+### Sprint 81 — El límite de peticiones bloqueaba al segundo paciente (hecho)
+
+Con el panel por fin en marcha en una máquina local, se recorrió **usando
+un navegador de verdad**, que es como aparecieron los fallos del Sprint
+73 y los que `next build` y la suite no ven.
+
+El hallazgo: `"user": "60/min"`. Abrir **una** ficha clínica y mirar sus
+pestañas gasta unas treinta peticiones. En una sesión ya empezada
+bastaron 22 más para recibir un 429 — es decir, **dos pacientes y la
+recepcionista queda bloqueada**. Y al llegar el 429 la pestaña de planes
+no mostraba un aviso: la pantalla entera pasaba de 2053 caracteres a
+cero, con `TypeError: plans.map is not a function`.
+
+El límite pensado para frenar un abuso estaba frenando el trabajo. Pasa a
+600/min: diez peticiones por segundo sostenidas, a las que ninguna
+persona se acerca, mientras un bucle desbocado o un token robado siguen
+teniendo techo. **El límite de anónimo no se toca**, porque es el que
+protege el login contra fuerza bruta; una prueba nueva lo comprueba
+intentando cuarenta contraseñas seguidas.
+
+Verificado en el navegador: la misma secuencia que dejaba la pantalla en
+blanco ahora no llega al 429 en setenta peticiones y la pestaña se dibuja
+entera, sin un solo error de JavaScript.
+
+**Corrección a lo que se venía diciendo.** El análisis daba por hecho que
+esas tres pestañas —Plan de tratamiento, Documentos, Consentimientos— se
+veían siempre en blanco. No es así: con la API sana se dibujan bien, con
+sus formularios y su «Sin planes de tratamiento». Se rompen **solo**
+cuando la API contesta un error, porque `data.results || data` guarda el
+objeto de error donde debía ir una lista y el `.map()` posterior revienta
+la pantalla. Este sprint quita el disparador más fácil de todos, pero no
+la fragilidad: un 500 o un 403 seguirían dejándola en blanco. Eso vive en
+archivos protegidos y espera permiso.
+
+### Sprint 82 — La pantalla en blanco, cerrada de raíz (hecho)
+
+Con permiso expreso para tocar dos archivos protegidos, se cierra lo que
+el Sprint 81 solo había hecho menos probable.
+
+El patrón era siempre el mismo, en siete sitios:
+
+```js
+const data = await resp.json();
+setPlans(data.results || data);      // ← si `data` es un error, guarda el error
+```
+
+Cuando la API contesta un error, `data.results || data` guarda el objeto
+`{detail: "…"}` donde debía ir una lista, y el `.map()` del render tumba
+la pantalla ENTERA — no la pestaña: la pantalla—. El `catch` de al lado no
+lo ve, porque la excepción ocurre al dibujar, no al pedir.
+
+Pasa a `readList(resp)`, la misma función que el Sprint 73 puso en los
+otros cuarenta sitios: comprueba el estado, devuelve siempre un array y
+convierte el error en un mensaje.
+
+**Verificado en el navegador**, haciendo que `/treatment-plans/` conteste
+500 y dejando el límite de peticiones en su valor real:
+
+| | antes | después |
+|---|---|---|
+| texto en pantalla | **0 caracteres** | 357 caracteres |
+| lo que se lee | nada | «No se pudieron cargar los planes.» |
+| errores de JavaScript | `TypeError: plans.map is not a function` | ninguno |
+
+No se ha tocado lógica clínica, ni la sincronización entre odontogramas,
+ni el trazado de rayos, ni historia, ni tratamientos: el diff son 11
+líneas añadidas y 17 quitadas, todas de manejo de respuestas.
+
+### Sprint 83 — El panel enseñaba «Error 403» teniendo el mensaje escrito (hecho)
+
+Tres cosas encontradas recorriendo el panel con un navegador.
+
+**1. `apiErrorMessage` no leía el mensaje.** La API envuelve sus errores
+como dice el documento 05-APIs:
+
+```json
+{ "error": { "code": "...", "message": "...", "details": { } } }
+```
+
+La función leía `error.details` y **nunca** `error.message`. Como
+`details` suele ser `{}` —y un objeto vacío es cierto en JavaScript—
+acababa siempre en el último recurso. El backend escribía «Usted no tiene
+permiso para realizar esta acción» y el panel enseñaba «Error 403». En
+los cuarenta y pico sitios que pasan por esta función.
+
+**2. Plataforma se quedaba en «Cargando…» para siempre.** Tres pestañas
+hacían `r.ok && setData(...)`: si la respuesta no era buena, el estado
+seguía nulo y la pantalla seguía diciendo que cargaba. Le pasa a
+cualquiera que administre una clínica, porque esa sección es del
+superadministrador. Ahora se lee el motivo real.
+
+**3. `next dev` y `next build` se pisaban.** Los dos escribían en `.next`,
+así que lanzar la validación obligatoria con el servidor en marcha le
+cambiaba la compilación por debajo: el panel seguía respondiendo pero
+`NEXT_PUBLIC_API_URL` llegaba vacía y el login moría con «Failed to
+fetch» sin una sola petición en la pestaña de red. La validación pasa a
+`.next-build`.
+
+Ese último cambio estuvo a punto de romper producción y se libró por
+comprobarlo: `docker-compose.prod.yml` copia el sitio desde `out/`, y al
+cambiar el directorio de salida ese `out/` dejaba de crearse **mientras
+la compilación seguía diciendo que todo fue bien**. El apaño se limita
+ahora a la compilación de validación; la exportación queda exactamente
+como estaba, con sus 14 páginas en `out/`.
+
+**Corrección.** Dije que la página de firma no avisaba al fallar. Es
+falso: sí muestra el error de la API. Lo único discutible es que el
+formulario siga siendo utilizable debajo, y eso no es un fallo.
+
+### Sprint 84 — El plan decía 580 y el presupuesto cobraba 413 (hecho)
+
+Encontrado **usando** el panel, no leyendo código: se aplicó una plantilla
+a una paciente con convenio y salieron dos cifras distintas para lo mismo,
+con un clic de diferencia.
+
+| | antes | ahora |
+|---|---|---|
+| Plan de tratamiento | **$580.00** | $413.00 |
+| Presupuesto generado | $413.00 | $413.00 |
+
+El presupuesto tenía razón —180 menos el 15 % del convenio son 153, más
+una corona con tarifa pactada de 260—. Lo que estaba mal era el plan:
+`ApplyTemplateView` guardaba `estimated_price=treatment.base_price`, el
+precio de catálogo, ignorando el convenio del paciente. **Y el plan es lo
+que el odontólogo lee en voz alta delante del paciente**, línea por línea.
+
+**Dejar de adivinar quién puso el precio.** Al presupuestar hay que saber
+si un importe lo escribió una persona —y entonces no se toca— o lo puso
+el sistema —y se recalcula con el tarifario—. Eso se deducía comparando
+con el precio de catálogo, y esa regla ya fallaba sola: un odontólogo que
+tecleara justo el precio de catálogo quedaba marcado como automático.
+Sembrar con el precio del convenio la rompía del todo. Ahora hay un campo
+explícito, `price_is_manual`, que la API pone cuando la petición trae un
+precio. La migración marca las filas que ya existen con la regla vieja,
+para no cambiarle el importe a ningún presupuesto en marcha.
+
+**Dos errores míos que cazaron las pruebas antes de salir de aquí:**
+
+- `prefetch_tariffs(tenant)` sin el convenio devuelve solo los tarifarios
+  **generales**, así que la tarifa pactada no aparecía: el plan decía 240
+  y el presupuesto 200.
+- Marcar el precio al **editar** no bastaba: faltaba al **crear** la
+  línea. Lo cazó una prueba del Sprint 71 que ya existía, y que ahora
+  declara su intención con el campo en vez de con un importe.
+
+**Un hueco de producto, sin tocar:** la pestaña «Plan de tratamiento» solo
+ofrece *crear plan desde plantilla*. Sin plantillas no hay forma de crear
+un plan desde el panel —y sin plan no hay presupuesto, ni cuotas, ni
+cobro—, aunque la API sí lo permite (`TreatmentPlanListCreateView`). La
+semilla de desarrollo crea ahora dos protocolos para que la ruta se pueda
+recorrer, pero el botón que falta vive en un archivo protegido.
+
+Queda también una cifra de catálogo en el desplegable de plantillas
+(«2 tratamientos · $580.00»): es correcta como total de catálogo, pero se
+muestra dentro de la ficha de un paciente concreto. Arreglarla exige que
+el panel mande el paciente al pedir las plantillas, y eso es el mismo
+archivo protegido.
+
+### Sprint 85 — Ascender a alguien a doctor no lo hacía existir (hecho)
+
+Siguiendo el recorrido del panel, al intentar agendar una cita el
+desplegable **«Doctor» estaba vacío**. La causa resultó ser más general
+que la semilla de desarrollo.
+
+La ficha `Doctor` se creaba al **dar de alta** un usuario con ese rol,
+pero `UserDetailView` no tenía `perform_update`: **cambiarle el rol a un
+usuario que ya existía no le creaba nada**. En una clínica eso es
+ascender a alguien a doctor, verlo en la lista de usuarios como doctor, y
+que en la agenda no exista. No se le puede citar y nada dice por qué.
+
+Ahora las dos rutas —alta y cambio de rol— pasan por la misma función.
+**Lo contrario no se hace a propósito**: quitarle el rol no borra la
+ficha, porque de ella cuelgan citas e historia clínica y perderlas por un
+cambio de puesto sería mucho peor que tener una ficha de más.
+
+**Orden estable en el listado de doctores.** Se paginaba sin ordenar, que
+es quedarse a merced de lo que devuelva la base: una misma fila puede
+salir dos veces o no salir en ninguna página. Django lo avisaba y el
+aviso estaba a la vista en la salida de las pruebas.
+
+**La semilla crea ahora una doctora**, porque sin ninguna el módulo de
+agenda entero queda fuera de alcance en un entorno recién levantado.
+
+### Lo que se recorrió y salió bien
+
+No todo fueron fallos. Comprobado en el navegador, de punta a punta:
+
+- **Plan → presupuesto → aprobación → cuotas → cobro**, con el arreglo
+  del Sprint 84 visible: el presupuesto lista $153.00 y $260.00, los
+  precios del convenio.
+- **El reparto de las cuotas cuadra al céntimo**: $413.00 en tres queda
+  137.67 + 137.67 + **137.66**. La última absorbe el resto, en vez de
+  dejar un céntimo suelto que mantendría al paciente como moroso para
+  siempre.
+- **El cobro cuadra en todas partes**: $137.67 aparece igual en el panel
+  de inicio y en reportes.
+- **El bloqueo por morosidad funciona**: con una cuota vencida hace 40
+  días, agendar devuelve 409, el panel explica el motivo y ofrece la
+  excepción manual, que crea la cita.
+
+### Sprint 86 — Nueve fallos que nadie llegaba a ver (hecho)
+
+El backend tenía nueve `except Exception: pass`. La decisión de **no
+romper el flujo** es correcta en todos ellos: un fallo del almacén no
+puede deshacer un tratamiento que ya se hizo, ni un logotipo ilegible
+impedir que salga una receta. Pero tragárselo en silencio no es ser
+resiliente, es no enterarse.
+
+El más caro es el inventario. Si el descuento de stock falla y nadie lo
+registra, **el sistema dice que hay material y el cajón está vacío** — y
+eso se descubre abriéndolo, a mitad de un procedimiento.
+
+Cinco pasan a dejar rastro, con el contexto necesario para ir a buscar
+qué pasó:
+
+| dónde | qué se perdía en silencio |
+|---|---|
+| Descuento de inventario | el stock se desviaba de la realidad |
+| Aviso de llegada del paciente | el doctor no se enteraba de que había llegado |
+| Firma en el documento | una receta salía sin la firma del profesional |
+| Logotipo de la clínica | la clínica no veía su logo y no sabía por qué |
+| Apariencia de documentos | todo salía con el estilo de serie, sin causa visible |
+
+Los otros cuatro **siguen callados a propósito** —una marca de agua
+ausente, un color mal escrito con reserva definida, un ajuste de texto en
+una celda— y ahora lo dicen en su sitio, para que el siguiente lector
+sepa que fue una decisión y no un descuido.
+
+**Para que la regla se sostenga sola** hay una prueba nueva que recorre
+el backend y falla si aparece un `except … : pass` sin un comentario
+encima explicando por qué ese fallo puede ignorarse. Comprobado que falla
+al reintroducir uno. Si no se puede ignorar, no es un `pass`: es un
+`logger.warning(..., exc_info=True)`.
+
+**Una trampa que ya había caído antes.** `assertLogs().output` usa el
+formato por defecto de `logging` y descarta todo lo que va en `extra`,
+que es justo donde están los identificadores. La prueba pasa cada
+registro por el formateador de producción —el mismo ayudante del Sprint
+75— y así comprueba lo que de verdad se escribiría.
+
+### Sprint 87 — El odontograma 3D no cabía en una tableta (hecho)
+
+Medido con un navegador de verdad emulando cada tamaño, no supuesto: el
+lienzo se quedaba en **1146×460 en todos los casos** —escritorio, tableta
+apaisada, tableta vertical y teléfono—. En una tableta de 1024 px eso
+significa que el arco es más ancho que la pantalla y **toda la página se
+va a un scroll horizontal**.
+
+| | antes | ahora |
+|---|---|---|
+| escritorio 1500 px | 1146×460 | 1146×481 |
+| tableta apaisada 1024 px | 1146×460 · desborde a 1420 | 689×320 · **sin desborde** |
+| tableta vertical 820 px | 1146×460 · desborde a 1190 | 725×320 · **sin desborde** |
+| teléfono 390 px | 1146×460 | 326×320 · **sin desborde** |
+
+**Era un bloqueo mutuo.** three.js le pone al `<canvas>` un tamaño en
+píxeles; la columna de la rejilla era `1fr`, cuyo mínimo es el contenido,
+así que el contenedor no podía encoger por debajo del lienzo; y el
+manejador de redimensionado leía el ancho de ese contenedor, que por eso
+nunca cambiaba. La columna pasa a `minmax(0,1fr)` y el ciclo se rompe.
+
+Además, el redimensionado solo escuchaba a `window.resize`, que **no se
+entera cuando lo que cambia es el contenedor**: plegar la barra lateral o
+abrir el panel de la pieza dejaban el lienzo con el tamaño anterior. Ahora
+lo observa un `ResizeObserver`.
+
+**El encuadre se corrige con la proporción.** La distancia de cámara
+pensada para una franja apaisada deja los molares fuera en un lienzo
+estrecho: el profesional veía el centro de la boca y tenía que arrastrar
+para llegar a los extremos. Ahora la distancia mínima depende de la
+relación de aspecto. Y el alto sale del ancho en vez de ser 460 fijo.
+
+**La barra de pestañas de la ficha también se salía.** Sus siete pestañas
+llegaban a 1189 px en una tableta de 1024 y arrastraban a la página
+entera. Ahora la tira se desplaza sola, como cualquier barra de pestañas
+en pantalla estrecha.
+
+**Lo que NO se ha tocado, y por qué.** Las capturas se hacen aquí con
+SwiftShader —WebGL por software—, que no antialía igual que una tarjeta
+gráfica. Los bordes dentados que se ven en ellas son del renderizador de
+pruebas, no de la aplicación: `antialias` ya estaba activado. Cambiar
+materiales o iluminación a partir de esas imágenes sería afinar a ciegas.
+Lo que sí es independiente del renderizador —cuántos píxeles mide el
+lienzo, si el arco cabe en el encuadre, si la página se desborda— es
+justo lo que se ha corregido.
+
+### Sprint 88 — Colores del odontograma 3D según la guía VITA (hecho)
+
+Todas las piezas compartían un único marfil, **rgb(253,247,236)**. Ese
+valor es más claro que el **B1** de la guía VITA Classical
+—rgb(208,194,168), el matiz más blanco de toda la guía—, así que la
+arcada se leía como una masa continua.
+
+Los valores salen de convertir a sRGB los L\*a\*b\* publicados de VITA y
+quedarse con las **proporciones** entre matices: el color del material se
+multiplica por el de vértice y luego lo ilumina la escena, así que poner
+el sRGB crudo daría una arcada apagada. Ahora cada familia lleva el suyo,
+siguiendo cómo se distribuye el color en una boca real:
+
+| familia | matiz | por qué |
+|---|---|---|
+| incisivos | A1 | las piezas más claras |
+| premolares | A2 | |
+| molares | A3 | algo más cromáticos |
+| **caninos** | **A3.5** | son las piezas más cromáticas de la boca |
+| temporales | B1 | más blancas y azuladas que las definitivas |
+
+**La encía estaba mal en dos cosas comprobables.** El margen libre salía
+más rojo que la encía adherida cuando en una encía sana es al revés, y la
+banda de mucosa alveolar estaba en rgb(125,51,54) —casi granate— frente a
+rgb(169,100,102) de la referencia de mucosa sana: el conjunto se leía
+como carne cruda. Las proporciones entre bandas se corrigen dejando la
+encía adherida donde estaba, que es el nivel ya ajustado contra la escena
+iluminada. No es solo estética: la unión mucogingival es una referencia
+clínica y si las bandas se parecen demasiado deja de verse dónde está.
+
+También se acentúa la **translucidez del tercio incisal**, que es de las
+señas más reconocibles de un diente natural y estaba apenas insinuada.
+
+### Lo que se midió, y lo que la medición desmintió
+
+Se localizó cada pieza usando el propio raycasting de la aplicación y se
+muestreó su color en pantalla. Dos conclusiones incómodas:
+
+1. **Las diferencias reales de VITA apenas sobreviven al sombreado.** Con
+   los matices puestos, un canino y un incisivo central daban el mismo
+   amarilleo: 20 contra 20 sobre 255. Se comprobó que el camino del
+   código SÍ funciona poniendo el canino en rojo puro a propósito: salió
+   rgb(222,88,107). El color llega; lo que pasa es que la diferencia
+   anatómica real es sutil, y exagerarla no sería realismo.
+2. **Bajar el barniz y la translucidez no servía de nada.** Se probó
+   (0.42 / 0.10) suponiendo que el reflejo tapaba el matiz. Medido: el
+   amarilleo seguía igual y toda la arcada se oscurecía ocho unidades.
+   **Se revirtió**: quedarse con un cambio cuya justificación ha fallado
+   es peor que no haberlo hecho.
+
+**La causa más probable de que se vea plano es otra.** La oclusión
+ambiental —lo que hunde las troneras y separa una pieza de la siguiente—
+**se apagaba sola y en silencio** cuando el equipo no sostenía 35 fps.
+Apagarla está bien; que nadie se entere, no. Ahora se dice debajo del
+lienzo.
+
+**Lo que sigue sin poder juzgarse desde aquí**: las capturas se hacen con
+SwiftShader, que además de no antialiasar igual **siempre** dispara esa
+desactivación. Lo que se ha tocado son números —matices, proporciones
+entre bandas— que no dependen del renderizador.
+
+### Sprint 89 — La app móvil no tenía nada que consumir (hecho)
+
+Primer paso del desarrollo de la aplicación del paciente, y no es
+Flutter: es la API que la app necesita, que **no existía**.
+
+Auditado endpoint por endpoint: el rol `patient` existe, el login por OTP
+de WhatsApp funciona, el registro de token para notificaciones está
+hecho y la historia clínica tiene marcas `visible_to_patient`… pero
+**ningún endpoint de la API admitía ese rol**. Un paciente autenticado no
+podía pedir ni una cita.
+
+| pieza | estado antes |
+|---|---|
+| Login del paciente por OTP | ✅ existía |
+| Registro de token push | ✅ existía |
+| Marcas `visible_to_patient` | ✅ existían |
+| Sus citas, su saldo, sus recetas | ❌ **ningún endpoint** |
+
+Se añade `/api/v1/app/` con cuatro vistas: perfil y resumen, citas,
+saldo con el vencimiento de cada cuota, y recetas e indicaciones de
+cuidado. Es lo que describen RF-APP-03, 04 y 06.
+
+**La regla que gobierna todo esto: el paciente nunca elige de quién son
+los datos.** No hay un identificador de paciente en ninguna ruta ni en
+ninguna consulta; la ficha sale del token. Hay una prueba que manda
+`?patient=`, `?paciente=`, `?patient_id=` e `?id=` con el identificador
+de otro paciente y comprueba que no cambia nada.
+
+**Lo que NO se expone, también a propósito**: notas clínicas internas, el
+odontograma, los costes internos, las notas de una cita. La app es una
+ventana para que el paciente se organice, no una copia de su historia.
+El filtro de indicaciones es una **lista blanca de tipos**, no una
+exclusión: si mañana alguien marca por error una nota clínica como
+visible, la app no la publica. Hay prueba de eso.
+
+Y un paciente cuya cuenta no está enlazada con su ficha recibe una
+explicación, no una lista vacía: decirle «no tienes citas» sería mentirle
+—no es que no tenga, es que no lo estamos encontrando—.
+
+**Lo que queda para tu máquina:** la app Flutter en sí. Necesita emulador
+con aceleración gráfica, que aquí no hay. Pero ya tiene contra qué
+hablar.
+
+### Sprint 90 — Una receta de seis fármacos imprimía dos (hecho)
+
+Encontrado instrumentando el lienzo de dibujo y contando qué llegaba al
+papel. El cuerpo de la receta hacía `break` al llegar al pie de página:
+
+| receta de | se imprimían | se perdían |
+|---|---|---|
+| 6 fármacos con su posología | **2** | **4** |
+
+Y el daño no es que falte información: es que **no se nota que falta**.
+La hoja salía con su firma, su pie y su código de verificación, con todo
+el aspecto de estar completa. El odontólogo la entrega, el paciente
+compra dos medicamentos de seis y nadie se entera hasta que el
+tratamiento no funciona.
+
+La receta pasa a fluir a las hojas que necesite, con el mismo modismo que
+el PDF de consentimiento ya usaba. Las hojas van numeradas —«Página 1 de
+2»— porque entregar la primera y quedarse la segunda hace el mismo daño
+que el corte, y la continuación se anuncia para que quien reciba la
+segunda sepa de qué es. La firma y el código van siempre en la última.
+
+Medido después: **cero líneas perdidas** con 1, 2, 4, 6 y 12 fármacos; una
+receta corriente de uno o dos sigue cabiendo en una hoja de talonario; y
+la generación cuesta entre 3 y 7 ms con las dos pasadas incluidas.
+
+**La orden de exámenes tenía el mismo fallo con otra forma.** Su
+`paragraph` no comprobaba ningún suelo: seguía bajando la coordenada y
+escribía por debajo del papel. Medido: con 3808 caracteres de
+justificación se perdían **7 líneas**, y con 7616 se perdían **42**.
+Ahora también fluye.
+
+Ocho pruebas nuevas. Comprobado que **fallan** al revertir los
+generadores: cuatro de las seis de receta se ponen en rojo.
+
+### Sprint 91 — El reporte de ingresos sumaba a mano (hecho)
+
+Sembrada una clínica con **9.000 pagos y 2.000 pacientes** —tres años de
+una consulta pequeña— y medidos los informes con calentamiento y nueve
+repeticiones:
+
+| reporte | antes | ahora |
+|---|---|---|
+| **financiero (3 años)** | **164,8 ms** | **6,1 ms** |
+| financiero (mes en curso) | 4,4 ms | 3,7 ms |
+| pacientes nuevos | 37,8 ms | 38,5 ms |
+| morosidad | 2,8 ms | 2,8 ms |
+
+No era un problema de N+1 —eran dos consultas— sino que recorría los
+pagos **uno a uno en Python** acumulando en un diccionario: carga todo el
+historial en memoria y crece con él. Con 50.000 pagos serían segundos. La
+suma pasa a hacerla la base.
+
+**Y el reporte de ingresos ya se puede exportar a Excel.** Era el único
+que no podía: solo el de pacientes nuevos tenía exportación, y el de
+ingresos es justamente el que va al contador.
+
+### La prueba se ganó el sueldo en el primer intento
+
+`Sum` de la base devuelve la escala que le da la gana, así que **150.50
+pasó a salir como 150.5** y el panel habría pintado «$150.5». Lo cazó la
+prueba escrita en esta misma tanda, antes de subir nada. Una optimización
+que cambia las cifras de un informe de ingresos no es una optimización.
+
+### Y una corrección sobre mi propio método
+
+Las dos primeras mediciones dieron 296 ms y luego 455 ms, y con la
+segunda llegué a creer que mi cambio había **empeorado** las cosas. Las
+dos eran ruido de arranque en frío: una sola ejecución no mide nada a
+esta escala. Con calentamiento y repeticiones, la mejora real es de 27
+veces. Queda anotado porque estuve a punto de revertir un cambio bueno
+por una medida mala.
 
 ## Desarrollo en GitHub Codespaces
 

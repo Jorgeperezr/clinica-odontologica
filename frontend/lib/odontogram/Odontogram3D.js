@@ -33,7 +33,7 @@ import {
   SURFACE_LABELS, TEMP_LOWER_L, TEMP_LOWER_R, TEMP_UPPER_L, TEMP_UPPER_R,
   dominantState, hasRecords,
 } from "./contract";
-import { toothFamily, isUpper } from "./ToothArt";
+import { toothFamily, isUpper, isDeciduous } from "./ToothArt";
 import { toothJitter, toothPose } from "./toothGeometry";
 import { createMeshProvider } from "./meshProvider";
 import { createArchCurve, distributeAlongArch } from "./archCurve";
@@ -42,6 +42,61 @@ import {
   enamelNormalTexture, enamelRoughnessTexture,
   gingivaNormalTexture, gingivaRoughnessTexture,
 } from "./dentalTextures";
+
+/* ── Color natural de cada pieza ──────────────────────────────────────
+   Todas las piezas compartían un único marfil, rgb(253,247,236). Ese
+   valor es MÁS CLARO que el B1 de la guía VITA Classical —rgb(208,194,168),
+   el matiz más blanco de toda la guía—, así que la arcada se leía como
+   una masa continua: sin diferencia de matiz, el ojo no separa una pieza
+   de la siguiente.
+
+   En una boca real el color no es uniforme y la variación no es aleatoria:
+
+     · los CANINOS son las piezas más cromáticas, típicamente uno o dos
+       matices por debajo de los incisivos;
+     · los incisivos son los más claros;
+     · premolares y molares quedan en medio, algo más saturados;
+     · la dentición TEMPORAL es más blanca y más azulada que la
+       permanente, que es justo por lo que un diente de leche al lado de
+       uno definitivo se nota a simple vista.
+
+   Los valores salen de convertir a sRGB los L*a*b* publicados de la guía
+   VITA y quedarse con las PROPORCIONES entre matices, no con los valores
+   crudos: el color del material se multiplica por el de vértice y luego
+   lo ilumina la escena, así que poner el sRGB de VITA tal cual daría una
+   arcada apagada. Las relaciones, en cambio, trasladan bien, y son las
+   que dan la distinción.
+
+   (Los L*a*b* de VITA varían algo entre estudios y geometrías de medida.
+   Se usan como referencia de las relaciones, no como calibración.) */
+const MARFIL_BASE = [253 / 255, 247 / 255, 236 / 255];   // el de antes ≈ A1
+
+const MATIZ_VITA = {
+  //            r       g       b     (proporción respecto a A1)
+  B1:   [1.015, 1.032, 1.057],
+  A1:   [1.000, 1.000, 1.000],
+  A2:   [0.995, 0.968, 0.918],
+  A3:   [0.985, 0.936, 0.843],
+  "A3.5": [0.961, 0.888, 0.761],
+};
+
+const MATIZ_POR_FAMILIA = {
+  incisivo: "A1",
+  canino: "A3.5",
+  premolar: "A2",
+  molar: "A3",
+};
+
+function matizNatural(THREE, code) {
+  const temporal = isDeciduous(code);
+  const clave = temporal ? "B1" : (MATIZ_POR_FAMILIA[toothFamily(code)] || "A2");
+  const k = MATIZ_VITA[clave];
+  return new THREE.Color(
+    Math.min(1, MARFIL_BASE[0] * k[0]),
+    Math.min(1, MARFIL_BASE[1] * k[1]),
+    Math.min(1, MARFIL_BASE[2] * k[2]),
+  );
+}
 
 /** Filtros clínicos: resaltan solo las piezas cuyo estado coincide. */
 const FILTERS = [
@@ -119,6 +174,7 @@ export default function Odontogram3D({
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [hovered, setHovered] = useState(null);
+  const [acabadoReducido, setAcabadoReducido] = useState(false);
 
   // Los callbacks cambian en cada render del contenedor; se guardan en una
   // referencia para no reconstruir la escena en cada actualización.
@@ -141,8 +197,30 @@ export default function Odontogram3D({
       if (cancelled || !mountRef.current) return;
 
       const mount = mountRef.current;
-      const width = mount.clientWidth || 800;
-      const height = 460;
+
+      /* ── Tamaño del lienzo ──
+         El alto era 460 fijo. En una pantalla ancha eso deja una franja
+         apaisada con las arcadas pequeñas en el centro, y en una tableta
+         vertical o un teléfono el arco no cabe a lo ancho y se sale.
+         Se deriva del ancho para conservar una proporción legible, con
+         topes para que ni se aplaste ni se coma la pantalla entera. */
+      function medidas() {
+        const w = Math.max(260, mount.clientWidth || 800);
+        const h = Math.round(Math.min(560, Math.max(320, w * 0.42)));
+        return { w, h };
+      }
+      let { w: width, h: height } = medidas();
+
+      /* Cuánto hay que alejarse para que el arco quepa a lo ancho. Con
+         un lienzo estrecho, la distancia pensada para escritorio deja las
+         piezas de los extremos fuera del encuadre: el profesional ve el
+         centro de la boca y tiene que arrastrar para llegar a los
+         molares. Se corrige por la relación de aspecto, no por el ancho
+         en píxeles, que es lo que de verdad determina el recorte. */
+      const ASPECTO_COMODO = 2.2;
+      function distanciaMinima(aspect) {
+        return aspect >= ASPECTO_COMODO ? 11 : 11 * (ASPECTO_COMODO / Math.max(0.6, aspect));
+      }
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 200);
@@ -340,6 +418,17 @@ export default function Odontogram3D({
           /* Barniz suave y amplio. Con clearcoat casi 1 y muy liso, el
              reflejo se concentra en un punto blanco durísimo y la pieza
              pasa de esmalte a porcelana de baño. */
+          /* Barniz suave y amplio. Con clearcoat casi 1 y muy liso, el
+             reflejo se concentra en un punto blanco durísimo y la pieza
+             pasa de esmalte a porcelana de baño.
+
+             Se probó a bajarlos (0.42 / 0.10) suponiendo que el reflejo
+             del entorno tapaba el matiz propio de cada pieza. Se midió
+             el resultado y NO era así: el canino y el incisivo central
+             seguían dando el mismo amarilleo, 20 contra 20 sobre 255, y
+             lo único que cambió fue que toda la arcada se oscureció ocho
+             unidades. Se dejan donde estaban: bajarlos no compraba nada
+             y costaba realismo en el esmalte. */
           clearcoat: 0.55,
           clearcoatRoughness: 0.22,
           transmission: 0.16,       // translucidez sutil
@@ -501,7 +590,11 @@ export default function Odontogram3D({
 
       /* ── Órbita, zoom y desplazamiento (implementación propia, para no
          depender de complementos externos al paquete) ── */
-      const state = { rotX: 0.30, rotY: 0, dist: 13.5, panX: 0, panY: 0 };
+      const state = {
+        rotX: 0.30, rotY: 0,
+        dist: Math.max(13.5, distanciaMinima(width / height)),
+        panX: 0, panY: 0,
+      };
       let dragging = null, lastX = 0, lastY = 0;
 
       const el = renderer.domElement;
@@ -589,6 +682,13 @@ export default function Odontogram3D({
           probeTime += dt;
           if (probeFrames === 40 && probeTime / 40 > 0.028) {   // < 35 fps
             composer = null;
+            /* Se apagaba en silencio, y eso deja al profesional mirando
+               una imagen más plana sin saber por qué: la oclusión es lo
+               que hunde las troneras y separa una pieza de la siguiente.
+               Ahora se dice, para que quien vea el modelo «raro» sepa que
+               es el equipo y no su paciente, y para que sea una pista si
+               alguien pregunta por la calidad de la imagen. */
+            setAcabadoReducido(true);
           }
         }
 
@@ -630,14 +730,40 @@ export default function Odontogram3D({
       }
       loop();
 
+      /* Antes esto solo escuchaba a `window.resize` y solo cambiaba el
+         ancho. Dos problemas, los dos comprobados con el navegador
+         emulando una tableta:
+
+         · `window.resize` no se dispara cuando lo que cambia es el
+           CONTENEDOR y no la ventana: plegar la barra lateral, abrir el
+           panel lateral de la pieza o cambiar de pestaña dejaban el
+           lienzo con el tamaño anterior. `ResizeObserver` observa lo que
+           de verdad importa.
+         · Había un bloqueo mutuo. three.js le pone al `<canvas>` un
+           tamaño en píxeles, y como la columna de la rejilla era `1fr`
+           —cuyo mínimo es el contenido— el contenedor no podía encoger
+           por debajo del lienzo; el manejador leía siempre el mismo
+           ancho y no ajustaba nada. Medido: 1146×460 en escritorio, en
+           tableta apaisada, en tableta vertical y en un teléfono, con el
+           panel desbordándose a 1420 px de scroll. La columna pasa a
+           `minmax(0,1fr)` y con eso el contenedor ya puede encoger. */
+      let ultimoAncho = 0, ultimoAlto = 0;
       const onResize = () => {
-        const w = mount.clientWidth || 800;
-        camera.aspect = w / height;
+        const { w, h } = medidas();
+        if (w === ultimoAncho && h === ultimoAlto) return;
+        ultimoAncho = w; ultimoAlto = h;
+        mount.style.height = `${h}px`;
+        camera.aspect = w / h;
         camera.updateProjectionMatrix();
-        renderer.setSize(w, height);
-        composer?.setSize(w, height);
-        gtao?.setSize(w, height);
+        renderer.setSize(w, h);
+        composer?.setSize(w, h);
+        gtao?.setSize(w, h);
+        // Que no se queden los molares fuera al estrecharse el lienzo.
+        state.dist = Math.max(state.dist, distanciaMinima(w / h));
       };
+      onResize();
+      const observador = new ResizeObserver(onResize);
+      observador.observe(mount);
       window.addEventListener("resize", onResize);
 
       applyTheme();
@@ -647,6 +773,7 @@ export default function Odontogram3D({
       cleanup = () => {
         cancelAnimationFrame(raf);
         themeObserver.disconnect();
+        observador.disconnect();
         window.removeEventListener("resize", onResize);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
@@ -683,13 +810,13 @@ export default function Odontogram3D({
     const { THREE, teeth } = s;
     const f = FILTERS.find((x) => x.key === filter);
 
-    /* Base casi blanca: el marfil, la dentina cervical y el cemento de
-       la raíz los aporta el color de vértice de la geometría, así que
-       este color queda libre para llevar el estado clínico. */
-    const ENAMEL = new THREE.Color(0xfdf7ec);
-
     for (const t of teeth) {
       const code = t.userData.code;
+      /* El matiz de ESTA pieza, no uno común a toda la boca. El marfil
+         cervical y el cemento de la raíz los sigue aportando el color de
+         vértice de la geometría; este color queda libre para llevar
+         encima el estado clínico. */
+      const ENAMEL = matizNatural(THREE, code);
       const surfaces = surfacesByTooth[code];
       const st = dominantState(surfaces);
       const registrado = hasRecords(surfaces);
@@ -808,11 +935,18 @@ export default function Odontogram3D({
       </div>
 
       <div style={{ display: "grid", gap: 14,
-                    gridTemplateColumns: selectedTooth ? "minmax(0,1fr) 300px" : "1fr" }}>
+                    /* `minmax(0,1fr)` también sin selección: con `1fr` a
+                       secas el mínimo de la columna es su contenido, y el
+                       lienzo con tamaño en píxeles impedía encoger al
+                       contenedor. Ahí estaba el desbordamiento en tableta. */
+                    gridTemplateColumns: selectedTooth ? "minmax(0,1fr) minmax(0,300px)" : "minmax(0,1fr)" }}>
         {/* Lienzo 3D */}
         <div>
           <div ref={mountRef}
-               style={{ width: "100%", height: 460, borderRadius: "var(--radius)",
+               /* El alto lo ajusta el motor con el ancho real (ver
+                  `medidas`); este es solo el valor de partida mientras
+                  carga. */
+               style={{ width: "100%", height: 460, minWidth: 0, borderRadius: "var(--radius)",
                         overflow: "hidden", background: "var(--paper)",
                         border: "1px solid var(--line)", position: "relative" }}>
             {!ready && !error && (
@@ -825,6 +959,14 @@ export default function Odontogram3D({
             clic en una pieza para ver su historial
             {hovered && <strong style={{ color: "var(--petrol)" }}> · pieza {hovered}</strong>}
           </p>
+          {acabadoReducido && (
+            <p style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 2 }}>
+              Este equipo no sostiene la oclusión ambiental con holgura, así que
+              se ha desactivado para mantener el giro fluido. El modelo se ve más
+              plano —menos sombra entre las piezas—, pero los datos clínicos y la
+              selección funcionan igual.
+            </p>
+          )}
         </div>
 
         {/* Panel lateral: historial de la pieza seleccionada */}

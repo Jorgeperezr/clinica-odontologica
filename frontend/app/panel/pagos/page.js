@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, readList } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 
@@ -19,8 +19,7 @@ export default function PagosPage() {
     if (q.length < 2) { setResults([]); return; }
     try {
       const resp = await api(`/patients/?search=${encodeURIComponent(q)}`);
-      const data = await resp.json();
-      setResults((data.results || data).slice(0, 6));
+      setResults((await readList(resp)).slice(0, 6));
     } catch { /* silencioso */ }
   }
 
@@ -80,17 +79,15 @@ function PatientBilling({ patient }) {
         api(`/patients/${patient.id}/budgets/`),
       ]);
       setStatement(await stResp.json());
-      const bu = await buResp.json();
-      setBudgets(bu.results || bu);
-    } catch { setError("No se pudo cargar la información de pagos."); }
+      setBudgets(await readList(buResp));
+    } catch (err) { setError(err?.message ? `No se pudo cargar la información de pagos. ${err.message}` : "No se pudo cargar la información de pagos."); }
   }, [patient.id]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     api("/config/treatments/?is_active=true").then(async (r) => {
-      const data = await r.json();
-      setTreatments(data.results || data);
+      setTreatments(await readList(r));
     }).catch(() => {});
   }, []);
 
@@ -282,9 +279,8 @@ function BudgetCard({ budget, treatments, confirm, onChange }) {
       const planId = data.payment_plan_id;
       if (!planId) { setError("Este presupuesto aún no tiene plan de pago."); return; }
       const iResp = await api(`/payment-plans/${planId}/installments/`);
-      const iData = await iResp.json();
-      setInstallments(iData.results || iData);
-    } catch { setError("No se pudieron cargar las cuotas."); }
+      setInstallments(await readList(iResp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las cuotas. ${err.message}` : "No se pudieron cargar las cuotas."); }
   }
 
   return (

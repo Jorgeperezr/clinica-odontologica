@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, apiErrorMessage, readList } from "../../../lib/api";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 
 const TABS = [
@@ -47,9 +47,19 @@ export default function PlataformaPage() {
 
 function DashboardTab() {
   const [data, setData] = useState(null);
+  // `error` separado de `data` a propósito: sin él, `r.ok && setData(...)`
+  // se traga el fallo y la pantalla se queda diciendo «Cargando…» para
+  // siempre. Pasa de verdad —entrar aquí con un usuario que administra
+  // una clínica da 403, porque esto es del superadministrador— y quien lo
+  // ve no tiene forma de saber si está cargando, si se cayó algo o si no
+  // le corresponde entrar.
+  const [error, setError] = useState("");
   useEffect(() => {
-    api("/platform/overview/").then(async (r) => r.ok && setData(await r.json())).catch(() => {});
+    api("/platform/overview/")
+      .then(async (r) => (r.ok ? setData(await r.json()) : setError(await apiErrorMessage(r))))
+      .catch(() => setError("No se pudo contactar con el servidor."));
   }, []);
+  if (error) return <div className="error-box">{error}</div>;
   if (!data) return <div className="empty">Cargando…</div>;
   return (
     <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -72,23 +82,111 @@ function Stat({ label, value, accent, danger }) {
   );
 }
 
+/* ───────────── Entrega de credenciales ───────────── */
+
+/**
+ * La contraseña temporal, una sola vez, y lo que hay que hacer con ella.
+ *
+ * Lo que de verdad resuelve es el paso siguiente: el dueño de la
+ * plataforma tiene que HACER LLEGAR esto a la clínica. Copiar la
+ * contraseña suelta obliga a redactar el resto a mano cada vez —dónde se
+ * entra, con qué correo, que hay que cambiarla— y ahí es donde se pierde
+ * la mitad del mensaje. El botón de abajo copia la nota entera, lista
+ * para pegar en un correo o en WhatsApp.
+ */
+function PanelDeCredenciales({ cred, clinica, onClose }) {
+  const [copiado, setCopiado] = useState("");
+
+  const url = typeof window !== "undefined" ? `${window.location.origin}/login/` : "";
+  const nota = [
+    `Acceso al sistema de ${clinica || "su clínica"}`,
+    "",
+    `Dirección: ${url}`,
+    `Usuario: ${cred.email}`,
+    `Contraseña temporal: ${cred.temporary_password}`,
+    "",
+    "Al entrar por primera vez el sistema le pedirá elegir su propia",
+    "contraseña. Desde ese momento nadie más que usted la conoce, y",
+    "podrá registrar a los profesionales de la clínica desde",
+    "Configuración → Usuarios.",
+  ].join("\n");
+
+  async function copiar(texto, cual) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(cual);
+      setTimeout(() => setCopiado(""), 2000);
+    } catch {
+      // Sin permiso de portapapeles (o sin HTTPS) no se puede copiar; la
+      // contraseña está a la vista, que es lo que importa.
+      setCopiado("no");
+    }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 18, borderColor: "var(--amber)",
+                                   background: "var(--amber-soft)" }}>
+      <h3 style={{ marginBottom: 4 }}>
+        Credenciales de {clinica ? <>«{clinica}»</> : "la clínica"} — entrégalas ahora
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+        Esta contraseña <strong>no se puede volver a consultar</strong>: no queda
+        guardada en ningún sitio. Solo sirve para el primer ingreso; al entrar,
+        la clínica elige la suya y tú dejas de tener acceso a la cuenta.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px",
+                    alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 12, color: "var(--ink-soft)", textTransform: "uppercase",
+                       letterSpacing: ".04em" }}>Usuario</span>
+        <code style={{ fontSize: 15, background: "var(--elev)", padding: "6px 12px",
+                       borderRadius: 8, justifySelf: "start" }}>{cred.email}</code>
+
+        <span style={{ fontSize: 12, color: "var(--ink-soft)", textTransform: "uppercase",
+                       letterSpacing: ".04em" }}>Contraseña</span>
+        <code className="tabular" style={{ fontSize: 18, fontWeight: 700, background: "var(--elev)",
+                       padding: "6px 12px", borderRadius: 8, justifySelf: "start",
+                       letterSpacing: ".02em" }}>{cred.temporary_password}</code>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <button className="btn btn-primary" style={{ fontSize: 13 }}
+                onClick={() => copiar(nota, "nota")}>
+          Copiar mensaje de entrega
+        </button>
+        <button className="btn btn-ghost" style={{ fontSize: 13 }}
+                onClick={() => copiar(cred.temporary_password, "clave")}>
+          Copiar solo la contraseña
+        </button>
+        <button className="btn btn-ghost" style={{ fontSize: 13, marginLeft: "auto" }}
+                onClick={onClose}>Ya la entregué</button>
+      </div>
+
+      {copiado === "nota" && <p style={{ fontSize: 13, marginTop: 8, color: "var(--petrol-deep)" }}>✓ Mensaje copiado.</p>}
+      {copiado === "clave" && <p style={{ fontSize: 13, marginTop: 8, color: "var(--petrol-deep)" }}>✓ Contraseña copiada.</p>}
+      {copiado === "no" && <p style={{ fontSize: 13, marginTop: 8, color: "var(--red)" }}>
+        El navegador no dejó copiar. Selecciónala a mano, arriba.</p>}
+    </div>
+  );
+}
+
 /* ───────────── 2. Gestión de Clínicas ───────────── */
 
 function ClinicsTab() {
   const [confirm, ConfirmUI] = useConfirm();
   const [clinics, setClinics] = useState([]);
-  const [form, setForm] = useState({ name: "", ruc: "", address: "", phone: "", email: "" });
+  const VACIO = { name: "", ruc: "", address: "", phone: "", email: "",
+                  admin_full_name: "", admin_email: "" };
+  const [form, setForm] = useState(VACIO);
   const [editing, setEditing] = useState(null);   // clínica en edición
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  const [cred, setCred] = useState(null);         // {email, temporary_password, clinica}
 
   const load = useCallback(async () => {
     try {
-      const resp = await api("/platform/clinics/");
-      const data = await resp.json();
-      if (!resp.ok) throw new Error();
-      setClinics(data.results || data);
-    } catch { setError("No se pudieron cargar las clínicas."); }
+      setClinics(await readList(await api("/platform/clinics/")));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las clínicas. ${err.message}` : "No se pudieron cargar las clínicas."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -104,8 +202,22 @@ function ClinicsTab() {
         const first = typeof detail === "object" ? Object.values(detail)[0] : detail;
         throw new Error(Array.isArray(first) ? first[0] : `Error ${resp.status}`);
       }
-      setOkMsg(`Clínica "${form.name}" creada (activa, con catálogo base). Asígnale su administrador en la pestaña Administradores.`);
-      setForm({ name: "", ruc: "", address: "", phone: "", email: "" });
+      // El alta del administrador va en la misma respuesta, y puede
+      // traer su propio error sin que eso deshaga la clínica: un correo
+      // repetido no es motivo para cancelar un alta que ya está hecha.
+      const alta = data.admin;
+      if (alta?.temporary_password) {
+        setCred({ ...alta, clinica: form.name });
+        setOkMsg(`Clínica "${form.name}" creada con su administrador. Entrégale las credenciales de abajo.`);
+      } else if (alta?.error) {
+        setOkMsg("");
+        setError(`La clínica "${form.name}" se creó, pero su administrador no: ${alta.error} `
+                 + "Créalo desde la pestaña Administradores.");
+      } else {
+        setOkMsg(`Clínica "${form.name}" creada (activa, con catálogo base). `
+                 + "Aún no tiene administrador: créalo en la pestaña Administradores.");
+      }
+      setForm(VACIO);
       load();
     } catch (err) { setError(err.message); }
   }
@@ -159,22 +271,56 @@ function ClinicsTab() {
       {error && <div className="error-box">{error}</div>}
       {okMsg && <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>✓ {okMsg}</div>}
 
+      {cred && (
+        <PanelDeCredenciales cred={cred} clinica={cred.clinica} onClose={() => setCred(null)} />
+      )}
+
       <form onSubmit={editing ? saveEdit : createClinic} className="card"
             style={{ marginBottom: 18, ...(editing ? { borderColor: "var(--petrol)" } : {}) }}>
-        <h3 style={{ marginBottom: 12 }}>{editing ? `Editar — ${editing.name}` : "Registrar nueva clínica"}</h3>
+        <h3 style={{ marginBottom: 2 }}>{editing ? `Editar — ${editing.name}` : "Registrar nueva clínica"}</h3>
+        {!editing && (
+          <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 14 }}>
+            La clínica queda activa y con el catálogo base. Si indicas su
+            administrador aquí, al guardar se genera su contraseña y se
+            muestra una sola vez para que se la entregues.
+          </p>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.5fr", gap: "12px 14px" }}>
           {fld("name", "Nombre *")}
           {fld("ruc", "RUC")}
           {fld("address", "Dirección")}
           {fld("phone", "Teléfono")}
           {fld("email", "Correo", "email")}
-          <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-            <button className="btn btn-primary">{editing ? "Guardar cambios" : "Crear clínica"}</button>
-            {editing && (
+          {editing && (
+            <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
+              <button className="btn btn-primary">Guardar cambios</button>
               <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)}>Cancelar</button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+
+        {/* Los datos del administrador solo al crear: al editar una
+            clínica ya existente su administrador se gestiona en su
+            propia pestaña, donde además se puede desactivar o cambiar. */}
+        {!editing && (
+          <>
+            <div style={{ borderTop: "1px solid var(--line)", margin: "16px 0 14px" }} />
+            <h4 style={{ marginBottom: 2, fontSize: 14 }}>Administrador de la clínica</h4>
+            <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+              Es quien recibe las credenciales y, ya dentro, da de alta a los
+              profesionales. Opcional: puedes crearlo más tarde.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.5fr auto",
+                          gap: "12px 14px", alignItems: "end" }}>
+              {fld("admin_full_name", "Nombre completo")}
+              {fld("admin_email", "Correo de acceso", "email")}
+              <button className="btn btn-primary">
+                {form.admin_email ? "Crear clínica y credenciales" : "Crear clínica"}
+              </button>
+            </div>
+          </>
+        )}
       </form>
 
       <div className="card" style={{ padding: 0 }}>
@@ -228,9 +374,8 @@ function AdminsTab() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/platform/clinics/");
-      const data = await resp.json();
-      setClinics(data.results || data);
-    } catch { setError("No se pudieron cargar las clínicas."); }
+      setClinics(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las clínicas. ${err.message}` : "No se pudieron cargar las clínicas."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -246,7 +391,8 @@ function AdminsTab() {
       const resp = await api(`/platform/clinics/${clinic.id}/admin/reset-password/`, { method: "POST" });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
-      setTempCred(data);
+      setTempCred({ ...data, clinica: clinic.name });
+      load();   // la cuenta vuelve a quedar pendiente de cambio
     } catch (err) { setError(err.message); }
   }
 
@@ -288,30 +434,20 @@ function AdminsTab() {
       {error && <div className="error-box">{error}</div>}
 
       {tempCred && (
-        <div className="card" style={{ marginBottom: 18, borderColor: "var(--amber)", background: "var(--amber-soft)" }}>
-          <h3 style={{ marginBottom: 6 }}>Contraseña temporal generada</h3>
-          <p style={{ fontSize: 14, marginBottom: 8 }}>
-            Para <strong>{tempCred.email}</strong> — cópiala AHORA, no se puede volver a consultar:
-          </p>
-          <code className="tabular" style={{ fontSize: 18, fontWeight: 700, background: "var(--elev)",
-                padding: "8px 14px", borderRadius: 8, display: "inline-block" }}>
-            {tempCred.temporary_password}
-          </code>
-          <div style={{ marginTop: 10 }}>
-            <button className="btn btn-ghost" style={{ fontSize: 13 }}
-                    onClick={() => { navigator.clipboard.writeText(tempCred.temporary_password); }}>
-              Copiar
-            </button>
-            <button className="btn btn-ghost" style={{ fontSize: 13, marginLeft: 6 }}
-                    onClick={() => setTempCred(null)}>Cerrar</button>
-          </div>
-        </div>
+        <PanelDeCredenciales cred={tempCred} clinica={tempCred.clinica}
+                             onClose={() => setTempCred(null)} />
       )}
 
       {creatingFor && (
         <CreateAdminForm clinic={creatingFor}
                          onClose={() => setCreatingFor(null)}
-                         onSaved={() => { setCreatingFor(null); load(); }} />
+                         onSaved={(cred) => {
+                           setCreatingFor(null);
+                           if (cred?.temporary_password) {
+                             setTempCred({ ...cred, clinica: creatingFor.name });
+                           }
+                           load();
+                         }} />
       )}
 
       <div className="card" style={{ padding: 0 }}>
@@ -338,10 +474,20 @@ function AdminsTab() {
                     </span>
                   ) : (c.admin?.email || "—")}
                 </td>
+                {/* Tres estados, no dos. «Pendiente» es el que faltaba:
+                    dice que las credenciales se generaron pero la clínica
+                    todavía no ha entrado a elegir la suya, así que la
+                    entrega no ha terminado. Sin él, una clínica que nunca
+                    ingresó se ve igual que una que lleva meses trabajando. */}
                 <td>{c.admin
-                  ? (c.admin.is_active
-                      ? <span className="badge badge-ok">Activa</span>
-                      : <span className="badge badge-danger">Desactivada</span>)
+                  ? (!c.admin.is_active
+                      ? <span className="badge badge-danger">Desactivada</span>
+                      : c.admin.must_change_password
+                        ? <span className="badge badge-warn"
+                                title="Se le generó una contraseña temporal y aún no ha ingresado a cambiarla.">
+                            Pendiente de ingreso
+                          </span>
+                        : <span className="badge badge-ok">Activa</span>)
                   : "—"}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {c.admin ? (
@@ -372,7 +518,7 @@ function AdminsTab() {
 }
 
 function CreateAdminForm({ clinic, onClose, onSaved }) {
-  const [form, setForm] = useState({ full_name: "", email: "", password: "" });
+  const [form, setForm] = useState({ full_name: "", email: "" });
   const [error, setError] = useState("");
 
   async function submit(e) {
@@ -384,7 +530,7 @@ function CreateAdminForm({ clinic, onClose, onSaved }) {
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.detail || `Error ${resp.status}`);
-      onSaved();
+      onSaved(data);
     } catch (err) { setError(err.message); }
   }
 
@@ -395,15 +541,15 @@ function CreateAdminForm({ clinic, onClose, onSaved }) {
         <button type="button" className="btn btn-ghost" style={{ padding: "4px 12px", fontSize: 12 }} onClick={onClose}>✕</button>
       </div>
       {error && <div className="error-box">{error}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.5fr 1fr auto", gap: "0 12px", alignItems: "end" }}>
+      {/* Ya no se pide contraseña: la genera el servidor y se muestra
+          una sola vez al guardar. Pedirle a una persona que invente un
+          secreto para otra es como acaban existiendo las «clinica2026». */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.5fr auto", gap: "0 12px", alignItems: "end" }}>
         <div className="field" style={{ marginBottom: 0 }}><label>Nombre completo *</label>
           <input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
-        <div className="field" style={{ marginBottom: 0 }}><label>Correo *</label>
+        <div className="field" style={{ marginBottom: 0 }}><label>Correo de acceso *</label>
           <input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-        <div className="field" style={{ marginBottom: 0 }}><label>Contraseña * (10+)</label>
-          <input type="password" required minLength={10} value={form.password}
-                 onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-        <button className="btn btn-primary">Crear</button>
+        <button className="btn btn-primary">Crear y generar credenciales</button>
       </div>
     </form>
   );
@@ -420,12 +566,14 @@ const ACTION_LABELS = {
 
 function AuditTab() {
   const [logs, setLogs] = useState(null);
+  const [error, setError] = useState("");
   useEffect(() => {
-    api("/platform/audit/").then(async (r) => {
-      if (r.ok) { const d = await r.json(); setLogs(d.results || []); }
-    }).catch(() => setLogs([]));
+    api("/platform/audit/")
+      .then(async (r) => (r.ok ? setLogs(await readList(r)) : setError(await apiErrorMessage(r))))
+      .catch(() => setError("No se pudo contactar con el servidor."));
   }, []);
 
+  if (error) return <div className="error-box">{error}</div>;
   if (logs === null) return <div className="empty">Cargando…</div>;
 
   return (
@@ -464,9 +612,12 @@ function ConfigTab() {
   const [okMsg, setOkMsg] = useState("");
 
   useEffect(() => {
-    api("/platform/config/").then(async (r) => r.ok && setConfig(await r.json())).catch(() => {});
+    api("/platform/config/")
+      .then(async (r) => (r.ok ? setConfig(await r.json()) : setError(await apiErrorMessage(r))))
+      .catch(() => setError("No se pudo contactar con el servidor."));
   }, []);
 
+  if (error) return <div className="error-box">{error}</div>;
   if (!config) return <div className="empty">Cargando…</div>;
 
   async function save(e) {

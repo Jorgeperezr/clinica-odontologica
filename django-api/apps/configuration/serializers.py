@@ -22,17 +22,57 @@ class TreatmentSerializer(serializers.ModelSerializer):
 
 
 class AgreementSerializer(serializers.ModelSerializer):
+    patient_count = serializers.IntegerField(read_only=True, default=0)
+
     class Meta:
         model = Agreement
-        fields = ["id", "name", "discount_percentage", "is_active"]
+        fields = ["id", "name", "discount_percentage", "is_active", "patient_count"]
         read_only_fields = ["id"]
+
+    def validate_discount_percentage(self, value):
+        """
+        Un descuento fuera de [0, 100] no significa nada: por encima de 100
+        la clínica pagaría al paciente y por debajo de 0 le cobraría un
+        recargo disfrazado de convenio. `price_for` lo recorta igualmente,
+        pero conviene que no llegue a guardarse mal.
+        """
+        if value is not None and not (0 <= value <= 100):
+            raise serializers.ValidationError("El descuento debe estar entre 0 y 100 %.")
+        return value
 
 
 class TariffSerializer(serializers.ModelSerializer):
+    treatment_name = serializers.CharField(source="treatment.name", read_only=True)
+    agreement_name = serializers.CharField(source="agreement.name", read_only=True,
+                                           default=None)
+
     class Meta:
         model = Tariff
-        fields = ["id", "treatment", "agreement", "price"]
+        fields = ["id", "treatment", "treatment_name", "agreement", "agreement_name",
+                  "price"]
         read_only_fields = ["id"]
+
+    # El `queryset` que DRF deduce de un ForeignKey NO filtra por tenant: son
+    # todos los tratamientos y convenios de todas las clínicas. Sin estas dos
+    # comprobaciones, un administrador podía crear un tarifario propio
+    # apuntando al tratamiento de otra clínica — la fila se guardaba con su
+    # propio tenant, así que pasaba los filtros de lectura, y el nombre del
+    # tratamiento ajeno aparecía en su rejilla de precios.
+
+    def validate_treatment(self, value):
+        if value.tenant_id != self.context["request"].tenant.id:
+            raise serializers.ValidationError("El tratamiento no pertenece a esta clínica.")
+        return value
+
+    def validate_agreement(self, value):
+        if value is not None and value.tenant_id != self.context["request"].tenant.id:
+            raise serializers.ValidationError("El convenio no pertenece a esta clínica.")
+        return value
+
+    def validate_price(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El precio no puede ser negativo.")
+        return value
 
 
 class SystemParameterSerializer(serializers.ModelSerializer):

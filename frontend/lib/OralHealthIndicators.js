@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./api";
+import { api, readList } from "./api";
 
 // Las 6 piezas índice del formulario (filas de la tabla de higiene)
 const INDEX_TEETH = [
@@ -45,8 +45,7 @@ export default function OralHealthIndicators({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/form033/`);
-      const list = await resp.json();
-      const records = list.results || list;
+      const records = await readList(resp);
       if (records.length > 0) {
         setRecordId(records[0].id);
         const ind = records[0].indicadores_salud_bucal || {};

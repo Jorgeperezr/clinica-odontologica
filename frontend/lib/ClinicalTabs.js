@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api, apiBase } from "./api";
+import { api, apiBase, apiErrorMessage, readList } from "./api";
 import SignaturePad from "./SignaturePad";
 import DocumentPreview from "./DocumentPreview";
 import DocumentScanner from "./DocumentScanner";
@@ -32,20 +32,27 @@ export function PlanTab({ patientId }) {
   const [templateId, setTemplateId] = useState("");
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  // Plan en blanco y sus líneas (ver `createPlan`).
+  const [treatments, setTreatments] = useState([]);
+  const [planNotes, setPlanNotes] = useState("");
+  const [addingTo, setAddingTo] = useState(null);   // id del plan al que se añade
+  const [itemDraft, setItemDraft] = useState({ treatment: "", tooth_fdi_code: "", estimated_price: "" });
 
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/treatment-plans/`);
-      const data = await resp.json();
-      setPlans(data.results || data);
+      setPlans(await readList(resp));
     } catch { setError("No se pudieron cargar los planes."); }
   }, [patientId]);
 
   useEffect(() => {
     load();
-    api("/clinical/plan-templates/").then(async (r) => {
-      if (r.ok) setTemplates(await r.json());
-    }).catch(() => {});
+    api("/clinical/plan-templates/")
+      .then(async (r) => setTemplates(await readList(r)))
+      .catch(() => {});
+    api("/config/treatments/")
+      .then(async (r) => setTreatments(await readList(r)))
+      .catch(() => {});
   }, [load]);
 
   async function applyTemplate() {
@@ -56,6 +63,56 @@ export function PlanTab({ patientId }) {
       });
       if (!resp.ok) throw new Error(`No se pudo aplicar la plantilla (error ${resp.status}).`);
       setTemplateId("");
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  /**
+   * Plan de tratamiento SIN plantilla.
+   *
+   * Hasta ahora la única forma de crear un plan era aplicar una
+   * plantilla, y una clínica recién dada de alta no tiene ninguna. El
+   * resultado era un callejón sin salida en el sitio peor posible: sin
+   * plan no hay presupuesto, y sin presupuesto no hay cuotas ni cobros.
+   * La clínica podía registrar pacientes y no podía cobrarles.
+   *
+   * El endpoint existía desde el Sprint 22 (`POST
+   * /patients/{id}/treatment-plans/`); lo que faltaba era la puerta.
+   */
+  async function createPlan() {
+    setError(""); setOkMsg("");
+    try {
+      const resp = await api(`/patients/${patientId}/treatment-plans/`, {
+        method: "POST", body: JSON.stringify({ notes: planNotes.trim() }),
+      });
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
+      const plan = await resp.json();
+      setPlanNotes("");
+      setAddingTo(plan.id);   // un plan vacío no sirve de nada: se sigue por sus líneas
+      setOkMsg("Plan creado. Añádele los tratamientos que lo componen.");
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function addItem(plan) {
+    setError("");
+    try {
+      const cuerpo = {
+        treatment: itemDraft.treatment,
+        tooth_fdi_code: itemDraft.tooth_fdi_code.trim(),
+        order: (plan.items?.length || 0) + 1,
+      };
+      // El precio va SOLO si lo escribió una persona. Mandarlo vacío lo
+      // marcaría como fijado a mano y el tarifario del convenio ya no
+      // volvería a tocarlo: la línea se quedaría clavada en cero.
+      const precio = itemDraft.estimated_price.trim();
+      if (precio !== "") cuerpo.estimated_price = precio;
+
+      const resp = await api(`/treatment-plans/${plan.id}/items/`, {
+        method: "POST", body: JSON.stringify(cuerpo),
+      });
+      if (!resp.ok) throw new Error(await apiErrorMessage(resp));
+      setItemDraft({ treatment: "", tooth_fdi_code: "", estimated_price: "" });
       load();
     } catch (err) { setError(err.message); }
   }
@@ -112,8 +169,29 @@ export function PlanTab({ patientId }) {
         </span>
       </div>
 
+      {/* Plan sin plantilla. Una clínica recién dada de alta no tiene
+          ninguna plantilla, y hasta ahora eso la dejaba sin forma de
+          crear un plan —y por tanto sin presupuesto y sin cobros—. */}
+      <div className="card" style={{ marginBottom: 18, display: "flex", gap: 10,
+                                     alignItems: "end", flexWrap: "wrap" }}>
+        <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 240 }}>
+          <label>Crear un plan en blanco</label>
+          <input value={planNotes} maxLength={200}
+                 placeholder="Descripción del plan (opcional): «Rehabilitación superior»"
+                 onChange={(e) => setPlanNotes(e.target.value)}
+                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); createPlan(); } }} />
+        </div>
+        <button className="btn btn-primary" onClick={createPlan}>+ Nuevo plan</button>
+        <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+          Se crea vacío y le vas añadiendo tratamientos.
+        </span>
+      </div>
+
       {plans.length === 0 ? (
-        <div className="card"><div className="empty">Sin planes de tratamiento.</div></div>
+        <div className="card"><div className="empty">
+          Sin planes de tratamiento. Crea uno desde una plantilla o en blanco,
+          arriba: hace falta un plan para poder generar el presupuesto.
+        </div></div>
       ) : plans.map((plan) => (
         <div key={plan.id} className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
@@ -150,7 +228,16 @@ export function PlanTab({ patientId }) {
                     <td className="tabular">{it.order}</td>
                     <td style={{ fontWeight: 600 }}>{it.treatment_name}</td>
                     <td className="tabular">{it.tooth_fdi_code || "—"}</td>
-                    <td className="tabular">{money(it.estimated_price)}</td>
+                    {/* Cero no es «gratis», es «todavía sin decidir»: en
+                        `_item_price` un precio de cero cae SIEMPRE al
+                        tarifario del convenio al presupuestar. Enseñar
+                        «$0.00» hacía creer que la línea no cuesta nada, y
+                        luego el presupuesto salía con otra cifra. */}
+                    <td className="tabular">
+                      {Number(it.estimated_price) > 0
+                        ? money(it.estimated_price)
+                        : <span style={{ color: "var(--ink-soft)" }}>Según tarifa</span>}
+                    </td>
                     <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                     <td style={{ textAlign: "right" }}>
                       {st.next && (
@@ -163,6 +250,48 @@ export function PlanTab({ patientId }) {
               })}
             </tbody>
           </table>
+
+          {/* Añadir una línea. Un plan sin líneas no genera presupuesto,
+              así que crear el plan y poder llenarlo son el mismo acto. */}
+          {addingTo === plan.id ? (
+            <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap",
+                          marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+              <div className="field" style={{ marginBottom: 0, flex: 2, minWidth: 220 }}>
+                <label>Tratamiento</label>
+                <select value={itemDraft.treatment}
+                        onChange={(e) => setItemDraft({ ...itemDraft, treatment: e.target.value })}>
+                  <option value="">Seleccionar…</option>
+                  {treatments.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} ({money(t.base_price)})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ marginBottom: 0, width: 90 }}>
+                <label>Pieza</label>
+                <input value={itemDraft.tooth_fdi_code} maxLength={2} placeholder="FDI"
+                       onChange={(e) => setItemDraft({ ...itemDraft, tooth_fdi_code: e.target.value })} />
+              </div>
+              <div className="field" style={{ marginBottom: 0, width: 130 }}>
+                <label>Precio</label>
+                <input type="number" step="0.01" min="0" placeholder="Tarifa"
+                       value={itemDraft.estimated_price}
+                       onChange={(e) => setItemDraft({ ...itemDraft, estimated_price: e.target.value })} />
+              </div>
+              <button className="btn btn-primary" disabled={!itemDraft.treatment}
+                      onClick={() => addItem(plan)}>Añadir</button>
+              <button className="btn btn-ghost" onClick={() => setAddingTo(null)}>Cerrar</button>
+              <span style={{ fontSize: 12, color: "var(--ink-soft)", flexBasis: "100%" }}>
+                Deja el precio vacío para que se aplique la tarifa del convenio del
+                paciente al generar el presupuesto. Si escribes una cifra, se respeta
+                tal cual y el tarifario no la toca.
+              </span>
+            </div>
+          ) : (
+            <button className="btn btn-ghost" style={{ fontSize: 13, marginTop: 10 }}
+                    onClick={() => { setAddingTo(plan.id); setItemDraft({ treatment: "", tooth_fdi_code: "", estimated_price: "" }); }}>
+              + Añadir tratamiento
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -195,8 +324,7 @@ export function DocumentsTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/documents/`);
-      const data = await resp.json();
-      setDocs(data.results || data);
+      setDocs(await readList(resp));
     } catch { setError("No se pudieron cargar los documentos."); }
   }, [patientId]);
 
@@ -433,16 +561,14 @@ export function ConsentsTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/consents/`);
-      const data = await resp.json();
-      setConsents(data.results || data);
+      setConsents(await readList(resp));
     } catch { setError("No se pudieron cargar los consentimientos."); }
   }, [patientId]);
 
   const loadTemplates = useCallback(async () => {
     try {
       const resp = await api("/consent-templates/");
-      const data = await resp.json();
-      setTemplates(data.results || data);
+      setTemplates(await readList(resp));
     } catch { /* opcional */ }
   }, []);
 

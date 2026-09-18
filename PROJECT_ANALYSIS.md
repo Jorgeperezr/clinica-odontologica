@@ -226,17 +226,49 @@ ocurren.
    `/media/branding/` y niega el resto, y `file_url` apunta al endpoint
    autenticado. Verificado con nginx real: logotipo 200, radiografía y
    documento 404, incluidos intentos de salto de directorio.
-2. **Test flaky de medianoche** (sección 5): CI rojo intermitente ≈ 1 hora/día.
+2. ~~**Test flaky de medianoche**~~ **RESUELTO (Sprints 61 y 70).** La suite
+   pasa ahora en nueve fechas frontera (fin de mes, fin de año, 29 de febrero,
+   1 de marzo) y en cuatro husos horarios. El CI ejecuta una segunda pasada con
+   la clínica en UTC+14 para que la fecha del servidor y la local NUNCA
+   coincidan, que es la condición en la que aparecen estos fallos.
 3. **JWT en `localStorage`** (`frontend/lib/api.js`): expuesto ante XSS. Riesgo
    moderado (no hay contenido de terceros inyectable hoy), pero una migración a
    cookies `httpOnly` o mitigaciones CSP es deseable antes de crecer.
-4. **Sin tests del gateway FastAPI**: el parseo del webhook de Meta (crítico
-   para confirmaciones de cita) solo tiene lint en CI.
-5. **Sin observabilidad**: no hay Sentry/alertas ni logging estructurado;
-   en producción los errores solo quedan en stdout de los contenedores.
-6. **Backups**: scripts cifrados existen (`scripts/backup.sh`), pero no hay
-   evidencia de programación automática (cron) ni de prueba de restauración
-   periódica — crítico con datos de salud.
+4. ~~**Sin tests del gateway FastAPI**~~ **RESUELTO (Sprint 69).** 30 pruebas
+   sobre firma del webhook, parseo del formato de Meta, verificación de la URL
+   y token interno; el trabajo de CI pasa a ejecutarlas además del lint. Al
+   escribirlas apareció un fallo real: una excepción inesperada al procesar un
+   evento devolvía 500, y Meta acaba desactivando el webhook de la cuenta ante
+   los 5xx repetidos.
+5. **Sin observabilidad** — **CORREGIDO en su parte crítica (Sprint 75).**
+   El diagnóstico era optimista: no es que los errores «solo quedaran en
+   stdout», es que **no quedaban en ninguna parte**. Comprobado con un 500
+   real y `DEBUG=False`: sin bloque `LOGGING`, el manejador `console` de
+   Django está filtrado por `require_debug_true` y `mail_admins` necesita
+   `ADMINS`, que estaba vacío; la traza no llegaba ni a la salida estándar.
+   Ahora hay registro estructurado en JSON con id de correlación
+   (`X-Request-ID`), una línea por petición y la traza completa de cada
+   500, con redacción de datos personales — incluidos los valores de la
+   cadena de consulta, que en `?search=` llevan apellidos de pacientes.
+   **Queda pendiente** la otra mitad: alertas (Sentry o equivalente) y un
+   monitor externo que vigile `/api/v1/ready/`. Eso necesita una cuenta y
+   una decisión de hosting, no código.
+6. **Backups** — **CORREGIDO (Sprint 76).** Aquí el análisis se pasaba de
+   pesimista en un punto y se quedaba corto en otro. La programación
+   automática **sí** estaba documentada (DEPLOY.md traía la línea de cron
+   diaria); lo que faltaba de verdad era la prueba de restauración. Y
+   había algo peor que no estaba anotado: la «verificación de integridad»
+   de `backup.sh` era un `gzip -t`, que solo prueba que el archivo se
+   descomprime. Un volcado cortado a la mitad —disco lleno, contenedor
+   reiniciado— comprime perfectamente y pasaba la prueba: el guion
+   anunciaba «correcto» una copia irrecuperable. Comprobado cortando un
+   volcado a propósito.
+   Ahora `backup.sh` comprueba que el volcado termine donde `pg_dump` lo
+   cierra, y `scripts/verificar-backup.sh` lo **restaura de verdad** en
+   una base desechable, cuenta filas y la destruye; devuelve un código de
+   salida para que cron pueda avisar. Verificado que falla ante volcado
+   truncado, esquema sin datos y frase de cifrado equivocada. Los guiones
+   funcionan además sin Docker.
 
 ### 6.2 Deuda técnica y limpieza
 
@@ -257,16 +289,45 @@ ocurren.
 3. **Páginas monolíticas en el frontend**: `configuracion/page.js` (866 líneas),
    `paciente/page.js` (630), `ClinicalTabs.js` (567), `plataforma/page.js`
    (532). Funcionan, pero elevan el costo de cada cambio.
-4. **Frontend sin linter ni tipos**: no hay ESLint configurado ni TypeScript;
+4. **Pantalla en blanco ante cualquier error de la API** — **CORREGIDO en
+   su mayor parte (Sprint 73), con dos archivos pendientes.** El patrón
+   `setCosas(data.results || data)` estaba repetido en 40 puntos y da por
+   hecho que la petición fue bien. Cuando no lo es, el cuerpo sigue siendo
+   JSON válido pero es un objeto, así que entra en el estado y el
+   `cosas.map(...)` de más abajo lanza «map is not a function»: React
+   derriba el árbol y la pantalla se queda **en blanco**, sin dato, sin
+   aviso y sin pista. No es hipotético: el límite es de 60 peticiones por
+   minuto y por usuario, y basta con recorrer las pestañas de
+   Configuración deprisa para provocarlo. Encontrado usando la aplicación
+   con un navegador real, no con los tests ni con `next build`.
+   Corregidos los 14 archivos que se podían tocar, con `readList()` /
+   `readObject()` en `lib/api.js`. **Siguen cayendo** `lib/ClinicalTabs.js`
+   (Plan de tratamiento, Documentos y Consentimientos) y
+   `lib/periodontal/PeriodontalMatrix.js`, que el usuario pidió no
+   modificar: son 6 puntos y basta aplicarles el mismo cambio de una línea.
+
+5. **Frontend sin linter ni tipos**: no hay ESLint configurado ni TypeScript;
    el CI solo compila. Los bugs de los Sprints 41–42 (tupla vs. objeto de
    `useConfirm`) son exactamente la clase de error que estas herramientas
    atrapan.
-5. **Throttle de OTP aproximado**: la ventana exacta de 10 minutos quedó
+6. **Throttle de OTP aproximado**: la ventana exacta de 10 minutos quedó
    anotada como pendiente en `settings.py:187`.
-6. **Duplicidad latente `full_name` vs. `first_name/last_name`** entre `User`
+7. **Duplicidad latente `full_name` vs. `first_name/last_name`** entre `User`
    (full_name) y `Patient` (first/last) — no es un bug, pero obliga a
    formatear en cada vista.
-7. **UI faltante para convenios y tarifarios** (backend listo desde Sprint 2).
+8. ~~**UI faltante para convenios y tarifarios**~~ **RESUELTO (Sprint 71).**
+   El diagnóstico se quedaba corto: faltaba la pantalla, sí, pero además
+   `Agreement` y `Tariff` **no los leía nadie**. El presupuesto se calculaba
+   siempre con `Treatment.base_price`, así que una clínica podía cargar el
+   tarifario entero de una aseguradora y seguir cobrando la tarifa
+   particular; y no existía forma de decir qué paciente está cubierto por
+   qué convenio. Ahora hay `Patient.agreement`, un único punto de
+   resolución de precios (`apps/configuration/pricing.py`) con precedencia
+   declarada, y el presupuesto automático lo usa. Al conectarlo aparecieron
+   dos agujeros de aislamiento: ni `TariffSerializer` ni `PatientSerializer`
+   comprobaban que el tratamiento o el convenio recibidos fueran de la
+   misma clínica — el `queryset` que DRF deduce de un ForeignKey no filtra
+   por tenant.
 
 ### 6.3 Fortalezas a preservar
 
@@ -316,7 +377,9 @@ recorre todos los módulos; accesibilidad (WCAG AA verificado, reduced-motion).
 9. Observabilidad mínima: Sentry (Django + Next) y healthchecks monitorizados.
 
 ### P2 — Completar el alcance funcional
-10. UI de convenios y tarifarios en Configuración (backend ya listo).
+10. ~~UI de convenios y tarifarios en Configuración~~ (Sprint 71). Incluyó
+    lo que el backend «ya listo» no tenía: vínculo paciente–convenio y uso
+    real de la tarifa al presupuestar.
 11. App móvil de pacientes (Flutter): login OTP, citas, evoluciones visibles,
     estado de cuenta — el backend ya expone lo necesario.
 12. Google Calendar Fase 2 (OAuth bidireccional).

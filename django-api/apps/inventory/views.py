@@ -98,7 +98,7 @@ class ExpiringBatchAlertView(APIView):
             days = int(request.query_params.get("days", 30))
         except ValueError:
             days = 30
-        limit_date = timezone.now().date() + timedelta(days=days)
+        limit_date = timezone.localdate() + timedelta(days=days)
 
         batches = Batch.objects.filter(
             tenant=request.tenant,
@@ -114,7 +114,7 @@ class ExpiringBatchAlertView(APIView):
                 "batch_number": b.batch_number,
                 "quantity": str(b.quantity),
                 "expiration_date": str(b.expiration_date),
-                "days_to_expiry": (b.expiration_date - timezone.now().date()).days,
+                "days_to_expiry": (b.expiration_date - timezone.localdate()).days,
             }
             for b in batches
         ]

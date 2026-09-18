@@ -160,7 +160,11 @@ class Sprint20AgendaTests(APITestCase):
         self._create_appt(1)
         self._create_appt(15)
         self.client.force_authenticate(user=self.reception)
-        first_of_month = timezone.now().strftime("%Y-%m-01")
+        # La MISMA fuente de fecha con la que se crearon las citas. Usando
+        # `timezone.now()` se tomaba la fecha UTC: en las horas en que el
+        # servidor ya ha cambiado de día —y de mes— la prueba creaba las
+        # citas en diciembre y consultaba enero.
+        first_of_month = timezone.localdate().strftime("%Y-%m-01")
         resp = self.client.get(f"/api/v1/agenda/view/?mode=monthly&date={first_of_month}")
         self.assertEqual(resp.status_code, 200)
         results = resp.data.get("results", resp.data)

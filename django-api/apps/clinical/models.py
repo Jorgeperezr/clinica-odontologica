@@ -178,6 +178,22 @@ class TreatmentPlanItem(models.Model):
         max_length=15, choices=Status.choices, default=Status.PLANNED
     )
     estimated_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # ¿Ese precio lo escribió una persona o lo puso el sistema?
+    #
+    # Antes se ADIVINABA comparando con el precio de catálogo: si coincidía,
+    # se daba por automático. Dos motivos para dejar de adivinar. Uno, la
+    # regla se equivocaba sola: un odontólogo que teclee justo el precio de
+    # catálogo quedaba marcado como automático y el convenio le reescribía
+    # la cifra por detrás. Y dos, desde que el plan se siembra con el precio
+    # del convenio y no con el de catálogo, la comparación ya no distingue
+    # nada.
+    #
+    # Importa porque de esto depende qué se cobra: lo que puso el sistema se
+    # recalcula con el tarifario al presupuestar, y lo que pactó una persona
+    # con el paciente NO se toca.
+    price_is_manual = models.BooleanField(
+        default=False, verbose_name="Precio fijado a mano",
+    )
 
     class Meta:
         verbose_name = "Ítem de plan de tratamiento"

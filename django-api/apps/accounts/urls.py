@@ -1,13 +1,15 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from apps.accounts import views
+from apps.accounts import password_views, views
 
 urlpatterns = [
     # Autenticación — RF-USR-01, 02, 04
     path("auth/login/", views.StaffLoginView.as_view(), name="staff-login"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("auth/me/", views.MeView.as_view(), name="auth-me"),
+    path("auth/change-password/", password_views.CambiarMiContrasenaView.as_view(),
+         name="auth-change-password"),
     path("auth/otp/request/", views.OTPRequestView.as_view(), name="otp-request"),
     path("auth/otp/verify/", views.OTPVerifyView.as_view(), name="otp-verify"),
     path("auth/patient-recovery/", views.PatientRecoveryView.as_view(), name="patient-recovery"),

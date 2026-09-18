@@ -115,8 +115,11 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 #   puede descifrar.
 ```
 
-Backup manual: `COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh`
-(incluye verificación de integridad automática al terminar).
+Copia manual: `COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh`
+
+Los guiones funcionan **con Docker y sin él**: si no hay demonio usan el
+`pg_dump` / `psql` de la máquina. Eso permite hacer y comprobar copias
+desde un portátil sin Docker Desktop.
 
 Cron diario:
 ```bash
@@ -124,10 +127,64 @@ Cron diario:
 0 2 * * * root cd /ruta/al/repo && COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh >> /var/log/backup-clinica.log 2>&1
 ```
 
-Restauración ante un error:
+### Verificación: una copia sin restaurar no es una copia
+
+`backup.sh` comprueba al terminar que el volcado **está completo** —que
+el SQL termina donde `pg_dump` lo cierra—. Eso descarta el fallo más
+común y más silencioso: que la exportación se corte a la mitad porque se
+llenó el disco o se reinició el contenedor.
+
+Antes esa comprobación era `gzip -t`, que solo prueba que el archivo se
+descomprime. **Un volcado partido por la mitad comprime perfectamente y
+pasaba la prueba**: se anunciaba «correcto» una copia irrecuperable.
+Verificado cortando un volcado a propósito.
+
+Pero que el archivo esté entero no significa que se pueda restaurar. Eso
+solo lo dice restaurarlo:
+
+```bash
+./scripts/verificar-backup.sh            # la copia más reciente
+./scripts/verificar-backup.sh <archivo>  # una concreta
+```
+
+Descifra, **restaura de verdad en una base desechable**, cuenta las filas
+de las tablas que importan y la destruye al salir. Nunca toca la base
+real: el nombre de la base de prueba se genera con marca de tiempo y el
+guion aborta si coincidiera con la de producción.
+
+Devuelve `0` si la copia sirve y distinto de `0` si no, para poder
+avisar. Comprobado que **falla** ante los cuatro casos que importan: un
+volcado truncado, uno con esquema pero sin datos, la frase de cifrado
+equivocada y un archivo inexistente.
+
+Semanal:
+```bash
+# /etc/cron.d/verificar-backup-clinica  (domingos a las 03:00)
+0 3 * * 0 root cd /ruta/al/repo && COMPOSE_FILE=docker-compose.prod.yml ./scripts/verificar-backup.sh >> /var/log/verificar-backup.log 2>&1 || mail -s "FALLO: la copia de la clinica NO es restaurable" tu@correo.ec
+```
+
+### En macOS
+
+macOS trae **LibreSSL**, no OpenSSL, y su `enc` no siempre acepta
+`-pbkdf2`. Sin esa opción el cifrado caería a una derivación de clave
+mucho más débil y —lo grave— no podría descifrar las copias hechas en el
+servidor. Los tres guiones lo comprueban antes de escribir nada y
+explican qué hacer:
+
+```bash
+brew install openssl@3
+export PATH="$(brew --prefix openssl@3)/bin:$PATH"
+```
+
+### Restauración ante un error real
+
 ```bash
 COMPOSE_FILE=docker-compose.prod.yml ./scripts/restore.sh backups/clinica-2026-07-09_0200.sql.gz.enc
 ```
+
+Comprueba que la copia esté completa **antes** de tocar la base: descubrir
+que estaba truncada después de haberla borrado es la peor secuencia
+posible, y era la que permitía el guion anterior.
 
 Copiar `backups/` a un destino EXTERNO (rclone a Google Drive, disco USB
 rotado). Un backup que vive en la misma máquina no es backup. Y probar la
@@ -160,6 +217,102 @@ git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 (Las migraciones corren solas en el arranque.)
+
+## Sondas de salud y orden de arranque
+
+Django expone dos rutas **públicas y sin autenticación** (un monitor no
+tiene credenciales):
+
+| Ruta | Pregunta | Toca la base de datos |
+|---|---|---|
+| `GET /api/v1/health/` | ¿Está vivo el proceso? | No |
+| `GET /api/v1/ready/` | ¿Puede atender? | Sí (`SELECT 1`) |
+
+Son dos preguntas distintas y conviene no mezclarlas. Si `/ready/`
+devuelve 503, el proceso está sano pero le falta la base: hay que sacarlo
+del reparto de tráfico, **no reiniciarlo**. Reiniciar procesos sanos
+porque la base tiene un mal momento convierte una incidencia en una
+caída.
+
+Ninguna de las dos revela versión, motor, nombre de clínica ni cuentas:
+el detalle del error va al registro, porque el mensaje de la base lleva
+host, puerto y usuario.
+
+**Orden de arranque.** `docker-compose.prod.yml` no tenía sonda en
+Postgres —el de desarrollo sí—, así que `depends_on: postgres` solo
+esperaba a que el contenedor arrancara. En un arranque en frío o tras
+reiniciar el host, `migrate` corría contra una base que aún no aceptaba
+conexiones; el contenedor moría, `restart: unless-stopped` lo reintentaba
+y acababa levantando, pero con un ciclo de caídas. Ahora:
+
+- `postgres` y `redis` tienen sonda propia.
+- `django-api` espera a que ambas estén sanas y publica la suya
+  (`/api/v1/ready/`, consultada con `urllib`: la imagen `python:3.12-slim`
+  no trae `curl` ni `wget`).
+- `celery-worker`, `celery-beat` y `nginx` esperan a que Django **atienda**,
+  no a que exista. Antes subían mientras aún corrían `migrate` y
+  `collectstatic`, y las primeras peticiones devolvían 502.
+
+Para monitorización externa (uptime, alertas), la ruta a vigilar es
+`/api/v1/ready/`.
+
+## Registro y diagnóstico
+
+**El problema que había.** El proyecto no tenía bloque `LOGGING`, y eso no
+significaba «el de Django por defecto»: significaba **silencio**.
+Comprobado con un 500 real y `DEBUG=False` — el cliente recibe su 500 y la
+traza no aparece en ningún sitio, ni en la salida estándar. El único
+logger que trae Django es `django`, con el manejador `console` filtrado
+por `require_debug_true` (callado en producción) y `mail_admins`, que
+necesita `ADMINS` y un backend de correo; `ADMINS` estaba vacío. Cuando el
+panel fallaba, nadie llegaba a enterarse de por qué.
+
+**Cómo queda.** Una línea por petición a la salida estándar, que es donde
+la recoge Docker:
+
+```
+DJANGO_LOG_FORMAT=json   # por defecto con DEBUG=False
+DJANGO_LOG_FORMAT=plain  # por defecto en desarrollo
+DJANGO_LOG_LEVEL=INFO
+```
+
+```json
+{"ts":"...","level":"ERROR","logger":"apps.request","msg":"Excepción no controlada",
+ "request_id":"34cb3d80bf9f4d4d","method":"GET","path":"/api/v1/patients/",
+ "query_keys":["search"],"user_id":"...","tenant_id":"...",
+ "exc_type":"RuntimeError","traceback":"..."}
+```
+
+**Correlación.** Cada petición lleva un `request_id` que va también en la
+cabecera `X-Request-ID` de la respuesta. Si un usuario reporta un fallo y
+da ese código, la incidencia se encuentra sin buscar por hora y a ojo.
+Si nginx o el gateway mandan ya un `X-Request-ID`, se respeta, de modo que
+una petición se sigue de punta a punta.
+
+**Qué NO va al registro.** Esto es un sistema de datos de salud y un
+registro se copia a un agregador, se conserva meses y lo lee gente que no
+tiene por qué ver la historia de nadie:
+
+| Sí | No |
+|---|---|
+| método, ruta, estado, duración | nombres, cédulas, teléfonos, correos |
+| id de usuario, rol, id de clínica | contraseñas, tokens, cabeceras de auth |
+| tipo de excepción y traza | contenido de notas clínicas |
+| **nombres** de los parámetros de consulta | **valores** de esos parámetros |
+
+Esa última fila importa más de lo que parece: `/api/v1/patients/?search=Pérez`
+lleva un apellido dentro de la URL. Se registra `query_keys: ["search"]` y
+nunca su contenido. Por el mismo motivo se descarta el logger
+`django.request`, que pasa el objeto de petición en `extra` y cuyo repr
+incluye la cadena de consulta entera.
+
+Los UUID sí se registran: son seudónimos, sin la base de datos no dicen
+quién es nadie, y sin ellos no se puede reconstruir qué pasó.
+
+**Qué monitorizar.** Alertar sobre líneas con `level: ERROR` del logger
+`apps.request`, y sobre `/api/v1/ready/` devolviendo 503. Las sondas de
+salud no se registran a propósito: un balanceador las pide cada diez
+segundos y ahogarían todo lo demás.
 
 ## Google Calendar — estado y Fase 2
 

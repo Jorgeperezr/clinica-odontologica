@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, readList } from "../../../lib/api";
 
 const STATUS_STYLE = {
   pending:     { label: "Pendiente",   cls: "badge-warn" },
@@ -47,8 +47,7 @@ export default function AgendaPage() {
       const params = new URLSearchParams({ mode, date });
       if (doctorId) params.set("doctor_id", doctorId);
       const resp = await api(`/agenda/view/?${params}`);
-      const data = await resp.json();
-      setAppointments(data.results || data);
+      setAppointments(await readList(resp));
     } catch {
       setError("No se pudo cargar la agenda.");
     } finally {
@@ -60,8 +59,7 @@ export default function AgendaPage() {
 
   useEffect(() => {
     api("/doctors/").then(async (r) => {
-      const data = await r.json();
-      setDoctors(data.results || data);
+      setDoctors(await readList(r));
     }).catch(() => {});
   }, []);
 
@@ -355,8 +353,7 @@ function AppointmentForm({ doctors, defaultDate, onSaved }) {
     if (q.length < 2) { setPatientResults([]); return; }
     try {
       const resp = await api(`/patients/?search=${encodeURIComponent(q)}`);
-      const data = await resp.json();
-      setPatientResults((data.results || data).slice(0, 6));
+      setPatientResults((await readList(resp)).slice(0, 6));
     } catch { /* silencioso */ }
   }
 

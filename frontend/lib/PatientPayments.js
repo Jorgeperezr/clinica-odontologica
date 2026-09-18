@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { api } from "./api";
+import { api, readList } from "./api";
 
 const METHODS = { cash: "Efectivo", transfer: "Transferencia", card: "Tarjeta" };
 
@@ -34,8 +34,7 @@ export default function PatientPayments({ patientId, role }) {
     try {
       const resp = await api(`/patients/${patientId}/payments/`);
       if (!resp.ok) return;
-      const data = await resp.json();
-      setRows(data.results || data);
+      setRows(await readList(resp));
     } catch { /* sin cobros: la ficha sigue funcionando */ }
   }, [patientId, canCharge]);
 

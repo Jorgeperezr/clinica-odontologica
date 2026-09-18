@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, currentUser } from "../../../lib/api";
+import { api, currentUser, readList, readObject } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import PatientPayments from "../../../lib/PatientPayments";
 import { VIEWS, getView, readPreferredView, savePreferredView } from "../../../lib/odontogram/registry";
@@ -32,6 +32,7 @@ export default function PatientDetailPage() {
 function PatientDetail() {
   const id = useSearchParams().get("id");
   const [patient, setPatient] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [role, setRole] = useState("");
   const [tab, setTab] = useState("odontograma");
 
@@ -42,8 +43,24 @@ function PatientDetail() {
   }, []);
 
   useEffect(() => {
-    api(`/patients/${id}/`).then(async (r) => setPatient(await r.json())).catch(() => {});
+    setLoadError("");
+    api(`/patients/${id}/`)
+      .then(async (r) => setPatient(await readObject(r)))
+      // Tragarse el motivo dejaba la ficha en «Cargando…» para siempre:
+      // el usuario se queda mirando un rótulo que nunca cambia y sin
+      // saber si es lentitud, un permiso o el límite de peticiones.
+      .catch((err) => setLoadError(err?.message || "No se pudo cargar el paciente."));
   }, [id]);
+
+  if (loadError) {
+    return (
+      <div>
+        <BackButton fallback="/panel/pacientes/" label="Pacientes" />
+        <div className="error-box" style={{ marginTop: 12 }}>{loadError}</div>
+        <button className="btn" onClick={() => window.location.reload()}>Reintentar</button>
+      </div>
+    );
+  }
 
   if (!patient) return <div className="empty">Cargando…</div>;
 
@@ -57,7 +74,20 @@ function PatientDetail() {
         </span>
       </div>
 
-      <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
+      <PatientAgreement patient={patient} canEdit={role === "admin" || role === "reception"}
+                        onChanged={(p) => setPatient(p)} />
+
+      {/* Las siete pestañas no caben a lo ancho de una tableta: medido,
+          a 1024 px la última llegaba a 1189 y arrastraba a TODA la página
+          a un scroll horizontal, así que el contenido de abajo también se
+          salía. Se deja que la tira se desplace sola, que es lo que hace
+          cualquier barra de pestañas en pantalla estrecha, y se le quita
+          a los botones la posibilidad de encogerse: partir «Plan de
+          tratamiento» en dos líneas es peor que deslizar. */}
+      <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px",
+                                     borderBottom: "1px solid var(--line)",
+                                     overflowX: "auto", scrollbarWidth: "thin",
+                                     WebkitOverflowScrolling: "touch" }}>
         {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"],
@@ -66,7 +96,7 @@ function PatientDetail() {
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
-              fontWeight: 600, fontSize: 14,
+              fontWeight: 600, fontSize: 14, flexShrink: 0, whiteSpace: "nowrap",
               color: tab === key ? "var(--petrol)" : "var(--ink-soft)",
               borderBottom: tab === key ? "3px solid var(--petrol)" : "3px solid transparent",
             }}>
@@ -135,19 +165,21 @@ function OdontogramTab({ patientId, initialView }) {
       }
       setTeeth(map);
       setRm(rmMap);
-    } catch { setError("No se pudo cargar el odontograma."); }
+    } catch (err) { setError(err?.message ? `No se pudo cargar el odontograma. ${err.message}` : "No se pudo cargar el odontograma."); }
   }, [patientId]);
 
   useEffect(() => {
     loadCurrent();
-    api("/odontogram-states/").then(async (r) => setStates(await r.json())).catch(() => {});
+    // Es una LISTA y el odontograma la recorre con .map: si aquí entrara
+    // un objeto de error, el .map derribaría la ficha ENTERA, no solo el
+    // odontograma — todas las pestañas del paciente a la vez.
+    api("/odontogram-states/").then(async (r) => setStates(await readList(r))).catch(() => {});
   }, [loadCurrent]);
 
   const loadHistory = useCallback(async (tooth) => {
     try {
       const resp = await api(`/patients/${patientId}/tooth-records/?tooth_fdi_code=${tooth}`);
-      const data = await resp.json();
-      setHistory(data.results || data);
+      setHistory(await readList(resp));
     } catch { /* silencioso */ }
   }, [patientId]);
 
@@ -447,9 +479,8 @@ function EvolutionsTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/evolutions/`);
-      const data = await resp.json();
-      setEvolutions(data.results || data);
-    } catch { setError("No se pudieron cargar las evoluciones."); }
+      setEvolutions(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las evoluciones. ${err.message}` : "No se pudieron cargar las evoluciones."); }
   }, [patientId]);
 
   useEffect(() => { load(); }, [load]);
@@ -625,6 +656,81 @@ function EvolutionsTab({ patientId }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * Convenio del paciente (Sprint 71).
+ *
+ * Se muestra junto a la cabecera porque condiciona el dinero de todo lo que
+ * venga después: el presupuesto que se genere desde el plan saldrá con la
+ * tarifa de este convenio. Tenerlo escondido en un formulario de edición
+ * llevaría a presupuestar con la tarifa equivocada sin enterarse.
+ *
+ * Solo administración y recepción lo cambian: es un dato administrativo, no
+ * clínico.
+ */
+function PatientAgreement({ patient, canEdit, onChanged }) {
+  const [agreements, setAgreements] = useState([]);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!editing || agreements.length) return;
+    api("/config/agreements/")
+      .then(async (r) => setAgreements((await readList(r)).filter((a) => a.is_active)))
+      .catch(() => setError("No se pudieron cargar los convenios."));
+  }, [editing, agreements.length]);
+
+  async function save(value) {
+    setSaving(true);
+    setError("");
+    try {
+      const resp = await api(`/patients/${patient.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ agreement: value || null }),
+      });
+      if (!resp.ok) throw new Error(`No se pudo guardar (error ${resp.status}).`);
+      onChanged(await resp.json());
+      setEditing(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                  fontSize: 13, color: "var(--ink-soft)", marginBottom: 4 }}>
+      <span>Convenio:</span>
+      {editing ? (
+        <select autoFocus disabled={saving} defaultValue={patient.agreement || ""}
+                aria-label="Convenio del paciente"
+                onChange={(e) => save(e.target.value)}
+                style={{ padding: "4px 8px", border: "1px solid var(--line)",
+                         borderRadius: "var(--radius-sm, 4px)" }}>
+          <option value="">Particular (sin convenio)</option>
+          {agreements.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      ) : (
+        <>
+          <strong style={{ color: "var(--ink)" }}>
+            {patient.agreement_name || "Particular"}
+          </strong>
+          {canEdit && (
+            <button type="button" onClick={() => setEditing(true)}
+                    style={{ background: "transparent", border: "none", padding: 0,
+                             color: "var(--petrol)", fontSize: 13, cursor: "pointer" }}>
+              Cambiar
+            </button>
+          )}
+        </>
+      )}
+      {error && <span style={{ color: "var(--red)" }}>{error}</span>}
     </div>
   );
 }

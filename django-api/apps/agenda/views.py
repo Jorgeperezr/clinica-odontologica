@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.utils import timezone
@@ -14,6 +15,8 @@ from apps.agenda.serializers import (
 )
 from apps.common.permissions import HasRole
 
+logger = logging.getLogger("apps.agenda")
+
 CAN_MANAGE_AGENDA = HasRole.for_roles("admin", "reception")
 CAN_VIEW_AGENDA = HasRole.for_roles("admin", "reception", "doctor", "auxiliary")
 
@@ -25,9 +28,14 @@ class DoctorListView(generics.ListAPIView):
     permission_classes = [CAN_VIEW_AGENDA]
 
     def get_queryset(self):
+        # El `order_by` no es cosmético: sin un orden estable, paginar un
+        # conjunto es quedarse a merced de lo que devuelva la base, y una
+        # misma fila puede salir dos veces o no salir en ninguna página.
+        # Django lo avisa («UnorderedObjectListWarning») y aquí se veía en
+        # la salida de las pruebas.
         return Doctor.objects.filter(
             tenant=self.request.tenant, is_active=True
-        ).select_related("user")
+        ).select_related("user").order_by("user__full_name", "user__email")
 
 
 class AppointmentListCreateView(generics.ListCreateAPIView):
@@ -181,7 +189,15 @@ class AppointmentCheckinView(_AppointmentActionView):
 
             notify_doctor_patient_arrived.delay(str(appt.id))
         except Exception:
-            pass
+            # El registro de llegada es lo crítico y no se toca. Pero que
+            # el aviso sea secundario no lo hace invisible: si el broker
+            # lleva días caído, ningún doctor se entera de que su paciente
+            # ha llegado y con un `pass` nadie llegaba a saberlo.
+            logger.warning(
+                "No se pudo encolar el aviso de llegada al doctor",
+                exc_info=True,
+                extra={"appointment_id": str(appt.id)},
+            )
         return Response(AppointmentSerializer(appt).data)
 
 
@@ -211,7 +227,7 @@ class AgendaViewList(generics.ListAPIView):
     def get_queryset(self):
         mode = self.request.query_params.get("mode", "daily")
         date_str = self.request.query_params.get("date")
-        anchor = parse_date(date_str) if date_str else timezone.now().date()
+        anchor = parse_date(date_str) if date_str else timezone.localdate()
 
         if mode == "weekly":
             start = anchor - timedelta(days=anchor.weekday())

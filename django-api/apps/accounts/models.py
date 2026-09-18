@@ -35,6 +35,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=20, choices=Role.choices)
 
     is_active = models.BooleanField(default=True)  # baja lógica — RF-USR-06
+    must_change_password = models.BooleanField(
+        default=False,
+        verbose_name="Debe cambiar la contraseña",
+        help_text=(
+            "Se marca cuando la contraseña la puso otra persona: el alta de "
+            "una clínica o un restablecimiento. Mientras esté marcada, la "
+            "cuenta solo puede hacer una cosa: elegir su propia contraseña."
+        ),
+    )
     is_staff = models.BooleanField(default=False)  # acceso al admin de Django
 
     created_at = models.DateTimeField(auto_now_add=True)
