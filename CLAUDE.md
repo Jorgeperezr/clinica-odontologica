@@ -51,8 +51,10 @@ El odontograma está fuera de alcance salvo permiso explícito:
 - `frontend/lib/odontogram/meshProvider.js`
 - `frontend/lib/odontogram/contract.js`
 - `frontend/lib/odontogram/registry.js`
-- `frontend/components/clinical/ClinicalTabs.js`
-- el odontograma clásico y el compacto/periodontal
+- `frontend/lib/odontogram/Odontogram3D.js`
+- `frontend/lib/ClinicalTabs.js`
+- `frontend/lib/Odontogram.js` (clásico) y
+  `frontend/lib/periodontal/PeriodontalMatrix.js`
 
 Tampoco se tocan la lógica clínica, la sincronización entre
 odontogramas, el raycasting, la historia ni los tratamientos. La
