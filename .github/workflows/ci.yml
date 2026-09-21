@@ -56,6 +56,30 @@ jobs:
           DJANGO_TIME_ZONE: Pacific/Kiritimati
         run: python manage.py test --settings=config.settings_test
 
+  movil:
+    # La app del paciente tenía pruebas y nadie las ejecutaba: sin este
+    # trabajo, el contrato con la API se rompe en silencio y se descubre
+    # en el teléfono de un paciente. Los `fixtures` son respuestas
+    # capturadas de la API real, así que renombrar un campo en
+    # `apps/app_paciente/views.py` pone esto en rojo.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.5"
+          channel: stable
+          cache: true
+      - name: Dependencias
+        working-directory: movil
+        run: flutter pub get
+      - name: Analizar
+        working-directory: movil
+        run: flutter analyze
+      - name: Tests
+        working-directory: movil
+        run: flutter test
+
   whatsapp-gateway:
     runs-on: ubuntu-latest
     steps:
