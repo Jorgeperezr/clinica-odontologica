@@ -59,11 +59,20 @@ escritas a mano: si se renombra un campo en `apps/app_paciente/views.py`
 hay que recapturarlas (el cómo está en `movil/README.md`) y no
 «arreglar» el test a mano, que es tapar el cambio de contrato.
 
-Compilar para iOS necesita un Mac con Xcode. Para ejecutarla en un
-simulador o un teléfono: `bash scripts/movil.sh --comprobar` dice qué
-falta, y `movil/EN-MI-MAC.md` tiene el paso a paso —incluida la URL de
-la API, que NO es la misma desde iOS (`localhost:8000`) que desde el
-emulador de Android (`10.0.2.2:8000`)—.
+Compilar para iOS necesita un Mac con Xcode **completo**: las Command
+Line Tools no bastan y `xcodebuild` falla con «requires Xcode». Para
+verla sin nada de eso, `bash scripts/movil.sh --web` la abre en Chrome.
+
+`bash scripts/movil.sh --comprobar` dice qué falta, y
+`movil/EN-MI-MAC.md` tiene el paso a paso, incluida la URL de la API,
+que NO es la misma desde iOS (`localhost:8000`) que desde el emulador de
+Android (`10.0.2.2:8000`).
+
+**Comandos que se le pasan a alguien en macOS: sin comentarios detrás.**
+En zsh `interactive_comments` puede estar desactivada y entonces el `#`
+llega como argumento —`xcode-select --install # …` falla con «invalid
+argument '#'»—. Ya pasó dos veces; los comentarios van en su propia
+línea.
 
 ## Archivos que no se tocan
 

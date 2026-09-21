@@ -68,6 +68,12 @@ export DJANGO_DEBUG=True
 # y la app móvil no puede ni iniciar sesión. El simulador de iOS usa
 # `localhost`, así que ese caso ya estaba cubierto por casualidad.
 export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,testserver,10.0.2.2
+# El panel va en el 3000 y la app del paciente en Chrome (`flutter run -d
+# chrome --web-port=5000`) en el 5000. Sin el 5000 aquí, Django responde
+# 200 pero SIN la cabecera `access-control-allow-origin` y el navegador
+# bloquea cada petición: la app se queda cargando y el motivo solo se ve
+# en la consola del navegador. Medido con un preflight, no supuesto.
+export CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5000
 
 ADMIN_EMAIL=${ADMIN_EMAIL:-admin@demo.ec}
 ADMIN_PASSWORD=${ADMIN_PASSWORD:-demo12345}
