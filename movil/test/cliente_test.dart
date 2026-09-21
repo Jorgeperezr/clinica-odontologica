@@ -8,36 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-/// Almacén en memoria: `flutter_secure_storage` necesita Keychain o
-/// Keystore, que en una prueba de escritorio no existen.
-class _SesionFalsa implements Sesion {
-  String? _acceso;
-  String? _refresco;
-
-  @override
-  Future<String?> get acceso async => _acceso;
-
-  @override
-  Future<String?> get refresco async => _refresco;
-
-  @override
-  Future<void> guardar(String acceso, String? refresco) async {
-    _acceso = acceso;
-    if (refresco != null) _refresco = refresco;
-  }
-
-  @override
-  Future<void> borrar() async {
-    _acceso = null;
-    _refresco = null;
-  }
-
-  @override
-  Future<bool> get hayTokens async => _acceso != null;
-
-  @override
-  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
-}
+import 'sesion_falsa.dart';
 
 void main() {
   group('Mensajes de error que una persona pueda leer', () {
@@ -93,7 +64,7 @@ void main() {
         return http.Response(jsonEncode({'ok': true}), 200);
       });
 
-      final sesion = _SesionFalsa();
+      final sesion = SesionFalsa();
       await sesion.guardar('viejo', 'viejo-r');
       final api = ClienteApi(urlBase: 'http://x', sesion: sesion, http_: falso);
 
@@ -112,7 +83,7 @@ void main() {
 
     test('sin refresh guardado, la sesión se borra y se avisa', () async {
       final falso = MockClient((req) async => http.Response('{"detail":"no"}', 401));
-      final sesion = _SesionFalsa();
+      final sesion = SesionFalsa();
       await sesion.guardar('viejo', null);
       final api = ClienteApi(urlBase: 'http://x', sesion: sesion, http_: falso);
 
@@ -126,7 +97,7 @@ void main() {
     test('entrar por OTP deja los dos tokens guardados', () async {
       final falso = MockClient((req) async => http.Response(
           jsonEncode({'access': 'a', 'refresh': 'r', 'role': 'patient'}), 200));
-      final sesion = _SesionFalsa();
+      final sesion = SesionFalsa();
       final api = ClienteApi(urlBase: 'http://x', sesion: sesion, http_: falso);
 
       await api.verificarCodigo('+593999111222', '123456');

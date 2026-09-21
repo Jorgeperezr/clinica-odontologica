@@ -59,7 +59,11 @@ escritas a mano: si se renombra un campo en `apps/app_paciente/views.py`
 hay que recapturarlas (el cómo está en `movil/README.md`) y no
 «arreglar» el test a mano, que es tapar el cambio de contrato.
 
-Compilar para iOS necesita un Mac con Xcode.
+Compilar para iOS necesita un Mac con Xcode. Para ejecutarla en un
+simulador o un teléfono: `bash scripts/movil.sh --comprobar` dice qué
+falta, y `movil/EN-MI-MAC.md` tiene el paso a paso —incluida la URL de
+la API, que NO es la misma desde iOS (`localhost:8000`) que desde el
+emulador de Android (`10.0.2.2:8000`)—.
 
 ## Archivos que no se tocan
 

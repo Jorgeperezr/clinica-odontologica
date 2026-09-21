@@ -4,7 +4,11 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
-pubspec.lock
+
+# `pubspec.lock` SÍ se versiona: esto es una aplicación, no una
+# biblioteca. Sin él, el Mac de quien compila y el CI resuelven
+# versiones distintas de las dependencias y «funciona en mi máquina»
+# deja de ser una broma.
 
 # Android / iOS generados
 android/.gradle/

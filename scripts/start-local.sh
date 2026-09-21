@@ -63,7 +63,11 @@ export POSTGRES_USER=${POSTGRES_USER:-clinica}
 export POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-clinica}
 export DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-only-key-long-enough-for-hmac-validation-0123456789}
 export DJANGO_DEBUG=True
-export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,testserver
+# 10.0.2.2 es la máquina anfitriona VISTA DESDE el emulador de Android,
+# y llega en la cabecera Host. Sin esto Django responde DisallowedHost
+# y la app móvil no puede ni iniciar sesión. El simulador de iOS usa
+# `localhost`, así que ese caso ya estaba cubierto por casualidad.
+export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,testserver,10.0.2.2
 
 ADMIN_EMAIL=${ADMIN_EMAIL:-admin@demo.ec}
 ADMIN_PASSWORD=${ADMIN_PASSWORD:-demo12345}

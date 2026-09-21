@@ -18,12 +18,14 @@ import 'pantallas/principal.dart';
 ///
 ///     flutter build apk --dart-define=API_URL=https://clinica.ejemplo.ec
 ///
-/// El valor por omisión es el del emulador de Android, donde `10.0.2.2`
-/// es la máquina que lo hospeda. En un iPhone o en un dispositivo real
-/// hay que pasar la URL de verdad.
+/// El valor por omisión es el del emulador de Android contra
+/// `scripts/start-local.sh`, que levanta Django en el 8000: dentro del
+/// emulador, `10.0.2.2` es la máquina que lo hospeda. El simulador de
+/// iOS comparte la red del Mac y usa `http://localhost:8000`; un
+/// teléfono de verdad necesita la IP del Mac en la wifi.
 const urlApi = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'http://10.0.2.2',
+  defaultValue: 'http://10.0.2.2:8000',
 );
 
 Future<void> main() async {
