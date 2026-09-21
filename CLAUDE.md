@@ -44,6 +44,23 @@ nunca. Varios fallos de frontera de fecha han salido de ahí.
 Antes de subir: los tests con los settings del CI, `ruff check apps
 config` y, si se tocó el panel, `npx next build`.
 
+## App móvil (`movil/`)
+
+Flutter, para el paciente. El SDK no viene con el repositorio; con
+Flutter 3.47 o posterior:
+
+```sh
+cd movil && flutter pub get && flutter analyze && flutter test
+```
+
+`flutter analyze` tiene que decir «No issues found!». Las pruebas de
+`test/fixtures/` usan respuestas **capturadas de la API real**, no
+escritas a mano: si se renombra un campo en `apps/app_paciente/views.py`
+hay que recapturarlas (el cómo está en `movil/README.md`) y no
+«arreglar» el test a mano, que es tapar el cambio de contrato.
+
+Compilar para iOS necesita un Mac con Xcode.
+
 ## Archivos que no se tocan
 
 El odontograma está fuera de alcance salvo permiso explícito:

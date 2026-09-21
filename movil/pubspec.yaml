@@ -1,0 +1,27 @@
+name: clinica_paciente
+description: Aplicación del paciente de la clínica odontológica.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Peticiones a la API. Se podría usar `dart:io` a pelo, pero `http`
+  # es la de referencia y además funciona igual en Android y en iOS.
+  http: ^1.2.0
+  # Los tokens dan acceso a datos clínicos: van al Keychain (iOS) y al
+  # Keystore (Android), NO a `shared_preferences`, que guarda en claro.
+  flutter_secure_storage: ^9.2.2
+  # Fechas en castellano: «mié, 24 sept · 08:23» en vez de ISO-8601.
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
