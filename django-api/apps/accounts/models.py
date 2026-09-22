@@ -35,6 +35,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=20, choices=Role.choices)
 
     is_active = models.BooleanField(default=True)  # baja lógica — RF-USR-06
+    puede_gestionar_logros = models.BooleanField(
+        default=False,
+        verbose_name="Puede gestionar rachas y logros",
+        help_text=(
+            "Solo para profesionales. El administrador de la clínica "
+            "siempre puede; a un doctor se le concede al crearlo. Es un "
+            "permiso aparte del rol porque no todos los doctores de una "
+            "clínica deciden a quién se premia."
+        ),
+    )
     must_change_password = models.BooleanField(
         default=False,
         verbose_name="Debe cambiar la contraseña",

@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "apps.whatsapp",
     "apps.app_paciente",
     "apps.configuration",
+    "apps.logros",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

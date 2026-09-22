@@ -144,6 +144,74 @@ class MisIndicacionesView(BaseVistaPaciente):
         } for e in visibles])
 
 
+class MisLogrosView(BaseVistaPaciente):
+    """
+    GET /api/v1/app/logros/ — sus rachas y logros.
+
+    Lo que se devuelve es lo CONCEDIDO, no lo que el paciente cumpliría
+    hoy si se evaluaran las reglas. Un logro es un hecho con su fecha;
+    recalcularlo al leerlo haría que alguien perdiera una medalla por
+    faltar a una cita este mes, que es lo contrario de lo que premia un
+    programa de fidelidad.
+
+    `racha` cuenta los meses seguidos del mismo logro automático, que es
+    lo que la app enseña como «3 meses seguidos».
+    """
+
+    def get(self, request):
+        from apps.logros.models import LogroDePaciente
+
+        ficha = ficha_del_paciente(request)
+        concesiones = LogroDePaciente.objects.filter(
+            patient=ficha, tenant=request.tenant,
+        ).select_related("logro").order_by("-otorgado_en")[:60]
+
+        por_logro = {}
+        for c in concesiones:
+            por_logro.setdefault(c.logro_id, []).append(c)
+
+        salida = []
+        for c in concesiones:
+            hermanos = por_logro[c.logro_id]
+            if hermanos[0].id != c.id:
+                continue   # solo la más reciente de cada logro
+            periodos = sorted(
+                (h.periodo for h in hermanos if h.periodo), reverse=True,
+            )
+            salida.append({
+                "id": str(c.id),
+                "nombre": c.logro.nombre,
+                "descripcion": c.logro.descripcion,
+                "icono": c.logro.icono,
+                "beneficio": c.logro.beneficio,
+                "obtenido": c.otorgado_en.date().isoformat(),
+                "veces": len(hermanos),
+                "racha": _racha_seguida(periodos),
+                "automatico": c.logro.es_automatico,
+            })
+        return Response(salida)
+
+
+def _racha_seguida(periodos):
+    """
+    Meses consecutivos, contando desde el más reciente hacia atrás.
+
+    Se calcula con lo YA concedido y no volviendo a mirar las citas: la
+    racha es el historial de premios, no una reevaluación.
+    """
+    if not periodos:
+        return 0
+    seguidos = 1
+    for anterior, siguiente in zip(periodos, periodos[1:]):
+        esperado_mes = anterior.month - 1 or 12
+        esperado_anio = anterior.year - (1 if anterior.month == 1 else 0)
+        if siguiente.month == esperado_mes and siguiente.year == esperado_anio:
+            seguidos += 1
+        else:
+            break
+    return seguidos
+
+
 def _cita(c):
     """Una cita como la ve el paciente: sin notas internas."""
     return {
