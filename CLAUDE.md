@@ -44,6 +44,23 @@ nunca. Varios fallos de frontera de fecha han salido de ahí.
 Antes de subir: los tests con los settings del CI, `ruff check apps
 config` y, si se tocó el panel, `npx next build`.
 
+## Comandos de Django fuera de `start-local.sh`
+
+```sh
+bash scripts/manage.sh shell
+```
+
+No `python manage.py …` a secas. `settings.py` toma `POSTGRES_HOST` con
+valor por omisión `postgres` —el nombre del servicio en Docker—, así que
+en cualquier terminal nueva revienta con «could not translate host name
+"postgres"», que no se parece a «falta una variable de entorno». El
+envoltorio pone el entorno y usa el intérprete de `.venv`.
+
+**No se arregla con un `.env` en la raíz:** `docker-compose.yml` lo carga
+con `env_file: .env` en django-api y celery-worker, así que un
+`POSTGRES_HOST=127.0.0.1` ahí haría que el contenedor se buscara la base
+a sí mismo. El arreglo cómodo para el Mac rompería Docker.
+
 ## App móvil (`movil/`)
 
 Flutter, para el paciente. El SDK no viene con el repositorio; con
