@@ -191,3 +191,54 @@ class Indicacion {
         profesional: j['profesional'] as String?,
       );
 }
+
+/// Una racha o un logro que el paciente ya ganó.
+///
+/// Es lo CONCEDIDO, no lo que cumpliría hoy: un logro es un hecho con su
+/// fecha. Recalcularlo al leerlo haría que alguien perdiera una medalla
+/// por faltar a una cita este mes, que es lo contrario de fidelizar.
+class Logro {
+  const Logro({
+    required this.id,
+    required this.nombre,
+    required this.icono,
+    required this.obtenido,
+    required this.veces,
+    required this.racha,
+    required this.automatico,
+    this.descripcion = '',
+    this.beneficio = '',
+  });
+
+  final String id;
+  final String nombre;
+
+  /// Clave corta, no una imagen: la app elige el icono. Así cambiar el
+  /// aspecto no obliga a resubir nada al servidor.
+  final String icono;
+  final DateTime obtenido;
+
+  /// Cuántas veces lo ha ganado en total.
+  final int veces;
+
+  /// Meses seguidos. Es lo que se enseña como «3 meses seguidos».
+  final int racha;
+  final bool automatico;
+  final String descripcion;
+  final String beneficio;
+
+  bool get esRacha => racha > 1;
+  bool get tieneBeneficio => beneficio.trim().isNotEmpty;
+
+  factory Logro.desdeJson(Map<String, dynamic> j) => Logro(
+        id: j['id'] as String,
+        nombre: j['nombre'] as String? ?? '',
+        icono: j['icono'] as String? ?? 'estrella',
+        obtenido: DateTime.parse(j['obtenido'] as String),
+        veces: (j['veces'] as num?)?.toInt() ?? 1,
+        racha: (j['racha'] as num?)?.toInt() ?? 0,
+        automatico: j['automatico'] as bool? ?? false,
+        descripcion: j['descripcion'] as String? ?? '',
+        beneficio: j['beneficio'] as String? ?? '',
+      );
+}

@@ -94,6 +94,23 @@ void main() {
             }),
             200);
       }
+      if (req.url.path.endsWith('/app/logros/')) {
+        return http.Response(
+            jsonEncode([
+              {
+                'id': 'l1',
+                'nombre': 'Constancia',
+                'descripcion': 'Asististe a todas tus citas del mes.',
+                'icono': 'racha',
+                'beneficio': '10% en tu próxima profilaxis.',
+                'obtenido': '2026-09-22',
+                'veces': 3,
+                'racha': 3,
+                'automatico': true,
+              }
+            ]),
+            200);
+      }
       return http.Response('{}', 200);
     });
     final sesion = SesionFalsa();
@@ -110,6 +127,60 @@ void main() {
     // El saldo se pinta tal cual llega, sin pasar por `double`.
     expect(find.textContaining('120.00'), findsOneWidget);
     expect(find.textContaining('1 cuota vencida'), findsOneWidget);
+    // La fila de logros, con el contador de meses de la racha.
+    expect(find.text('Constancia'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('tocar un logro abre su beneficio', (tester) async {
+    // Es la razón de ser de la pantalla: el paciente tiene que poder
+    // llegar a lo que ha ganado sin buscarlo.
+    final falso = MockClient((req) async {
+      if (req.url.path.endsWith('/app/logros/')) {
+        return http.Response(
+            jsonEncode([
+              {
+                'id': 'l1',
+                'nombre': 'Constancia',
+                'descripcion': 'Asististe a todas tus citas del mes.',
+                'icono': 'racha',
+                'beneficio': '10% en tu próxima profilaxis.',
+                'obtenido': '2026-09-22',
+                'veces': 3,
+                'racha': 3,
+                'automatico': true,
+              }
+            ]),
+            200);
+      }
+      return http.Response(
+          jsonEncode({
+            'nombre': 'Ana Probe',
+            'clinica': 'Clínica Probe',
+            'cuotas_pendientes': 0,
+            'cuotas_vencidas': 0,
+            'saldo': '0',
+            'proxima_cita': null,
+          }),
+          200);
+    });
+    final sesion = SesionFalsa();
+    await sesion.guardar('t', 'r');
+    final api = ClienteApi(urlBase: 'http://x', sesion: sesion, http_: falso);
+
+    await tester.pumpWidget(_envoltorio(
+      PantallaPrincipal(api: api, alSalir: () {}),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Constancia'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('3 meses seguidos'), findsOneWidget);
+    expect(find.text('Tu beneficio'), findsOneWidget);
+    expect(find.textContaining('10% en tu próxima profilaxis'), findsOneWidget);
+    // Y se dice dónde se cobra: el descuento NO se aplica solo.
+    expect(find.textContaining('Recuérdaselo a tu clínica'), findsOneWidget);
   });
 
   testWidgets('si la API falla, se ve el motivo y un botón de reintentar',

@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import '../api/cliente.dart';
 import '../api/formato.dart';
 import '../api/modelos.dart';
+import 'logros.dart';
+import 'perfil.dart';
 
 class PantallaPrincipal extends StatefulWidget {
   const PantallaPrincipal({super.key, required this.api, required this.alSalir});
@@ -33,30 +35,37 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       _Citas(api: widget.api),
       _Cuenta(api: widget.api),
       _Indicaciones(api: widget.api),
+      PantallaPerfil(api: widget.api, alSalir: widget.alSalir),
     ];
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mi clínica'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Salir',
-            onPressed: () async {
-              await widget.api.salir();
-              widget.alSalir();
-            },
-          ),
-        ],
-      ),
+      // Sin botón de salir en la barra: vive en el perfil, que es donde
+      // lo busca cualquiera que haya usado una app con pestañas.
+      appBar: AppBar(title: const Text('Mi clínica')),
       body: paginas[_indice],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _indice,
         onDestinationSelected: (i) => setState(() => _indice = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Inicio'),
-          NavigationDestination(icon: Icon(Icons.event_outlined), label: 'Citas'),
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Cuenta'),
-          NavigationDestination(icon: Icon(Icons.healing_outlined), label: 'Cuidados'),
+          NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Inicio'),
+          NavigationDestination(
+              icon: Icon(Icons.event_outlined),
+              selectedIcon: Icon(Icons.event),
+              label: 'Citas'),
+          NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined),
+              selectedIcon: Icon(Icons.receipt_long),
+              label: 'Cuenta'),
+          NavigationDestination(
+              icon: Icon(Icons.healing_outlined),
+              selectedIcon: Icon(Icons.healing),
+              label: 'Cuidados'),
+          NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Perfil'),
         ],
       ),
     );
@@ -169,17 +178,47 @@ class _Inicio extends StatelessWidget {
 
   final ClienteApi api;
 
+  /// El inicio necesita DOS cosas —el resumen y los logros— y las pide
+  /// a la vez. En serie, la fila de logros aparecería medio segundo
+  /// después que el resto y la pantalla daría un salto al cargar.
+  Future<(Perfil, List<Logro>)> _todo() async {
+    final resultados = await Future.wait([
+      api.objeto('/app/me/'),
+      api.lista('/app/logros/'),
+    ]);
+    return (
+      Perfil.desdeJson(resultados[0] as Map<String, dynamic>),
+      (resultados[1] as List<dynamic>)
+          .map((e) => Logro.desdeJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _Cargador<Perfil>(
-      pedir: () async => Perfil.desdeJson(await api.objeto('/app/me/')),
-      construir: (context, p) => ListView(
-        padding: const EdgeInsets.all(16),
+    return _Cargador<(Perfil, List<Logro>)>(
+      pedir: _todo,
+      construir: (context, datos) {
+        final (p, logros) = datos;
+        return ListView(
+        padding: const EdgeInsets.only(top: 8, bottom: 24),
         children: [
-          Text('Hola, ${p.nombre.split(' ').first}',
-              style: Theme.of(context).textTheme.headlineSmall),
-          Text(p.clinica, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Hola, ${p.nombre.split(' ').first}',
+                    style: Theme.of(context).textTheme.headlineSmall),
+                Text(p.clinica, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          FilaDeLogros(logros: logros),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Divider(),
+          ),
           if (p.proximaCita != null)
             _Tarjeta(
               icono: Icons.event_available_outlined,
@@ -223,7 +262,8 @@ class _Inicio extends StatelessWidget {
             ),
           ],
         ],
-      ),
+        );
+      },
     );
   }
 }
@@ -234,6 +274,7 @@ class _Tarjeta extends StatelessWidget {
     required this.titulo,
     required this.lineas,
     this.alerta = false,
+    this.margen = const EdgeInsets.symmetric(horizontal: 16),
   });
 
   final IconData icono;
@@ -241,10 +282,16 @@ class _Tarjeta extends StatelessWidget {
   final List<String> lineas;
   final bool alerta;
 
+  /// El muro va a sangre para que la fila de logros pueda desbordarse
+  /// por el lado, así que el margen lateral lo pone cada tarjeta. En
+  /// Cuenta, cuya lista ya tiene sangrado, se pasa a cero.
+  final EdgeInsets margen;
+
   @override
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
     return Card(
+      margin: margen,
       color: alerta ? tema.colorScheme.errorContainer : null,
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -368,6 +415,7 @@ class _Cuenta extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _Tarjeta(
+              margen: EdgeInsets.zero,
               icono: e.alDia
                   ? Icons.check_circle_outline
                   : Icons.warning_amber_outlined,

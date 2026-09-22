@@ -11,6 +11,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'api/cliente.dart';
 import 'pantallas/ingreso.dart';
 import 'pantallas/principal.dart';
+import 'tema.dart';
 
 /// Dónde vive la API.
 ///
@@ -62,15 +63,8 @@ class _AppPacienteState extends State<AppPaciente> {
     return MaterialApp(
       title: 'Mi clínica',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF14607A),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: const Color(0xFF14607A),
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
+      theme: temaClaro(),
+      darkTheme: temaOscuro(),
       home: FutureBuilder<bool>(
         future: _haySesion,
         builder: (context, snap) {

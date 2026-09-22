@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:clinica_paciente/api/modelos.dart';
+import 'package:clinica_paciente/tema.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> _objeto(String nombre) =>
@@ -144,6 +145,8 @@ void main() {
     });
   });
 
+  _pruebasDeLogros();
+
   group('Lo que puede faltar no debe romper la app', () {
     test('una cita sin tratamiento ni doctor se lee igual', () {
       final c = Cita.desdeJson({
@@ -175,6 +178,60 @@ void main() {
     test('una agenda vacía se reconoce como vacía', () {
       final a = Agenda.desdeJson({'proximas': [], 'anteriores': []});
       expect(a.vacia, isTrue);
+    });
+  });
+}
+
+// ── Rachas y logros ──────────────────────────────────────────────────
+
+void _pruebasDeLogros() {
+  group('Logros, tal como los devuelve /app/logros/', () {
+    late List<Logro> lista;
+    setUp(() => lista = _lista('logros')
+        .map((e) => Logro.desdeJson(e as Map<String, dynamic>))
+        .toList());
+
+    test('llegan los dos', () {
+      expect(lista, hasLength(2));
+    });
+
+    test('una racha de tres meses se reconoce como racha', () {
+      final constancia = lista.firstWhere((l) => l.nombre == 'Constancia');
+      expect(constancia.racha, 3);
+      expect(constancia.veces, 3);
+      expect(constancia.esRacha, isTrue);
+      expect(constancia.automatico, isTrue);
+    });
+
+    test('un logro suelto NO es una racha', () {
+      // `racha` vale 0 en los manuales, que no tienen periodo. Sin esta
+      // distinción, la app pintaría el anillo de llama y el contador de
+      // meses en algo que se ganó una sola vez.
+      final manual = lista.firstWhere((l) => l.nombre == 'Cuidado impecable');
+      expect(manual.racha, 0);
+      expect(manual.esRacha, isFalse);
+      expect(manual.automatico, isFalse);
+    });
+
+    test('el beneficio llega para poder enseñarlo', () {
+      final constancia = lista.firstWhere((l) => l.nombre == 'Constancia');
+      expect(constancia.tieneBeneficio, isTrue);
+      expect(constancia.beneficio, contains('10%'));
+    });
+
+    test('un logro sin beneficio no finge tenerlo', () {
+      final sin = Logro.desdeJson({
+        'id': 'x', 'nombre': 'Simple', 'icono': 'estrella',
+        'obtenido': '2026-09-22', 'veces': 1, 'racha': 0,
+        'automatico': false, 'beneficio': '   ',
+      });
+      expect(sin.tieneBeneficio, isFalse);
+    });
+
+    test('un icono desconocido no deja un hueco', () {
+      // La clínica puede inventarse claves nuevas; la app cae en la
+      // estrella en vez de romperse o dejar el círculo vacío.
+      expect(iconoDeLogro('algo_que_no_existe'), iconoDeLogro('estrella'));
     });
   });
 }

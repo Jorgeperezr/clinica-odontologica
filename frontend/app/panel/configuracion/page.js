@@ -8,6 +8,7 @@ import LogoCropper from "../../../lib/LogoCropper";
 import DocumentAppearance from "../../../lib/DocumentAppearance";
 import ClinicBackup from "../../../lib/ClinicBackup";
 import AgreementsTariffs from "../../../lib/AgreementsTariffs";
+import RachasYLogros from "../../../lib/RachasYLogros";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -27,7 +28,7 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div className="tabs" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["convenios", "Convenios y tarifarios"],
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["convenios", "Convenios y tarifarios"], ["logros", "Rachas y logros"],
           ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
           ["documentos", "Apariencia de documentos"],
           ["respaldo", "Copia de seguridad"]].map(([k, label]) => (
@@ -48,6 +49,7 @@ export default function ConfiguracionPage() {
       {tab === "plantillas" && <TemplatesTab />}
       {tab === "usuarios" && <UsersTab />}
       {tab === "convenios" && <AgreementsTariffs />}
+      {tab === "logros" && <RachasYLogros />}
       {tab === "parametros" && <ParametersTab />}
       {tab === "consentimientos" && <ConsentTemplatesTab />}
       {tab === "personalizacion" && <BrandingTab />}
@@ -273,7 +275,8 @@ const ROLE_OPTIONS = {
 
 function UsersTab() {
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({ full_name: "", email: "", role: "doctor", password: "" });
+  const [form, setForm] = useState({ full_name: "", email: "", role: "doctor",
+                                     password: "", puede_gestionar_logros: false });
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
 
@@ -300,7 +303,8 @@ function UsersTab() {
       setOkMsg(form.role === "doctor"
         ? `Usuario creado. ${form.full_name} ya aparece como doctor en la Agenda.`
         : "Usuario creado.");
-      setForm({ full_name: "", email: "", role: "doctor", password: "" });
+      setForm({ full_name: "", email: "", role: "doctor",
+                password: "", puede_gestionar_logros: false });
       load();
     } catch (err) { setError(err.message); }
   }
@@ -335,17 +339,38 @@ function UsersTab() {
                    onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
           <button className="btn btn-primary">Crear</button>
         </div>
+
+        {/* El permiso se concede AL CREAR. En una clínica con varios
+            doctores no todos deciden quién se lleva un descuento, y
+            darle esa potestad a cualquiera con bata convierte el
+            programa en un favor personal en vez de en una regla. El
+            administrador siempre puede, así que la casilla no aparece
+            para él: marcarla no cambiaría nada y confundiría. */}
+        {form.role !== "admin" && (
+          <label style={{ display: "flex", alignItems: "center", gap: 8,
+                          marginTop: 14, fontSize: 14 }}>
+            <input type="checkbox" checked={form.puede_gestionar_logros}
+                   onChange={(e) => setForm({ ...form, puede_gestionar_logros: e.target.checked })} />
+            Puede gestionar rachas y logros
+            <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+              (definir qué se premia y otorgarlo a pacientes)
+            </span>
+          </label>
+        )}
       </form>
 
       <div className="card" style={{ padding: 0 }}>
         <table>
-          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Activo</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Logros</th><th>Activo</th></tr></thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
                 <td style={{ fontWeight: 600 }}>{u.full_name || "—"}</td>
                 <td>{u.email}</td>
                 <td><span className="badge badge-ok">{ROLE_OPTIONS[u.role] || u.role}</span></td>
+                <td>{u.role === "admin" || u.puede_gestionar_logros
+                  ? <span className="badge badge-ok">Sí</span>
+                  : <span style={{ color: "var(--ink-soft)" }}>—</span>}</td>
                 <td>{u.is_active ? "Sí" : "No"}</td>
               </tr>
             ))}
