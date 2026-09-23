@@ -19,10 +19,10 @@ from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.logros import reglas
 from apps.logros.models import Logro, LogroDePaciente
 from apps.logros.permissions import PuedeGestionarLogros
+from apps.logros.serializers import LogroDePacienteSerializer, LogroSerializer
 
 # Hace falta el permiso de la persona Y que la clínica tenga el módulo.
 PUEDE = [PuedeGestionarLogros, RequiereFuncionalidad.para("logros")]
-from apps.logros.serializers import LogroDePacienteSerializer, LogroSerializer
 
 
 class LogroListCreateView(generics.ListCreateAPIView):
