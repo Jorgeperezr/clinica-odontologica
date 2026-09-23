@@ -9,6 +9,7 @@ import DocumentAppearance from "../../../lib/DocumentAppearance";
 import ClinicBackup from "../../../lib/ClinicBackup";
 import AgreementsTariffs from "../../../lib/AgreementsTariffs";
 import RachasYLogros from "../../../lib/RachasYLogros";
+import WhatsAppClinica from "../../../lib/WhatsAppClinica";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -34,6 +35,7 @@ export default function ConfiguracionPage() {
       <div className="tabs" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
         {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ...(hay("convenios") ? [["convenios", "Convenios y tarifarios"]] : []),
           ...(hay("logros") ? [["logros", "Rachas y logros"]] : []),
+          ...(hay("whatsapp") ? [["whatsapp", "WhatsApp"]] : []),
           ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
           ["documentos", "Apariencia de documentos"],
           ["respaldo", "Copia de seguridad"]].map(([k, label]) => (
@@ -55,6 +57,7 @@ export default function ConfiguracionPage() {
       {tab === "usuarios" && <UsersTab />}
       {tab === "convenios" && <AgreementsTariffs />}
       {tab === "logros" && <RachasYLogros />}
+      {tab === "whatsapp" && <WhatsAppClinica />}
       {tab === "parametros" && <ParametersTab />}
       {tab === "consentimientos" && <ConsentTemplatesTab />}
       {tab === "personalizacion" && <BrandingTab />}

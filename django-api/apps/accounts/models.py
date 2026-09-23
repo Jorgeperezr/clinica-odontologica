@@ -45,6 +45,14 @@ class User(AbstractBaseUser, PermissionsMixin):
             "clínica deciden a quién se premia."
         ),
     )
+    puede_gestionar_whatsapp = models.BooleanField(
+        default=False,
+        verbose_name="Puede configurar WhatsApp",
+        help_text=(
+            "Conectar la cuenta de WhatsApp de la clínica y encender los "
+            "recordatorios. El administrador siempre puede."
+        ),
+    )
     must_change_password = models.BooleanField(
         default=False,
         verbose_name="Debe cambiar la contraseña",

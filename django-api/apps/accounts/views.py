@@ -327,6 +327,8 @@ class MeView(APIView):
             "must_change_password": u.must_change_password,
             "puede_gestionar_logros": (
                 u.role == User.Role.ADMIN or u.puede_gestionar_logros),
+            "puede_gestionar_whatsapp": (
+                u.role == User.Role.ADMIN or u.puede_gestionar_whatsapp),
             # El panel esconde los módulos que la clínica no tiene. Es
             # cortesía: el candado de verdad está en la API, en
             # `RequiereFuncionalidad`.
