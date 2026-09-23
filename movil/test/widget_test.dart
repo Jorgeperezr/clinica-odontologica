@@ -12,6 +12,7 @@ library;
 import 'dart:convert';
 
 import 'package:clinica_paciente/api/cliente.dart';
+import 'package:clinica_paciente/api/modelos.dart';
 import 'package:clinica_paciente/pantallas/ingreso.dart';
 import 'package:clinica_paciente/pantallas/principal.dart';
 import 'package:flutter/material.dart';
@@ -200,5 +201,80 @@ void main() {
 
     expect(find.text('La clínica está desactivada.'), findsOneWidget);
     expect(find.text('Reintentar'), findsOneWidget);
+  });
+
+  testWidgets('el ingreso lleva el nombre de la clínica, no uno genérico',
+      (tester) async {
+    const marca = Marca(
+      nombre: 'Sonrisa Feliz',
+      colorPrincipal: 0xFF0E5C63,
+      colorSecundario: 0xFF9FE1CB,
+    );
+    final falso = MockClient((req) async => http.Response('{}', 200));
+    final api = ClienteApi(
+        urlBase: 'http://x', sesion: SesionFalsa(), http_: falso);
+
+    await tester.pumpWidget(_envoltorio(
+      PantallaIngreso(api: api, marca: marca, alEntrar: () {}),
+    ));
+
+    expect(find.text('Sonrisa Feliz'), findsOneWidget);
+    expect(find.text('Tu clínica'), findsNothing);
+  });
+
+  testWidgets('un logotipo que no carga NO deja un aspa rota', (tester) async {
+    // El logotipo viene de la red: un servidor caído o una URL vieja
+    // dejarían el icono de imagen rota presidiendo el ingreso.
+    const marca = Marca(
+      nombre: 'Sonrisa Feliz',
+      logo: 'http://127.0.0.1:9/no-existe.png',
+      colorPrincipal: 0xFF0E5C63,
+      colorSecundario: 0xFF9FE1CB,
+    );
+    final falso = MockClient((req) async => http.Response('{}', 200));
+    final api = ClienteApi(
+        urlBase: 'http://x', sesion: SesionFalsa(), http_: falso);
+
+    await tester.pumpWidget(_envoltorio(
+      PantallaIngreso(api: api, marca: marca, alEntrar: () {}),
+    ));
+    await tester.pump(const Duration(seconds: 1));
+
+    // Se cae al icono genérico y la pantalla sigue siendo usable.
+    expect(find.text('Sonrisa Feliz'), findsOneWidget);
+    expect(find.text('Enviarme el código'), findsOneWidget);
+  });
+
+  testWidgets('la barra de dentro lleva el nombre corto', (tester) async {
+    const marca = Marca(
+      nombre: 'Clínica Odontológica Sonrisa Feliz del Valle',
+      nombreCorto: 'Sonrisa',
+      colorPrincipal: 0xFF0E5C63,
+      colorSecundario: 0xFF9FE1CB,
+    );
+    final falso = MockClient((req) async {
+      if (req.url.path.endsWith('/app/logros/')) {
+        return http.Response('[]', 200);
+      }
+      return http.Response(
+          jsonEncode({
+            'nombre': 'Ana Probe', 'clinica': 'Sonrisa Feliz',
+            'cuotas_pendientes': 0, 'cuotas_vencidas': 0,
+            'saldo': '0', 'proxima_cita': null,
+          }),
+          200);
+    });
+    final sesion = SesionFalsa();
+    await sesion.guardar('t', 'r');
+    final api = ClienteApi(urlBase: 'http://x', sesion: sesion, http_: falso);
+
+    await tester.pumpWidget(_envoltorio(
+      PantallaPrincipal(api: api, marca: marca, alSalir: () {}),
+    ));
+    await tester.pumpAndSettle();
+
+    // El nombre largo no cabe en una barra de teléfono; por eso existe
+    // el corto y por eso la barra lo prefiere.
+    expect(find.text('Sonrisa'), findsOneWidget);
   });
 }

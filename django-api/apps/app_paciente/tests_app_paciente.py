@@ -229,3 +229,73 @@ class CadaUnoPorSuPuertaTests(BaseApp):
         r = self.client.get("/api/v1/app/citas/")
         self.assertEqual(r.status_code, 403)
         self.assertIn("recepción", str(r.data).lower())
+
+
+class LaMarcaDeLaClinicaTests(APITestCase):
+    """
+    La app se pinta con los colores, el nombre y el logotipo de SU
+    clínica. Lo que se comprueba aquí es que no se vea la de otra, y que
+    los colores lleguen resueltos para que la app no tenga que saber
+    nada de temas.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.tenant = Tenant.objects.create(name="Clínica Marca", ruc="1790000094001")
+        self.paciente = Patient.objects.create(
+            tenant=self.tenant, first_name="Ana", last_name="Marca",
+            national_id="1700000200")
+        self.usuario = User.objects.create_user(
+            phone="+593999000200", role="patient", full_name="Ana Marca",
+            tenant=self.tenant)
+        self.paciente.user = self.usuario
+        self.paciente.save()
+        self.client.force_authenticate(user=self.usuario)
+
+    def _marca(self, **kwargs):
+        from apps.configuration.models import ClinicBranding
+        return ClinicBranding.objects.create(tenant=self.tenant, **kwargs)
+
+    def test_sin_personalizar_se_usa_el_nombre_del_tenant(self):
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(r.data["nombre"], "Clínica Marca")
+        self.assertEqual(r.data["color_principal"], "#14639e")
+        self.assertIsNone(r.data["logo"])
+
+    def test_el_nombre_comercial_manda_sobre_el_del_tenant(self):
+        self._marca(display_name="Sonrisa Feliz")
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual(r.data["nombre"], "Sonrisa Feliz")
+
+    def test_los_colores_llegan_resueltos_y_no_el_nombre_del_tema(self):
+        # Si llegara «petroleo», la app necesitaría su propia tabla y se
+        # desincronizaría con el panel.
+        self._marca(theme={"preset": "petroleo", "primary": "", "secondary": ""})
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual(r.data["color_principal"], "#0e5c63")
+        self.assertEqual(r.data["color_secundario"], "#9fe1cb")
+
+    def test_un_color_invalido_no_llega_a_pintar_la_app(self):
+        self._marca(theme={"preset": "custom", "primary": "azulito", "secondary": ""})
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual(r.data["color_principal"], "#14639e")
+
+    def test_se_devuelve_el_telefono_para_poder_llamar(self):
+        self._marca(phone="02 244 8890")
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual(r.data["telefono"], "02 244 8890")
+
+    def test_nunca_se_ve_la_marca_de_otra_clinica(self):
+        otra = Tenant.objects.create(name="Otra Clínica", ruc="1790000094099")
+        from apps.configuration.models import ClinicBranding
+        ClinicBranding.objects.create(tenant=otra, display_name="La De Al Lado")
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual(r.data["nombre"], "Clínica Marca")
+
+    def test_una_cuenta_sin_ficha_no_pasa_ni_a_la_parte_decorativa(self):
+        self.paciente.user = None
+        self.paciente.save()
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual(r.status_code, 403)

@@ -16,10 +16,16 @@ import 'logros.dart';
 import 'perfil.dart';
 
 class PantallaPrincipal extends StatefulWidget {
-  const PantallaPrincipal({super.key, required this.api, required this.alSalir});
+  const PantallaPrincipal({
+    super.key,
+    required this.api,
+    required this.alSalir,
+    this.marca = Marca.neutra,
+  });
 
   final ClienteApi api;
   final VoidCallback alSalir;
+  final Marca marca;
 
   @override
   State<PantallaPrincipal> createState() => _PantallaPrincipalState();
@@ -35,12 +41,32 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       _Citas(api: widget.api),
       _Cuenta(api: widget.api),
       _Indicaciones(api: widget.api),
-      PantallaPerfil(api: widget.api, alSalir: widget.alSalir),
+      PantallaPerfil(
+          api: widget.api, marca: widget.marca, alSalir: widget.alSalir),
     ];
     return Scaffold(
       // Sin botón de salir en la barra: vive en el perfil, que es donde
       // lo busca cualquiera que haya usado una app con pestañas.
-      appBar: AppBar(title: const Text('Mi clínica')),
+      appBar: AppBar(
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            if (widget.marca.tieneLogo) ...[
+              Image.network(
+                widget.marca.logo!,
+                height: 28,
+                // Si el logotipo no carga, la barra se queda solo con el
+                // nombre en vez de con un aspa rota.
+                errorBuilder: (context, _, __) => const SizedBox.shrink(),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Flexible(
+              child: Text(widget.marca.nombreDeBarra, overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+      ),
       body: paginas[_indice],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _indice,

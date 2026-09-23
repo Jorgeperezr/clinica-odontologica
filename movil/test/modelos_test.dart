@@ -146,6 +146,7 @@ void main() {
   });
 
   _pruebasDeLogros();
+  _pruebasDeMarca();
 
   group('Lo que puede faltar no debe romper la app', () {
     test('una cita sin tratamiento ni doctor se lee igual', () {
@@ -232,6 +233,73 @@ void _pruebasDeLogros() {
       // La clínica puede inventarse claves nuevas; la app cae en la
       // estrella en vez de romperse o dejar el círculo vacío.
       expect(iconoDeLogro('algo_que_no_existe'), iconoDeLogro('estrella'));
+    });
+  });
+}
+
+// ── La marca de la clínica ───────────────────────────────────────────
+
+void _pruebasDeMarca() {
+  group('Marca de la clínica', () {
+    test('lee lo que devuelve /app/clinica/', () {
+      final m = Marca.desdeJson({
+        'nombre': 'Sonrisa Feliz',
+        'nombre_corto': 'Sonrisa',
+        'logo': 'http://localhost:8000/media/branding/logos/x.png',
+        'color_principal': '#0e5c63',
+        'color_secundario': '#9fe1cb',
+        'telefono': '02 244 8890',
+        'direccion': 'Av. Amazonas N34-120',
+        'email': 'hola@sonrisa.ec',
+      });
+      expect(m.nombre, 'Sonrisa Feliz');
+      expect(m.nombreDeBarra, 'Sonrisa');
+      expect(m.tieneLogo, isTrue);
+      expect(m.sePuedeLlamar, isTrue);
+      expect(m.colorPrincipal, 0xFF0E5C63);
+    });
+
+    test('sin nombre corto, la barra usa el largo', () {
+      final m = Marca.desdeJson({
+        'nombre': 'Clínica Larga', 'nombre_corto': '   ',
+        'color_principal': '#14639e', 'color_secundario': '#bcdcf2',
+      });
+      expect(m.nombreDeBarra, 'Clínica Larga');
+    });
+
+    test('un color corrupto no deja la app negra', () {
+      // Un entero mal parseado pintaría la app de negro o reventaría al
+      // construir el ColorScheme.
+      for (final malo in ['azul', '#zzz', '', '0e5c63', '#0e5c6']) {
+        expect(colorDesdeHex(malo, 0xFF14639E), 0xFF14639E, reason: malo);
+      }
+    });
+
+    test('un logo vacío es no tener logo', () {
+      final m = Marca.desdeJson({
+        'nombre': 'X', 'logo': '   ',
+        'color_principal': '#14639e', 'color_secundario': '#bcdcf2',
+      });
+      expect(m.tieneLogo, isFalse);
+    });
+
+    test('sin nombre se usa el neutro en vez de dejar la barra vacía', () {
+      final m = Marca.desdeJson({
+        'nombre': '', 'color_principal': '#14639e', 'color_secundario': '#bcdcf2',
+      });
+      expect(m.nombre, Marca.neutra.nombre);
+    });
+
+    test('guardar y volver a leer conserva los colores', () {
+      // Es lo que evita el parpadeo al arrancar: la marca se guarda y
+      // se relee antes de pintar la primera pantalla.
+      const original = Marca(
+        nombre: 'Sonrisa', colorPrincipal: 0xFF0E5C63,
+        colorSecundario: 0xFF9FE1CB, telefono: '099');
+      final ida = Marca.desdeJson(original.aJson());
+      expect(ida.colorPrincipal, original.colorPrincipal);
+      expect(ida.colorSecundario, original.colorSecundario);
+      expect(ida.telefono, '099');
     });
   });
 }

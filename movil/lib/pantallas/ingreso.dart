@@ -8,12 +8,23 @@ library;
 import 'package:flutter/material.dart';
 
 import '../api/cliente.dart';
+import '../api/modelos.dart';
 
 class PantallaIngreso extends StatefulWidget {
-  const PantallaIngreso({super.key, required this.api, required this.alEntrar});
+  const PantallaIngreso({
+    super.key,
+    required this.api,
+    required this.alEntrar,
+    this.marca = Marca.neutra,
+  });
 
   final ClienteApi api;
   final VoidCallback alEntrar;
+
+  /// La de la última clínica con la que se ingresó, si la hay. En el
+  /// primer arranque del teléfono no se sabe de qué clínica se trata
+  /// —no hay sesión— y se usa la neutra.
+  final Marca marca;
 
   @override
   State<PantallaIngreso> createState() => _PantallaIngresoState();
@@ -76,10 +87,9 @@ class _PantallaIngresoState extends State<PantallaIngreso> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.medical_services_outlined,
-                      size: 64, color: tema.colorScheme.primary),
+                  _Emblema(marca: widget.marca, color: tema.colorScheme.primary),
                   const SizedBox(height: 20),
-                  Text('Tu clínica', style: tema.textTheme.headlineMedium),
+                  Text(widget.marca.nombre, style: tema.textTheme.headlineMedium),
                   const SizedBox(height: 6),
                   Text(
                     _codigoPedido
@@ -169,6 +179,34 @@ class _Aviso extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(texto, style: TextStyle(color: tema.colorScheme.onErrorContainer)),
+    );
+  }
+}
+
+
+/// El logotipo de la clínica, o el icono genérico si no tiene.
+///
+/// `errorBuilder` no es opcional: el logotipo se carga desde la red y un
+/// servidor caído, una URL vieja o un archivo borrado dejarían un aspa
+/// rota presidiendo la pantalla de ingreso. Se cae al icono, que nunca
+/// falla.
+class _Emblema extends StatelessWidget {
+  const _Emblema({required this.marca, required this.color});
+
+  final Marca marca;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!marca.tieneLogo) {
+      return Icon(Icons.medical_services_outlined, size: 64, color: color);
+    }
+    return Image.network(
+      marca.logo!,
+      height: 72,
+      fit: BoxFit.contain,
+      errorBuilder: (context, _, __) =>
+          Icon(Icons.medical_services_outlined, size: 64, color: color),
     );
   }
 }

@@ -242,3 +242,89 @@ class Logro {
         beneficio: j['beneficio'] as String? ?? '',
       );
 }
+
+/// La identidad de la clínica: cómo se llama, su logotipo y sus colores.
+///
+/// **Los colores llegan resueltos** en `#rrggbb`. La app no guarda
+/// ninguna tabla de temas a propósito: si la guardara, el día que
+/// alguien añada un tema en el panel la misma clínica se vería de un
+/// color en el escritorio y de otro en el teléfono.
+class Marca {
+  const Marca({
+    required this.nombre,
+    required this.colorPrincipal,
+    required this.colorSecundario,
+    this.nombreCorto = '',
+    this.logo,
+    this.telefono = '',
+    this.direccion = '',
+    this.email = '',
+  });
+
+  final String nombre;
+
+  /// Enteros ARGB ya parseados: guardarlos como cadena obligaría a
+  /// parsear en cada `build`, que ocurre muchas veces por segundo.
+  final int colorPrincipal;
+  final int colorSecundario;
+  final String nombreCorto;
+
+  /// URL absoluta. Nginx publica `/media/branding/` sin token y niega el
+  /// resto de `/media/`, así que el logotipo se puede cargar con una
+  /// imagen normal y las radiografías siguen protegidas.
+  final String? logo;
+  final String telefono;
+  final String direccion;
+  final String email;
+
+  bool get tieneLogo => (logo ?? '').isNotEmpty;
+  bool get sePuedeLlamar => telefono.trim().isNotEmpty;
+
+  /// El nombre que cabe en una barra estrecha.
+  String get nombreDeBarra => nombreCorto.trim().isNotEmpty ? nombreCorto : nombre;
+
+  /// La marca por omisión, mientras no se sepa de qué clínica se trata
+  /// —antes del primer ingreso— o si la petición falla. Nunca se deja la
+  /// app sin colores: una pantalla en blanco es peor que unos colores
+  /// que no son los de la clínica.
+  static const neutra = Marca(
+    nombre: 'Tu clínica',
+    colorPrincipal: 0xFF14639E,
+    colorSecundario: 0xFFBCDCF2,
+  );
+
+  factory Marca.desdeJson(Map<String, dynamic> j) => Marca(
+        nombre: (j['nombre'] as String? ?? '').trim().isEmpty
+            ? neutra.nombre
+            : (j['nombre'] as String).trim(),
+        nombreCorto: j['nombre_corto'] as String? ?? '',
+        logo: (j['logo'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : (j['logo'] as String).trim(),
+        colorPrincipal: colorDesdeHex(j['color_principal'], neutra.colorPrincipal),
+        colorSecundario: colorDesdeHex(j['color_secundario'], neutra.colorSecundario),
+        telefono: j['telefono'] as String? ?? '',
+        direccion: j['direccion'] as String? ?? '',
+        email: j['email'] as String? ?? '',
+      );
+
+  Map<String, dynamic> aJson() => {
+        'nombre': nombre,
+        'nombre_corto': nombreCorto,
+        'logo': logo,
+        'color_principal': '#${(colorPrincipal & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
+        'color_secundario': '#${(colorSecundario & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
+        'telefono': telefono,
+        'direccion': direccion,
+        'email': email,
+      };
+}
+
+/// `#rrggbb` a entero ARGB. Lo que no encaje cae en `porDefecto`: un
+/// color corrupto dejaría la app negra o la haría reventar al pintar.
+int colorDesdeHex(Object? valor, int porDefecto) {
+  final texto = (valor as String? ?? '').trim();
+  if (texto.length != 7 || !texto.startsWith('#')) return porDefecto;
+  final n = int.tryParse(texto.substring(1), radix: 16);
+  return n == null ? porDefecto : 0xFF000000 | n;
+}

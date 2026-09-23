@@ -66,6 +66,37 @@ for r in me citas saldo indicaciones; do
 done
 ```
 
+## La app se pinta con la marca de la clínica
+
+Nombre, logotipo y colores salen de `Configuración → Personalización`
+del panel, y la app los pide a `/api/v1/app/clinica/`.
+
+**Los colores llegan ya resueltos** en `#rrggbb`. La app no guarda
+ninguna tabla de temas: si la guardara, el día que alguien añada un tema
+al panel la misma clínica se vería de un color en el escritorio y de
+otro en el teléfono. Quien resuelve es
+`django-api/apps/configuration/temas.py`, y hay una prueba que compara
+esa tabla con la de `frontend/lib/theme.js` leyendo el archivo, para que
+las dos copias no se separen en silencio.
+
+La marca se **guarda en el teléfono** y se relee antes de pintar la
+primera pantalla. Sin eso, cada arranque en frío pinta medio segundo con
+los colores neutros y luego salta a los de la clínica; ese parpadeo se
+ve. No se borra al cerrar sesión —es la identidad de la clínica, no un
+dato del paciente—, así que al volver a entrar la pantalla de ingreso ya
+es la suya.
+
+Antes del PRIMER ingreso en un teléfono nuevo no se sabe de qué clínica
+se trata, así que se usa la marca neutra. No hay forma de saberlo: el
+paciente todavía no ha dicho quién es.
+
+**Si el logotipo no aparece**, la app cae al icono genérico en vez de
+enseñar un aspa rota. Suele ser una de estas: la clínica no ha subido
+ninguno; o se está sirviendo la API con `DEBUG=False` sin nginx delante,
+y entonces Django no publica `/media/` —`start-local.sh` la levanta con
+`DEBUG=True`, y en producción lo sirve nginx, que publica
+`/media/branding/` y niega el resto—.
+
 ## Decisiones que conviene no deshacer
 
 - **El dinero se queda como cadena** de punta a punta. Llega como

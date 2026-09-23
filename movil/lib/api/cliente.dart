@@ -24,6 +24,8 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import 'modelos.dart';
+
 /// Fallo con un mensaje que se le puede enseñar a una persona.
 class ErrorDeApi implements Exception {
   ErrorDeApi(this.mensaje, {this.codigo});
@@ -47,6 +49,7 @@ class Sesion {
 
   static const _claveAcceso = 'acceso';
   static const _claveRefresco = 'refresco';
+  static const _claveMarca = 'marca';
 
   Future<String?> get acceso => _almacen.read(key: _claveAcceso);
   Future<String?> get refresco => _almacen.read(key: _claveRefresco);
@@ -61,9 +64,34 @@ class Sesion {
   Future<void> borrar() async {
     await _almacen.delete(key: _claveAcceso);
     await _almacen.delete(key: _claveRefresco);
+    // La marca NO se borra al salir: es la identidad de la clínica, no
+    // un dato del paciente, y conservarla hace que la pantalla de
+    // ingreso siga siendo la de su clínica cuando vuelva a entrar. Se
+    // reemplaza sola si ingresa con una cuenta de otra clínica.
   }
 
   Future<bool> get hayTokens async => (await acceso) != null;
+
+  /// La marca guardada, si se llegó a pedir alguna vez.
+  ///
+  /// Sin esto, cada arranque en frío pinta medio segundo con los
+  /// colores neutros y luego salta a los de la clínica. El parpadeo se
+  /// ve, y se ve mal.
+  Future<Marca?> get marca async {
+    final crudo = await _almacen.read(key: _claveMarca);
+    if (crudo == null) return null;
+    try {
+      return Marca.desdeJson(jsonDecode(crudo) as Map<String, dynamic>);
+    } catch (_) {
+      // Guardado por una versión anterior con otra forma: se descarta y
+      // se vuelve a pedir. Mejor los colores neutros un momento que una
+      // excepción al arrancar.
+      return null;
+    }
+  }
+
+  Future<void> guardarMarca(Marca marca) =>
+      _almacen.write(key: _claveMarca, value: jsonEncode(marca.aJson()));
 }
 
 /// Mensaje legible de una respuesta de error.
@@ -145,6 +173,13 @@ class ClienteApi {
   }
 
   Future<void> salir() => sesion.borrar();
+
+  /// La marca de la clínica del paciente, guardada de paso.
+  Future<Marca> marcaDeLaClinica() async {
+    final marca = Marca.desdeJson(await objeto('/app/clinica/'));
+    await sesion.guardarMarca(marca);
+    return marca;
+  }
 
   // ── Peticiones autenticadas ──────────────────────────────────────
 

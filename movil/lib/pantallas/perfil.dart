@@ -14,10 +14,16 @@ import '../tema.dart';
 import 'logros.dart';
 
 class PantallaPerfil extends StatefulWidget {
-  const PantallaPerfil({super.key, required this.api, required this.alSalir});
+  const PantallaPerfil({
+    super.key,
+    required this.api,
+    required this.alSalir,
+    this.marca = Marca.neutra,
+  });
 
   final ClienteApi api;
   final VoidCallback alSalir;
+  final Marca marca;
 
   @override
   State<PantallaPerfil> createState() => _PantallaPerfilState();
@@ -85,6 +91,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
           child: _Contenido(
             perfil: p,
             logros: logros,
+            marca: widget.marca,
             alSalir: () async {
               await widget.api.salir();
               widget.alSalir();
@@ -100,11 +107,13 @@ class _Contenido extends StatelessWidget {
   const _Contenido({
     required this.perfil,
     required this.logros,
+    required this.marca,
     required this.alSalir,
   });
 
   final Perfil perfil;
   final List<Logro> logros;
+  final Marca marca;
   final Future<void> Function() alSalir;
 
   @override
@@ -205,6 +214,17 @@ class _Contenido extends StatelessWidget {
             itemBuilder: (context, i) => _Celda(logro: logros[i]),
           ),
         const SizedBox(height: 28),
+        // Los datos de contacto de la clínica: hasta ahora la app decía
+        // «llama a tu clínica» sin dar el número, que es un consejo
+        // vacío si el paciente no lo tiene a mano.
+        if (marca.sePuedeLlamar || marca.direccion.isNotEmpty) ...[
+          Text(marca.nombre, style: tema.textTheme.titleSmall),
+          if (marca.sePuedeLlamar)
+            Text(marca.telefono, style: tema.textTheme.bodyMedium),
+          if (marca.direccion.isNotEmpty)
+            Text(marca.direccion, style: tema.textTheme.bodySmall),
+          const SizedBox(height: 20),
+        ],
         OutlinedButton.icon(
           onPressed: alSalir,
           icon: const Icon(Icons.logout),

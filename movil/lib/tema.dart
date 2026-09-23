@@ -32,12 +32,18 @@ const anilloLogro = LinearGradient(
   end: Alignment.bottomRight,
 );
 
-ThemeData temaClaro() => _tema(Brightness.light);
-ThemeData temaOscuro() => _tema(Brightness.dark);
+/// El tema, a partir del color que la clínica eligió en el panel.
+///
+/// `seedColor` y no un color fijo: Material genera de ahí una paleta
+/// entera con contrastes que se leen, en claro y en oscuro. Poner el
+/// color de la clínica a pelo en cada superficie daría texto gris sobre
+/// fondo gris en cuanto alguien eligiera un tono claro.
+ThemeData temaClaro([int? semilla]) => _tema(Brightness.light, semilla);
+ThemeData temaOscuro([int? semilla]) => _tema(Brightness.dark, semilla);
 
-ThemeData _tema(Brightness brillo) {
+ThemeData _tema(Brightness brillo, [int? semilla]) {
   final esquema = ColorScheme.fromSeed(
-    seedColor: petroleo,
+    seedColor: semilla == null ? petroleo : Color(semilla),
     brightness: brillo,
   );
   return ThemeData(

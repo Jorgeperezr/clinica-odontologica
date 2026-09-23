@@ -5,10 +5,13 @@
 /// más: ni odontograma, ni notas clínicas, ni costes internos.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'api/cliente.dart';
+import 'api/modelos.dart';
 import 'pantallas/ingreso.dart';
 import 'pantallas/principal.dart';
 import 'tema.dart';
@@ -46,39 +49,79 @@ class AppPaciente extends StatefulWidget {
 
 class _AppPacienteState extends State<AppPaciente> {
   final _api = ClienteApi(urlBase: urlApi);
-  late Future<bool> _haySesion;
+  late Future<_Arranque> _arranque;
+
+  /// La marca con la que se está pintando ahora mismo. Empieza en la
+  /// neutra y se sustituye en cuanto se sabe de qué clínica se trata.
+  Marca _marca = Marca.neutra;
 
   @override
   void initState() {
     super.initState();
-    _haySesion = _api.sesion.hayTokens;
+    _arranque = _preparar();
   }
 
-  void _refrescarSesion() => setState(() {
-        _haySesion = _api.sesion.hayTokens;
-      });
+  /// Se mira la marca GUARDADA antes de pintar nada.
+  ///
+  /// Si se pidiera al servidor, la app arrancaría con los colores
+  /// neutros y saltaría a los de la clínica medio segundo después. Ese
+  /// parpadeo se ve. Lo guardado se refresca luego, sin prisa.
+  Future<_Arranque> _preparar() async {
+    final guardada = await _api.sesion.marca;
+    if (guardada != null) _marca = guardada;
+    final hay = await _api.sesion.hayTokens;
+    if (hay) unawaited(_refrescarMarca());
+    return _Arranque(haySesion: hay, marca: _marca);
+  }
+
+  /// Vuelve a pedir la marca por si la clínica cambió de logotipo o de
+  /// colores. Si falla, se sigue con la guardada: que no se pueda pedir
+  /// el logotipo no es motivo para dejar al paciente sin sus citas.
+  Future<void> _refrescarMarca() async {
+    try {
+      final fresca = await _api.marcaDeLaClinica();
+      if (mounted) setState(() => _marca = fresca);
+    } catch (_) {
+      // Sin red, o la cuenta todavía sin ficha. Se conserva lo guardado.
+    }
+  }
+
+  void _refrescarSesion() {
+    setState(() => _arranque = _preparar());
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mi clínica',
       debugShowCheckedModeBanner: false,
-      theme: temaClaro(),
-      darkTheme: temaOscuro(),
-      home: FutureBuilder<bool>(
-        future: _haySesion,
+      theme: temaClaro(_marca.colorPrincipal),
+      darkTheme: temaOscuro(_marca.colorPrincipal),
+      home: FutureBuilder<_Arranque>(
+        future: _arranque,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          if (snap.data ?? false) {
-            return PantallaPrincipal(api: _api, alSalir: _refrescarSesion);
+          if (snap.data?.haySesion ?? false) {
+            return PantallaPrincipal(
+              api: _api, marca: _marca, alSalir: _refrescarSesion);
           }
-          return PantallaIngreso(api: _api, alEntrar: _refrescarSesion);
+          return PantallaIngreso(
+            api: _api, marca: _marca, alEntrar: _refrescarSesion);
         },
       ),
     );
   }
+}
+
+
+/// Lo que hay que saber antes de pintar la primera pantalla.
+class _Arranque {
+  const _Arranque({required this.haySesion, required this.marca});
+
+  final bool haySesion;
+  final Marca marca;
 }

@@ -192,6 +192,63 @@ class MisLogrosView(BaseVistaPaciente):
         return Response(salida)
 
 
+class MiClinicaView(BaseVistaPaciente):
+    """
+    GET /api/v1/app/clinica/ — nombre, logotipo y colores de SU clínica.
+
+    Hacía falta un endpoint nuevo en vez de abrir `/config/branding/` al
+    rol de paciente: aquel devuelve el registro entero y está pensado
+    para el panel. Aquí sale solo lo que la app pinta, y el tenant lo
+    decide el token, como todo lo demás de esta app.
+
+    **Los colores llegan ya resueltos**, en #rrggbb. La app no guarda
+    ninguna tabla de temas: si la guardara, el día que alguien añada un
+    tema al panel la misma clínica se vería de un color en el escritorio
+    y de otro en el teléfono.
+
+    El logotipo se devuelve como URL ABSOLUTA porque la app no vive en
+    el mismo origen que la API —el panel sí, y por eso a él le vale la
+    ruta relativa—. Nginx publica `/media/branding/` y niega el resto de
+    `/media/`, así que el logotipo es alcanzable sin token y las
+    radiografías no.
+    """
+
+    def get(self, request):
+        from apps.configuration.models import ClinicBranding
+        from apps.configuration.temas import resolver
+
+        # `ficha_del_paciente` no se usa aquí —no hacen falta sus datos—,
+        # pero sí su comprobación: una cuenta sin ficha no debe poder
+        # recorrer la app, ni siquiera su parte decorativa.
+        ficha_del_paciente(request)
+
+        marca = ClinicBranding.objects.filter(tenant=request.tenant).first()
+        principal, secundario = resolver(marca.theme if marca else None)
+
+        nombre = ""
+        if marca:
+            nombre = (marca.display_name or "").strip()
+        nombre = nombre or request.tenant.name
+
+        return Response({
+            "nombre": nombre,
+            "nombre_corto": (marca.short_name or "").strip() if marca else "",
+            "logo": _url_absoluta(request, marca.logo.url if marca and marca.logo else None),
+            "color_principal": principal,
+            "color_secundario": secundario,
+            # Para que «llama a tu clínica» deje de ser un consejo vacío.
+            "telefono": (marca.phone or "").strip() if marca else "",
+            "direccion": (marca.address or "").strip() if marca else "",
+            "email": (marca.email or "").strip() if marca else "",
+        })
+
+
+def _url_absoluta(request, ruta):
+    if not ruta:
+        return None
+    return request.build_absolute_uri(ruta)
+
+
 def _racha_seguida(periodos):
     """
     Meses consecutivos, contando desde el más reciente hacia atrás.
