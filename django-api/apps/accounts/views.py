@@ -325,4 +325,21 @@ class MeView(APIView):
             "full_name": u.full_name,
             "role": u.role,
             "must_change_password": u.must_change_password,
+            "puede_gestionar_logros": (
+                u.role == User.Role.ADMIN or u.puede_gestionar_logros),
+            # El panel esconde los módulos que la clínica no tiene. Es
+            # cortesía: el candado de verdad está en la API, en
+            # `RequiereFuncionalidad`.
+            "funcionalidades": _funcionalidades_de(u),
         })
+
+
+def _funcionalidades_de(usuario):
+    from apps.common.funcionalidades import CATALOGO, normalizar
+
+    if usuario.tenant_id is None:
+        # El Super Administrador opera sobre la plataforma, no dentro de
+        # una clínica. Se le devuelve todo apagado para que el panel no
+        # le pinte módulos de clínica que no le corresponden.
+        return {clave: False for clave in CATALOGO}
+    return normalizar(usuario.tenant.funcionalidades)

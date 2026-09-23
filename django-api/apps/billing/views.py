@@ -23,6 +23,7 @@ from apps.billing.serializers import (
     PayInstallmentSerializer,
     PaymentPlanSerializer,
 )
+from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.common.permissions import HasRole
 from apps.patients.models import Patient
 
@@ -243,7 +244,8 @@ class FinancialReportView(APIView):
     Ingresos por período, desglosados por método de pago.
     """
 
-    permission_classes = [HasRole.for_roles("admin")]
+    permission_classes = [HasRole.for_roles("admin"),
+                          RequiereFuncionalidad.para("reportes")]
 
     def get(self, request):
         from django.db.models import Count, Sum

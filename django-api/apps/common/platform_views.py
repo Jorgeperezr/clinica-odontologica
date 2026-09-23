@@ -61,11 +61,12 @@ def _principal_admin(tenant):
 
 class ClinicSerializer(serializers.ModelSerializer):
     admin = serializers.SerializerMethodField()
+    funcionalidades = serializers.JSONField(required=False)
 
     class Meta:
         model = Tenant
         fields = ["id", "name", "ruc", "address", "phone", "email",
-                  "is_active", "admin", "created_at"]
+                  "is_active", "admin", "funcionalidades", "created_at"]
         read_only_fields = ["id", "created_at"]
 
     def get_admin(self, obj):
@@ -81,6 +82,25 @@ class ClinicSerializer(serializers.ModelSerializer):
             # lleva meses trabajando.
             "must_change_password": admin.must_change_password,
         }
+
+    def validate_funcionalidades(self, value):
+        """
+        Se normaliza SIEMPRE: lo que llegue se recorta al catálogo y lo
+        que falte se rellena. Guardar tal cual lo que mande el panel
+        dejaría claves inventadas en la base y, peor, clínicas sin
+        alguna clave el día que se añada una funcionalidad nueva.
+        """
+        from apps.common.funcionalidades import normalizar
+        return normalizar(value)
+
+    def to_representation(self, instance):
+        from apps.common.funcionalidades import normalizar
+        datos = super().to_representation(instance)
+        # Igual al leer: una clínica creada antes de que existiera una
+        # funcionalidad la recibe con su valor por defecto en vez de un
+        # hueco que el panel pintaría como «apagada».
+        datos["funcionalidades"] = normalizar(instance.funcionalidades)
+        return datos
 
     def validate_name(self, value):
         qs = Tenant.objects.filter(name__iexact=value.strip())
@@ -120,7 +140,11 @@ class ClinicListCreateView(generics.ListCreateAPIView):
         # Una clínica nueva SIEMPRE nace activa; suspenderla es una acción
         # explícita posterior (PATCH). Esto también neutraliza la semántica
         # de checkbox de los formularios (boolean ausente = False).
-        tenant = serializer.save(is_active=True)
+        from apps.common.funcionalidades import normalizar
+        tenant = serializer.save(
+            is_active=True,
+            funcionalidades=normalizar(serializer.validated_data.get("funcionalidades")),
+        )
         # Siembra del catálogo base de la clínica nueva (Sprint 1)
         call_command("bootstrap", tenant_name=tenant.name)
         _audit_platform(self.request, "create_clinic", "Tenant", tenant.id,

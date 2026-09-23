@@ -14,8 +14,8 @@ const NAV = [
   { href: "/panel/agenda/", label: "Agenda", iconName: "agenda", roles: ["admin", "reception", "doctor"] },
   { href: "/panel/firma/", label: "Mi firma", iconName: "firma", roles: ["doctor"] },
   { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception"] },
-  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "auxiliary"] },
-  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin"] },
+  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "auxiliary"], funcionalidad: "inventario" },
+  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin"], funcionalidad: "reportes" },
   { href: "/panel/configuracion/", label: "Configuración", iconName: "configuracion", roles: ["admin"] },
 ];
 
@@ -100,7 +100,18 @@ export default function PanelLayout({ children }) {
 
   if (!ready) return null;
 
-  const items = NAV.filter((n) => n.roles.includes(user.role));
+  // Rol Y funcionalidad. Esconder el módulo es cortesía; lo que de
+  // verdad lo cierra es `RequiereFuncionalidad` en la API, porque quien
+  // conozca la URL entraría igual.
+  //
+  // `!== false` y no `=== true`: si el perfil viene de una sesión
+  // anterior y todavía no trae `funcionalidades`, se enseña todo en vez
+  // de dejar al usuario sin menú hasta que vuelva a entrar.
+  const contratadas = user.funcionalidades || {};
+  const items = NAV.filter(
+    (n) => n.roles.includes(user.role)
+      && (!n.funcionalidad || contratadas[n.funcionalidad] !== false),
+  );
   const path = typeof window !== "undefined" ? window.location.pathname : "";
   const W = isMobile ? 264 : (collapsed ? 64 : 220);
 

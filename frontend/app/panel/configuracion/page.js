@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, apiBase, readList } from "../../../lib/api";
+import { api, apiBase, readList, currentUser} from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../../../lib/theme";
 import LogoCropper from "../../../lib/LogoCropper";
@@ -21,6 +21,10 @@ const PARAM_LABELS = {
 
 export default function ConfiguracionPage() {
   const [tab, setTab] = useState("tratamientos");
+  // Igual que en la navegación: `!== false` para que un perfil viejo no
+  // deje al administrador sin pestañas.
+  const contratadas = (currentUser() || {}).funcionalidades || {};
+  const hay = (clave) => contratadas[clave] !== false;
 
   return (
     <div>
@@ -28,7 +32,8 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div className="tabs" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["convenios", "Convenios y tarifarios"], ["logros", "Rachas y logros"],
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ...(hay("convenios") ? [["convenios", "Convenios y tarifarios"]] : []),
+          ...(hay("logros") ? [["logros", "Rachas y logros"]] : []),
           ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
           ["documentos", "Apariencia de documentos"],
           ["respaldo", "Copia de seguridad"]].map(([k, label]) => (

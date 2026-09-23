@@ -15,9 +15,13 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.logros import reglas
 from apps.logros.models import Logro, LogroDePaciente
 from apps.logros.permissions import PuedeGestionarLogros
+
+# Hace falta el permiso de la persona Y que la clínica tenga el módulo.
+PUEDE = [PuedeGestionarLogros, RequiereFuncionalidad.para("logros")]
 from apps.logros.serializers import LogroDePacienteSerializer, LogroSerializer
 
 
@@ -25,7 +29,7 @@ class LogroListCreateView(generics.ListCreateAPIView):
     """GET/POST /api/v1/logros/ — el catálogo de la clínica."""
 
     serializer_class = LogroSerializer
-    permission_classes = [PuedeGestionarLogros]
+    permission_classes = PUEDE
     pagination_class = None
 
     def get_queryset(self):
@@ -37,7 +41,7 @@ class LogroListCreateView(generics.ListCreateAPIView):
 
 class LogroDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = LogroSerializer
-    permission_classes = [PuedeGestionarLogros]
+    permission_classes = PUEDE
 
     def get_queryset(self):
         return Logro.objects.filter(tenant=self.request.tenant)
@@ -61,7 +65,7 @@ class OtorgarLogroView(APIView):
     puede ver.
     """
 
-    permission_classes = [PuedeGestionarLogros]
+    permission_classes = PUEDE
 
     def post(self, request):
         from apps.patients.models import Patient
@@ -89,7 +93,7 @@ class LogrosDelPacienteView(generics.ListAPIView):
     """GET /api/v1/patients/{id}/logros/ — para la ficha del panel."""
 
     serializer_class = LogroDePacienteSerializer
-    permission_classes = [PuedeGestionarLogros]
+    permission_classes = PUEDE
     pagination_class = None
 
     def get_queryset(self):
@@ -107,7 +111,7 @@ class EvaluarLogrosView(APIView):
     impide conceder dos veces el mismo mes.
     """
 
-    permission_classes = [PuedeGestionarLogros]
+    permission_classes = PUEDE
 
     def post(self, request):
         mes = _primer_dia_del_mes_pedido(request.data.get("mes"))

@@ -5,6 +5,7 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.common.permissions import HasRole
 from apps.inventory.models import Batch, InventoryMovement, Product
 from apps.inventory.serializers import (
@@ -37,7 +38,7 @@ class ProductListCreateView(generics.ListCreateAPIView):
 
 class ProductDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = ProductSerializer
-    permission_classes = [CAN_MANAGE]
+    permission_classes = [CAN_MANAGE, RequiereFuncionalidad.para("inventario")]
 
     def get_queryset(self):
         return Product.objects.filter(tenant=self.request.tenant).prefetch_related("batches")
@@ -47,7 +48,7 @@ class BatchListCreateView(generics.ListCreateAPIView):
     """GET/POST /api/v1/products/{id}/batches/ — RF-INV-02."""
 
     serializer_class = BatchSerializer
-    permission_classes = [CAN_MANAGE]
+    permission_classes = [CAN_MANAGE, RequiereFuncionalidad.para("inventario")]
 
     def get_queryset(self):
         return Batch.objects.filter(
@@ -70,7 +71,7 @@ class BatchListCreateView(generics.ListCreateAPIView):
 class LowStockAlertView(APIView):
     """GET /api/v1/inventory/alerts/low-stock/ — RF-INV-03."""
 
-    permission_classes = [CAN_VIEW]
+    permission_classes = [CAN_VIEW, RequiereFuncionalidad.para("inventario")]
 
     def get(self, request):
         products = Product.objects.filter(
@@ -91,7 +92,7 @@ class LowStockAlertView(APIView):
 class ExpiringBatchAlertView(APIView):
     """GET /api/v1/inventory/alerts/expiring/?days=30 — RF-INV-04."""
 
-    permission_classes = [CAN_VIEW]
+    permission_classes = [CAN_VIEW, RequiereFuncionalidad.para("inventario")]
 
     def get(self, request):
         try:
@@ -125,7 +126,7 @@ class InventoryMovementListView(generics.ListAPIView):
     """GET /api/v1/inventory/movements/ — historial completo."""
 
     serializer_class = InventoryMovementSerializer
-    permission_classes = [CAN_VIEW]
+    permission_classes = [CAN_VIEW, RequiereFuncionalidad.para("inventario")]
     filterset_fields = ["product", "movement_type", "reason"]
 
     def get_queryset(self):

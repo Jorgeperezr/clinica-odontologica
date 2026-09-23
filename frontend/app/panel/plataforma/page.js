@@ -4,6 +4,30 @@ import { useCallback, useEffect, useState } from "react";
 import { api, apiErrorMessage, readList } from "../../../lib/api";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 
+/**
+ * Las funcionalidades que se pueden contratar por clínica.
+ *
+ * El catálogo de verdad vive en `apps/common/funcionalidades.py`, que es
+ * el que la API usa para rechazar un módulo apagado. Esta lista solo
+ * pone los textos; si alguien añade una clave allí y se olvida aquí, la
+ * clínica la recibe encendida por defecto y no se ve para editarla —se
+ * nota, pero no rompe nada—.
+ */
+const FUNCIONALIDADES = [
+  ["logros", "Rachas y logros", "Premiar al paciente que acude a sus controles."],
+  ["inventario", "Inventario", "Control de stock e insumos."],
+  ["whatsapp", "Recordatorios por WhatsApp", "Necesita conectar la cuenta de la clínica."],
+  ["convenios", "Convenios y tarifarios", "Precios pactados con aseguradoras."],
+  ["app_paciente", "App del paciente", "Sus citas y su saldo en el teléfono."],
+  ["odontograma_3d", "Odontograma 3D", "El clásico no se apaga nunca."],
+  ["formulario_033", "Formulario MSP 033", "Historia clínica única del Ministerio."],
+  ["reportes", "Reportes", "Informes financieros y de producción."],
+];
+
+const FUNCIONALIDADES_POR_DEFECTO = Object.fromEntries(
+  FUNCIONALIDADES.map(([k]) => [k, k !== "whatsapp"]),
+);
+
 const TABS = [
   ["dashboard", "Dashboard"], ["clinicas", "Clínicas"],
   ["admins", "Administradores"], ["auditoria", "Auditoría"],
@@ -176,7 +200,8 @@ function ClinicsTab() {
   const [confirm, ConfirmUI] = useConfirm();
   const [clinics, setClinics] = useState([]);
   const VACIO = { name: "", ruc: "", address: "", phone: "", email: "",
-                  admin_full_name: "", admin_email: "" };
+                  admin_full_name: "", admin_email: "",
+                  funcionalidades: { ...FUNCIONALIDADES_POR_DEFECTO } };
   const [form, setForm] = useState(VACIO);
   const [editing, setEditing] = useState(null);   // clínica en edición
   const [error, setError] = useState("");
@@ -292,12 +317,49 @@ function ClinicsTab() {
           {fld("address", "Dirección")}
           {fld("phone", "Teléfono")}
           {fld("email", "Correo", "email")}
-          {editing && (
-            <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-              <button className="btn btn-primary">Guardar cambios</button>
-              <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)}>Cancelar</button>
-            </div>
-          )}
+        </div>
+        {editing && (
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button className="btn btn-primary">Guardar cambios</button>
+            <button type="button" className="btn btn-ghost"
+                    onClick={() => setEditing(null)}>Cancelar</button>
+          </div>
+        )}
+
+        {/* Qué módulos tiene esta clínica. Se pueden cambiar después:
+            apagar uno NO borra sus datos, solo deja de verse. */}
+        <div style={{ borderTop: "1px solid var(--line)", margin: "16px 0 14px" }} />
+        <h4 style={{ marginBottom: 2, fontSize: 14 }}>Funcionalidades</h4>
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
+          Pacientes, agenda, historia clínica y pagos van siempre: sin eso no
+          es una versión reducida, es algo que no sirve. Lo de aquí es lo que
+          se puede contratar aparte.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 18px",
+                      marginBottom: 4 }}>
+          {FUNCIONALIDADES.map(([clave, titulo, detalle]) => {
+            const fuente = editing || form;
+            const puesto = fuente.funcionalidades || FUNCIONALIDADES_POR_DEFECTO;
+            return (
+              <label key={clave} style={{ display: "flex", gap: 8, alignItems: "start",
+                                          fontSize: 14 }}>
+                <input type="checkbox" style={{ marginTop: 3 }}
+                       checked={!!puesto[clave]}
+                       onChange={(e) => {
+                         const nuevas = { ...puesto, [clave]: e.target.checked };
+                         editing
+                           ? setEditing({ ...editing, funcionalidades: nuevas })
+                           : setForm({ ...form, funcionalidades: nuevas });
+                       }} />
+                <span>
+                  {titulo}
+                  <span style={{ display: "block", fontSize: 12, color: "var(--ink-soft)" }}>
+                    {detalle}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
         </div>
 
         {/* Los datos del administrador solo al crear: al editar una
@@ -342,7 +404,9 @@ function ClinicsTab() {
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                     <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}
                             onClick={() => setEditing({ id: c.id, name: c.name, ruc: c.ruc,
-                              address: c.address, phone: c.phone, email: c.email })}>Editar</button>
+                              address: c.address, phone: c.phone, email: c.email,
+                              funcionalidades: c.funcionalidades
+                                || { ...FUNCIONALIDADES_POR_DEFECTO } })}>Editar</button>
                     <button className="btn btn-ghost"
                             style={{ padding: "4px 10px", fontSize: 12, marginLeft: 6,
                                      color: c.is_active ? "var(--red)" : "var(--petrol)" }}

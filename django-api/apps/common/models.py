@@ -17,6 +17,15 @@ class Tenant(models.Model):
     phone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
     is_active = models.BooleanField(default=True)
+    funcionalidades = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Funcionalidades contratadas",
+        help_text=(
+            "Qué módulos tiene esta clínica. El catálogo está en "
+            "apps/common/funcionalidades.py. Apagar uno NO borra sus "
+            "datos: deja de verse y de poder tocarse."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

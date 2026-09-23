@@ -24,10 +24,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.app_paciente.permissions import EsPaciente, ficha_del_paciente
+from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 
 
 class BaseVistaPaciente(APIView):
-    permission_classes = [EsPaciente]
+    # La clínica puede no tener contratada la app. Se comprueba aquí, en
+    # la base, para que ninguna vista del paciente se olvide.
+    permission_classes = [EsPaciente, RequiereFuncionalidad.para("app_paciente")]
 
 
 class MiPerfilView(BaseVistaPaciente):
