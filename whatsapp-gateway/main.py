@@ -41,6 +41,7 @@ async def send_template(payload: SendTemplateRequest):
         template_name=payload.template_name,
         language=payload.language,
         variables=payload.variables,
+        credenciales=payload.credenciales,
     )
     return SendTemplateResponse(**result)
 

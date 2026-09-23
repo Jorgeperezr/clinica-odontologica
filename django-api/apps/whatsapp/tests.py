@@ -9,9 +9,10 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
 from apps.agenda.models import Appointment, Doctor
+from apps.common.funcionalidades import normalizar
 from apps.common.models import Tenant
 from apps.patients.models import Patient
-from apps.whatsapp.models import WhatsAppOptIn
+from apps.whatsapp.models import ConfiguracionWhatsApp, WhatsAppOptIn
 
 
 class OptInTests(APITestCase):
@@ -44,9 +45,29 @@ class OptInTests(APITestCase):
         self.assertFalse(optin.is_active)
 
 
+def conectar_whatsapp(tenant, plantilla="recordatorio_cita"):
+    """
+    Deja la clínica con su cuenta de WhatsApp lista para enviar.
+
+    Desde que cada clínica envía desde su cuenta, una clínica sin
+    configurar no recibe recordatorios: las pruebas que esperan un envío
+    tienen que conectarla primero.
+    """
+    tenant.funcionalidades = normalizar({"whatsapp": True})
+    tenant.save(update_fields=["funcionalidades"])
+    config = ConfiguracionWhatsApp(
+        tenant=tenant, phone_number_id="555000111", numero_visible="+593999000111",
+        plantilla_recordatorio=plantilla, activo=True,
+    )
+    config.token = "EAAG-token-de-prueba"
+    config.save()
+    return config
+
+
 class ReminderTaskTests(APITestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(name="Clínica Test", ruc="1234567890001")
+        conectar_whatsapp(self.tenant)
         from apps.configuration.models import SystemParameter
         SystemParameter.objects.create(
             tenant=self.tenant, key="ventana_recordatorio_horas", value="24"

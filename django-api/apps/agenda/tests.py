@@ -225,6 +225,10 @@ class ReminderNoDuplicatesTest(APITestCase):
         tenant = Tenant.objects.create(name="T remind")
         from django.core.management import call_command
         call_command("bootstrap", tenant_name=tenant.name)
+        # Cada clínica envía desde su cuenta: sin conectarla no hay
+        # recordatorio que duplicar.
+        from apps.whatsapp.tests import conectar_whatsapp
+        conectar_whatsapp(tenant)
         du = User.objects.create_user(
             email="d@rem.ec", password="superseguro123", role="doctor", tenant=tenant,
         )
