@@ -54,18 +54,26 @@
    recta cruzando todas las coronas. */
 const PROFILE = [
   { n: 0.00, y: 0.06, band: 0 },   // cresta (queda dentro de la pieza)
-  { n: 0.80, y: 0.00, band: 0 },   // margen libre vestibular
-  { n: 1.42, y: -0.34, band: 1 },  // encía libre (pared que cae deprisa)
-  { n: 1.46, y: -0.78, band: 1 },  // encía adherida sobre la eminencia
-  { n: 1.30, y: -1.26, band: 2 },  // unión mucogingival
+  { n: 0.82, y: 0.00, band: 0 },   // margen libre vestibular
+  { n: 1.08, y: -0.22, band: 1 },  // encía libre: fina, pegada al cuello
+  { n: 1.06, y: -0.72, band: 1 },  // encía adherida
+  { n: 1.02, y: -1.20, band: 2 },  // unión mucogingival
   { n: 0.80, y: -1.62, band: 3 },  // fondo de vestíbulo
   { n: 0.00, y: -1.85, band: 3 },  // base
   { n: -0.76, y: -1.60, band: 3 }, // fondo lingual
-  { n: -1.16, y: -1.22, band: 2 },
-  { n: -1.34, y: -0.70, band: 1 },
-  { n: -1.26, y: -0.26, band: 1 },
-  { n: -0.78, y: 0.00, band: 0 },  // margen libre lingual
+  { n: -0.98, y: -1.22, band: 2 },
+  { n: -1.04, y: -0.70, band: 1 },
+  { n: -1.02, y: -0.24, band: 1 },
+  { n: -0.80, y: 0.00, band: 0 },  // margen libre lingual
 ];
+
+/* La pared vestibular del perfil es deliberadamente ESTRECHA —el ancho
+   de la propia pieza—: el volumen real lo da la envolvente medida de
+   las raíces más el grosor del tejido. Con una pared ancha y fija
+   (1,42–1,46 veces la semiprofundidad, lo de antes) la encía era un tubo
+   liso que pasaba por encima de todo; así sigue cada raíz, abulta sobre
+   ella —la eminencia del canino es la más visible— y se hunde entre una
+   y la siguiente, que es lo que se ve en una encía de verdad. */
 
 /* Tono por banda: multiplica al color del material, nunca lo sustituye.
 
@@ -86,28 +94,31 @@ const PROFILE = [
    estético: la unión mucogingival es una referencia clínica, y si las
    dos bandas se parecen demasiado deja de verse dónde está. */
 const BAND_SHADE = [
-  [1.03, 1.00, 0.99],   // margen libre: más pálido y rosado que la adherida
+  [1.03, 0.98, 0.97],   // margen libre: más pálido y rosado que la adherida
   [1.00, 0.92, 0.91],   // encía adherida: queda como estaba (referencia)
-  [0.94, 0.80, 0.82],   // unión mucogingival: transición
-  [0.89, 0.67, 0.69],   // mucosa alveolar: más roja, pero mucosa, no granate
+  [0.90, 0.70, 0.73],   // unión mucogingival: transición
+  [0.80, 0.54, 0.58],   // mucosa alveolar: más roja y oscura
 ];
+/* Se subió el contraste entre la adherida y la mucosa: con los valores
+   anteriores, en el tema claro toda la encía se leía como un único rosa
+   y desaparecía la unión mucogingival, que es una referencia clínica. */
 
 /* Perfil del hueso alveolar. La cresta queda por debajo del cuello (en
    una boca sana, 1,5–2 mm apical a la unión amelocementaria) y el
    volumen es algo más estrecho que la encía, que lo recubre. */
 export const PERFIL_HUESO = [
   { n: 0.00, y: 0.02, band: 0 },   // cresta, dentro de la raíz
-  { n: 0.86, y: 0.00, band: 0 },   // cresta vestibular
-  { n: 1.22, y: -0.30, band: 1 },  // tabla vestibular
-  { n: 1.28, y: -0.90, band: 1 },
-  { n: 1.14, y: -1.45, band: 2 },  // hueso basal
-  { n: 0.62, y: -1.76, band: 2 },
-  { n: 0.00, y: -1.86, band: 2 },
-  { n: -0.62, y: -1.74, band: 2 },
-  { n: -1.08, y: -1.36, band: 2 },
-  { n: -1.20, y: -0.80, band: 1 },
-  { n: -1.12, y: -0.28, band: 1 },
-  { n: -0.84, y: 0.00, band: 0 },  // cresta lingual/palatina
+  { n: 0.78, y: 0.00, band: 0 },   // cresta vestibular
+  { n: 0.94, y: -0.30, band: 1 },  // tabla vestibular (la envolvente la ajusta a cada raíz)
+  { n: 0.95, y: -0.90, band: 1 },
+  { n: 0.88, y: -1.45, band: 2 },  // hueso basal
+  { n: 0.56, y: -1.72, band: 2 },
+  { n: 0.00, y: -1.80, band: 2 },
+  { n: -0.56, y: -1.70, band: 2 },
+  { n: -0.86, y: -1.36, band: 2 },
+  { n: -0.92, y: -0.80, band: 1 },
+  { n: -0.90, y: -0.28, band: 1 },
+  { n: -0.78, y: 0.00, band: 0 },  // cresta lingual/palatina
 ];
 
 /* Hueso: la cresta y las tablas corticales, algo más claras; el hueso
@@ -119,7 +130,9 @@ export const TONO_HUESO = [
 ];
 
 const SUB = 2;          // subdivisiones por tramo del perfil
-const PER_TOOTH = 7;    // muestras a lo largo del arco por pieza
+// Muestras a lo largo del arco por pieza. Eran 7: con la pared siguiendo
+// cada raíz, tan pocas dejaban las eminencias facetadas.
+const PER_TOOTH = 12;
 
 /** Catmull-Rom cerrada: suaviza el perfil sin tener que escribir más puntos. */
 function sampleProfile(p = PROFILE) {
@@ -141,8 +154,12 @@ function sampleProfile(p = PROFILE) {
            entre dos dientes, no un pliegue de todo el tejido: si se sube
            la sección entera, el margen vestibular monta sobre la cara
            del diente y se ve una banda rosa cruzando las coronas. */
+        /* El margen vestibular subía solo un 32 % de la papila y la papila
+           no llegaba a formarse: quedaba un festón bajo y redondo. La
+           banda rosa que se atribuía a subirlo más era en realidad la
+           encía dibujada del revés (ver el sentido de los triángulos). */
         lift: Math.max(0, 1 - Math.abs(f(p0.y, p1.y, p2.y, p3.y)) / 0.5)
-            * (0.32 + 0.68 * Math.max(0, 1 - Math.abs(f(p0.n, p1.n, p2.n, p3.n)) / 0.7)),
+            * (0.66 + 0.34 * Math.max(0, 1 - Math.abs(f(p0.n, p1.n, p2.n, p3.n)) / 0.7)),
       });
     }
   }
@@ -316,7 +333,10 @@ export function buildGingivaGeometry(THREE, curve, placements, opts = {}) {
       }
 
       pos.push(fr.x + fr.nx * nOff, y, fr.z + fr.nz * nOff);
-      uvs.push((l / curve.total) * 6, r / ring);
+      /* Misma escala a lo largo del arco que a lo ancho del perfil (unas
+         4,6 unidades de perímetro): antes el punteado salía estirado
+         casi 3 a 1 y se leía como vetas verticales. */
+      uvs.push(l / 4.6, r / ring);
 
       const sh = tonos[Math.min(p.band, tonos.length - 1)];
       /* Sombra del surco. El punto donde la encía se encuentra con el
@@ -447,12 +467,20 @@ export function medirEnvolvente(THREE, piezas, { upper = false, paso = 0.08 } = 
     en(l, y) {
       // Vecindad de una celda en cada sentido: sin ella, una celda vacía
       // entre dos llenas deja un hoyo en la pared.
+      /* Vecindad con caída: una celda vecina cuenta, pero algo menos
+         cuanto más lejos. Tomar el máximo plano de las vecinas (lo de
+         antes) tapaba el hueco entre dos raíces y la pared salía lisa;
+         con la caída se hunde entre raíz y raíz, como el hueso real. */
       const iL = Math.round(l / paso), iY = Math.round(y / paso);
       let vest = -Infinity, ling = Infinity;
-      for (let a = -1; a <= 1; a++) {
+      for (let a = -2; a <= 2; a++) {
+        const caida = 0.018 * a * a;
         for (let b = -1; b <= 1; b++) {
           const c = celdas.get(`${iL + a},${iY + b}`);
-          if (c) { if (c.vest > vest) vest = c.vest; if (c.ling < ling) ling = c.ling; }
+          if (c) {
+            if (c.vest - caida > vest) vest = c.vest - caida;
+            if (c.ling + caida < ling) ling = c.ling + caida;
+          }
         }
       }
       return vest === -Infinity ? null : { vest, ling };

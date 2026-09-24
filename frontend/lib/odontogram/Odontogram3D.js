@@ -508,9 +508,10 @@ export default function Odontogram3D({
           roughnessMap: texRoughGum,
           normalMap: texNormGum,
           /* Era 0,45 y se ajustó mirando la cara INTERIOR de la encía (se
-             dibujaba del revés). Vista por fuera y de perfil, esa
-             intensidad arrugaba el tejido como papel. */
-          normalScale: new THREE.Vector2(0.24, 0.24),
+             dibujaba del revés). Vista por fuera, esa intensidad arrugaba
+             el tejido como papel: el punteado de la encía adherida es una
+             piel de naranja fina que solo se aprecia de cerca. */
+          normalScale: new THREE.Vector2(0.11, 0.11),
           metalness: 0,
           /* Sin capa de barniz: en la encía el brillo húmedo lo da ya el
              mapa de rugosidad (margen brillante, encía adherida mate), y
@@ -644,13 +645,14 @@ export default function Odontogram3D({
           };
         });
         const gumGeo = buildGingivaGeometry(THREE, curve, placements,
-                                            { upper, envolvente, holgura: 0.09 });
+                                            { upper, envolvente, holgura: 0.11 });
         const gum = new THREE.Mesh(gumGeo, gingivaMaterial());
-        /* La encía recibe sombra (la de las piezas sobre el tejido es la
-           que da profundidad) pero no la proyecta: su silueta apenas
-           aporta y así no entra en el paso de sombras, que recorre la
-           escena entera en cada fotograma. */
-        gum.castShadow = false;
+        /* La encía proyecta sombra. Antes no, para ahorrar el paso de
+           sombras, y la sombra del suelo la hacían las raíces, que están
+           dentro de ella: salía un peine de púas debajo de cada arcada.
+           Con la encía translúcida se apaga (ver `aplicarCapas`) y
+           vuelven a verse las raíces, que es lo coherente. */
+        gum.castShadow = true;
         gum.receiveShadow = true;
         gum.visible = visible;
         gum.renderOrder = 2;
@@ -718,6 +720,7 @@ export default function Odontogram3D({
         for (const t of teeth) t.visible = visibleSegun(t.userData);
         for (const g of gums) {
           g.visible = visibleSegun(g.userData) && capas.encia > 0;
+          g.castShadow = capas.encia >= 1;
           translucir(g.material, capas.encia);
         }
         for (const h of huesos) {
