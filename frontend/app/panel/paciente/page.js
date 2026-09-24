@@ -123,6 +123,23 @@ function PatientDetail() {
 
 /* ───────────────────────── Odontograma ───────────────────────── */
 
+/**
+ * Modelos de odontograma que esta persona puede usar. El 3D necesita dos
+ * cosas: que la clínica lo tenga contratado (lo decide el dueño de la
+ * plataforma) y que la persona no lo haya apagado en «Mis preferencias».
+ *
+ * Antes se enseñaban los cuatro siempre, así que apagar el 3D a una
+ * clínica desde la plataforma no tenía ningún efecto en la ficha.
+ * `!== false` por lo mismo que en la navegación: un perfil guardado por
+ * una versión anterior no trae estos campos, y eso no debe esconder nada.
+ */
+function vistasDisponibles() {
+  const u = currentUser() || {};
+  const con3d = (u.funcionalidades || {}).odontograma_3d !== false
+    && (u.preferencias || {}).odontograma_3d !== false;
+  return VIEWS.filter((v) => v.key !== "tridimensional" || con3d);
+}
+
 function OdontogramTab({ patientId, initialView }) {
   const [confirm, ConfirmUI] = useConfirm();
   const [toothNotes, setToothNotes] = useState("");
@@ -135,7 +152,15 @@ function OdontogramTab({ patientId, initialView }) {
   const [rmEdit, setRmEdit] = useState(null);      // { code, kind } en edición
   const [pendingReg, setPendingReg] = useState(null); // { stateId, label } desde la simbología
 
-  useEffect(() => { setViewKey(initialView || readPreferredView()); }, [initialView]);
+  const [vistas, setVistas] = useState(VIEWS);
+  useEffect(() => {
+    // En el navegador, no en el primer render: el perfil vive en localStorage.
+    const disponibles = vistasDisponibles();
+    setVistas(disponibles);
+    const pedida = initialView || readPreferredView();
+    // Si el último modelo usado era el 3D y ya no está, se vuelve al clásico.
+    setViewKey(disponibles.some((v) => v.key === pedida) ? pedida : disponibles[0].key);
+  }, [initialView]);
   const [history, setHistory] = useState([]);      // historial de la pieza
   const [error, setError] = useState("");
 
@@ -299,7 +324,7 @@ function OdontogramTab({ patientId, initialView }) {
                style={{ display: "inline-flex", gap: 2, padding: 3,
                         background: "var(--paper)", borderRadius: 999,
                         border: "1px solid var(--line)" }}>
-            {VIEWS.map((v) => (
+            {vistas.map((v) => (
               <button key={v.key} type="button" role="radio"
                       aria-checked={viewKey === v.key} title={v.description}
                       onClick={() => { setViewKey(v.key); savePreferredView(v.key); }}

@@ -17,6 +17,8 @@ const NAV = [
   { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "auxiliary"], funcionalidad: "inventario" },
   { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin"], funcionalidad: "reportes" },
   { href: "/panel/configuracion/", label: "Configuración", iconName: "configuracion", roles: ["admin"] },
+  // De cada persona para sí misma: por eso la ven todos los roles de clínica.
+  { href: "/panel/preferencias/", label: "Mis preferencias", iconName: "preferencias", roles: ["admin", "reception", "doctor", "auxiliary"] },
 ];
 
 const ROLE_LABELS = {

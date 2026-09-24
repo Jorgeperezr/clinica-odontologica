@@ -109,6 +109,17 @@ function Plataforma(p) {
   );
 }
 
+function Preferencias(p) {
+  // controles deslizantes
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+      <circle cx="15" cy="7" r="2.2" />
+      <circle cx="9" cy="17" r="2.2" />
+    </svg>
+  );
+}
+
 const ICONS = {
   plataforma: Plataforma,
   inicio: Inicio,
@@ -119,6 +130,7 @@ const ICONS = {
   inventario: Inventario,
   reportes: Reportes,
   configuracion: Configuracion,
+  preferencias: Preferencias,
 };
 
 /** Devuelve el componente de icono por clave; fallback a un punto neutro. */

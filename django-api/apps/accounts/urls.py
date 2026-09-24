@@ -8,6 +8,7 @@ urlpatterns = [
     path("auth/login/", views.StaffLoginView.as_view(), name="staff-login"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("auth/me/", views.MeView.as_view(), name="auth-me"),
+    path("auth/me/preferencias/", views.PreferenciasView.as_view(), name="auth-me-preferencias"),
     path("auth/change-password/", password_views.CambiarMiContrasenaView.as_view(),
          name="auth-change-password"),
     path("auth/otp/request/", views.OTPRequestView.as_view(), name="otp-request"),

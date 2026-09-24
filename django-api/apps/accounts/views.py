@@ -18,6 +18,8 @@ from apps.accounts.models import (
     PasswordResetToken,
     User,
 )
+from apps.accounts.preferencias import CATALOGO as CATALOGO_PREFERENCIAS
+from apps.accounts.preferencias import normalizar as normalizar_preferencias
 from apps.accounts.serializers import (
     AuditLogSerializer,
     DeviceTokenSerializer,
@@ -91,7 +93,9 @@ class OTPRequestView(APIView):
     def _default_tenant_id():
         from apps.common.models import Tenant
 
-        tenant = Tenant.objects.filter(is_active=True).first()
+        # Por fecha de alta: sin orden, `first()` ordena por el UUID y con
+        # varias clínicas devolvía una cualquiera.
+        tenant = Tenant.objects.filter(is_active=True).order_by("created_at", "id").first()
         return tenant.id if tenant else None
 
 
@@ -333,7 +337,53 @@ class MeView(APIView):
             # cortesía: el candado de verdad está en la API, en
             # `RequiereFuncionalidad`.
             "funcionalidades": _funcionalidades_de(u),
+            "preferencias": normalizar_preferencias(u.preferencias),
         })
+
+
+class PreferenciasView(APIView):
+    """
+    GET/PATCH /api/v1/auth/me/preferencias/ — las preferencias PROPIAS.
+
+    No lleva identificador de usuario en la ruta a propósito: cada cual
+    solo puede tocar las suyas, y así no hay ninguna forma de pedir las
+    de otro. `disponibles` dice cuáles tienen efecto en su clínica, para
+    que el panel pueda explicar por qué un interruptor no hace nada.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _respuesta(self, u):
+        contratadas = _funcionalidades_de(u)
+        return Response({
+            "preferencias": normalizar_preferencias(u.preferencias),
+            "disponibles": {
+                clave: bool(contratadas.get(d["funcionalidad"], False))
+                for clave, d in CATALOGO_PREFERENCIAS.items()
+            },
+        })
+
+    def get(self, request):
+        if request.user.role == User.Role.PATIENT:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return self._respuesta(request.user)
+
+    def patch(self, request):
+        u = request.user
+        if u.role == User.Role.PATIENT:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        datos = request.data if isinstance(request.data, dict) else {}
+        desconocidas = sorted(set(datos) - set(CATALOGO_PREFERENCIAS))
+        if desconocidas:
+            return Response({"detail": f"Preferencias desconocidas: {', '.join(desconocidas)}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        no_booleanas = sorted(k for k, v in datos.items() if not isinstance(v, bool))
+        if no_booleanas:
+            return Response({"detail": f"Tienen que ser verdadero o falso: {', '.join(no_booleanas)}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        u.preferencias = {**normalizar_preferencias(u.preferencias), **datos}
+        u.save(update_fields=["preferencias"])
+        return self._respuesta(u)
 
 
 def _funcionalidades_de(usuario):

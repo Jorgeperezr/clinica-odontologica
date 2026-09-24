@@ -45,6 +45,13 @@ class User(AbstractBaseUser, PermissionsMixin):
             "clínica deciden a quién se premia."
         ),
     )
+    preferencias = models.JSONField(
+        default=dict, blank=True,
+        help_text=(
+            "Preferencias de la propia persona (p. ej. usar o no el "
+            "odontograma 3D). Ver apps/accounts/preferencias.py."
+        ),
+    )
     puede_gestionar_whatsapp = models.BooleanField(
         default=False,
         verbose_name="Puede configurar WhatsApp",

@@ -261,7 +261,14 @@ django.setup()
 from apps.accounts.models import User          # noqa: E402
 from apps.common.models import Tenant          # noqa: E402
 
-tenant = Tenant.objects.first()
+# La clínica demo es SIEMPRE la primera que se creó, que es la que crea
+# este guion la primera vez. `Tenant.objects.first()` a secas ordena por
+# el id, que es un UUID aleatorio: en cuanto había más de una clínica
+# (las que se dan de alta desde «Plataforma»), cada arranque elegía otra,
+# mudaba a ella al administrador demo sin avisar y la semilla fallaba con
+# «duplicate key … agenda_doctor_user_id_key», porque la ficha de la
+# doctora seguía en la clínica anterior.
+tenant = Tenant.objects.order_by("created_at", "id").first()
 correo = os.environ["ADMIN_EMAIL"]
 usuario, _ = User.objects.get_or_create(
     email=correo, defaults={"full_name": "Administración (demo)"}
@@ -309,7 +316,7 @@ from apps.configuration.models import Agreement, Tariff, Treatment  # noqa: E402
 from apps.patients.models import Patient                            # noqa: E402
 from apps.specialties.models import Specialty                       # noqa: E402
 
-tenant = Tenant.objects.first()
+tenant = Tenant.objects.order_by("created_at", "id").first()   # la misma de arriba
 especialidades = list(Specialty.objects.filter(tenant=tenant))
 
 catalogo = [
