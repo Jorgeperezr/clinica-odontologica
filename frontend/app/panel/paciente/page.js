@@ -7,6 +7,7 @@ import BackButton from "../../../lib/BackButton";
 import PatientPayments from "../../../lib/PatientPayments";
 import { VIEWS, getView, readPreferredView, savePreferredView } from "../../../lib/odontogram/registry";
 import Form033Panel from "../../../lib/Form033Panel";
+import Dictado from "../../../lib/dictado/Dictado";
 import DiagnosisSection from "../../../lib/DiagnosisTab";
 import CpoCeoCard from "../../../lib/CpoCeoCard";
 import OralHealthIndicators from "../../../lib/OralHealthIndicators";
@@ -583,7 +584,11 @@ function EvolutionsTab({ patientId }) {
         </div>
         <div className="field">
           <label>Notas *</label>
-          <textarea rows={4} required value={form.notes}
+          {/* Dictado: en la nota clínica ordena por secciones; en receta
+              e indicaciones, dictado corrido. Se AÑADE a lo escrito. */}
+          <Dictado conSecciones={form.type === "clinical_note"}
+                   onTexto={(texto) => setForm((f) => ({ ...f, notes: f.notes ? `${f.notes}\n${texto}` : texto }))} />
+          <textarea rows={Math.min(12, Math.max(4, form.notes.split("\n").length + 1))} required value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
         <div className="field">
