@@ -258,9 +258,50 @@ function geometriaVestibular(code) {
     relieve.push(`M${w * 0.34} ${y0 + c * 0.19} Q${w * 0.35} ${y0 + c * 0.36} ${w * 0.33} ${y0 + c * 0.48}`);
   }
 
+  /* Implante: fijación roscada en lugar de las raíces, algo más corta
+     que la raíz natural y estrechándose hacia el ápice. */
+  const fijacion = (() => {
+    const ancho = cw * 0.62, x0 = w / 2 - ancho / 2, x1 = w / 2 + ancho / 2;
+    const fin = yc + r * 0.78;
+    const cuerpo = `M${x0} ${yc - caida} L${x1} ${yc - caida} L${x1} ${fin - ancho * 0.45}`
+      + ` Q${x1} ${fin} ${w / 2} ${fin} Q${x0} ${fin} ${x0} ${fin - ancho * 0.45} Z`;
+    const roscas = [];
+    for (let y = yc + 0.6; y < fin - ancho * 0.3; y += 0.95) {
+      roscas.push(`M${x0 - 0.35} ${y} L${x1 + 0.35} ${y + 0.35}`);
+    }
+    return { cuerpo, roscas };
+  })();
+
   return {
-    w, c, t, corona: curvaCerrada(corona), raices, relieve,
+    w, c, t, corona: curvaCerrada(corona), raices, relieve, fijacion,
     brillo: { cx: w * 0.44, cy: y0 + c * 0.38, rx: w * 0.16, ry: c * 0.26 },
+  };
+}
+
+/**
+ * Dónde caen, en la lámina vestibular ya dibujada, el cuello de la pieza
+ * y sus tres sitios de sondaje. Es lo que necesita el periodontograma
+ * para trazar el margen y el fondo de bolsa en milímetros REALES desde
+ * la unión amelocementaria de cada pieza, que no está a la misma altura
+ * en un incisivo que en un molar.
+ *
+ * Coordenadas en mm desde la esquina superior izquierda de la lámina
+ * (la del `<svg>` de `VistaVestibular`).
+ *   sitios   x de [mesial, central, distal]
+ *   cuello   y de la unión amelocementaria
+ *   apical   +1 si la raíz crece hacia abajo (inferior), −1 si hacia arriba
+ */
+export function marcoVestibular(code) {
+  const { w, c } = medidas(code);
+  const H = ALTO_VESTIBULAR[isDeciduous(code) ? "temporal" : "permanente"];
+  const canonico = [0.8 * w, 0.5 * w, 0.2 * w];         // mesial a la derecha
+  const sitios = canonico.map((x) => (reflejadaX(code) ? w - x : x) + MARGEN);
+  const yCanonico = MARGEN + c;
+  const sup = isUpper(code);
+  return {
+    ancho: w + 2 * MARGEN, alto: H, sitios,
+    cuello: sup ? H - yCanonico : yCanonico,
+    apical: sup ? -1 : 1,
   };
 }
 
@@ -270,7 +311,9 @@ function geometriaVestibular(code) {
  * @param estado  { color, label } dominante, o null si está sana
  * @param escala  píxeles por milímetro
  */
-export function VistaVestibular({ code, estado, seleccionado, escala, onClick }) {
+export function VistaVestibular({
+  code, estado, seleccionado, escala, onClick, implante = false, ausente = false,
+}) {
   const g = geometriaVestibular(code);
   const temporal = isDeciduous(code);
   const H = ALTO_VESTIBULAR[temporal ? "temporal" : "permanente"];
@@ -318,8 +361,17 @@ export function VistaVestibular({ code, estado, seleccionado, escala, onClick })
         </radialGradient>
       </defs>
 
-      <g transform={`translate(${cx} ${cy}) scale(${sx} ${sy}) translate(${-cx} ${-cy})`}>
-        {g.raices.map((rz, i) => (
+      <g transform={`translate(${cx} ${cy}) scale(${sx} ${sy}) translate(${-cx} ${-cy})`}
+         opacity={ausente ? 0.16 : 1}>
+        {implante ? (
+          <g>
+            <path d={g.fijacion.cuerpo} fill="#8f9aa3" stroke="#5d6770" strokeWidth="0.2" />
+            <path d={g.fijacion.cuerpo} fill={`url(#${id}-vol)`} />
+            {g.fijacion.roscas.map((d, i) => (
+              <path key={i} d={d} stroke="#4f5961" strokeWidth="0.28" strokeLinecap="round" />
+            ))}
+          </g>
+        ) : g.raices.map((rz, i) => (
           <g key={i} opacity={rz.atras ? 0.8 : 1}>
             <path d={rz.d} fill={`url(#${id}-raiz)`} stroke="var(--anat-contorno)"
                   strokeWidth="0.2" strokeLinejoin="round" />
