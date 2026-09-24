@@ -120,6 +120,16 @@ function Preferencias(p) {
   );
 }
 
+function Bandeja(p) {
+  // bandeja de entrada
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 13l2.2-7.2A1.5 1.5 0 0 1 7.6 4.7h8.8a1.5 1.5 0 0 1 1.4 1.1L20 13" />
+      <path d="M4 13v5a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 18v-5h-4.5l-1.2 2h-4.6l-1.2-2z" />
+    </svg>
+  );
+}
+
 const ICONS = {
   plataforma: Plataforma,
   inicio: Inicio,
@@ -131,6 +141,7 @@ const ICONS = {
   reportes: Reportes,
   configuracion: Configuracion,
   preferencias: Preferencias,
+  bandeja: Bandeja,
 };
 
 /** Devuelve el componente de icono por clave; fallback a un punto neutro. */

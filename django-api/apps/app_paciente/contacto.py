@@ -235,7 +235,22 @@ class AgendarSolicitudView(APIView):
                 context={"request": request},
             )
             ser.is_valid(raise_exception=True)
-            cita = ser.save(tenant=request.tenant)
+
+            # La MISMA regla de morosidad que la agenda (RN-AGN-01): vive
+            # en la vista de citas, no en el serializador, así que aquí
+            # hay que aplicarla a mano. Sin esto, un paciente moroso
+            # conseguía por la app la cita que la agenda le negaba.
+            from apps.billing.services import is_patient_delinquent
+
+            forzar = str(datos.get("override", "")).lower() in ("true", "1", "yes")
+            if not forzar and is_patient_delinquent(s.patient, request.tenant):
+                return Response({"error": {
+                    "code": "patient_delinquent",
+                    "message": ("El paciente tiene cuotas vencidas. Regularice el pago o "
+                                "use override=true para agendar de todas formas."),
+                }}, status=status.HTTP_409_CONFLICT)
+
+            cita = ser.save(tenant=request.tenant, created_by=request.user)
 
             s.estado = SolicitudCita.Estado.AGENDADA
             s.cita = cita

@@ -11,6 +11,8 @@ const NAV = [
   { href: "/panel/plataforma/", label: "Plataforma", iconName: "plataforma", roles: ["superadmin"] },
   { href: "/panel/", label: "Inicio", iconName: "inicio", roles: ["admin", "reception", "doctor", "auxiliary"] },
   { href: "/panel/pacientes/", label: "Pacientes", iconName: "pacientes", roles: ["admin", "reception", "doctor", "auxiliary"] },
+  // Lo que piden los pacientes desde la app; con contador de pendientes.
+  { href: "/panel/bandeja/", label: "Bandeja de la app", iconName: "bandeja", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "app_paciente", contador: "bandeja" },
   { href: "/panel/agenda/", label: "Agenda", iconName: "agenda", roles: ["admin", "reception", "doctor"] },
   { href: "/panel/firma/", label: "Mi firma", iconName: "firma", roles: ["doctor"] },
   // Los módulos de gestión siguen la FUNCIÓN de cada profesional (ver
@@ -101,6 +103,24 @@ export default function PanelLayout({ children }) {
     document.body.style.overflow = (isMobile && drawerOpen) ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [isMobile, drawerOpen]);
+
+  /* Pendientes de la bandeja de la app, para el número del menú. Se
+     pide al entrar, cada 2 minutos y cuando la propia bandeja avisa de
+     que atendió algo. Si la clínica no tiene la app, la API responde 403
+     y el número simplemente no aparece. */
+  const [pendientesBandeja, setPendientesBandeja] = useState(0);
+  useEffect(() => {
+    if (!ready || !user || user.role === "superadmin" || (user.funcionalidades || {}).app_paciente === false) return;
+    let vivo = true;
+    const pedir = () => api("/bandeja-app/resumen/")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo && d) setPendientesBandeja(d.solicitudes_pendientes + d.mensajes_sin_responder); })
+      .catch(() => {});
+    pedir();
+    const cada = setInterval(pedir, 120000);
+    window.addEventListener("bandeja-actualizada", pedir);
+    return () => { vivo = false; clearInterval(cada); window.removeEventListener("bandeja-actualizada", pedir); };
+  }, [ready, user]);
 
   if (!ready) return null;
 
@@ -200,6 +220,15 @@ export default function PanelLayout({ children }) {
                   <NavIcon name={item.iconName} />
                 </span>
                 {(!collapsed || isMobile) && <span>{item.label}</span>}
+                {item.contador === "bandeja" && pendientesBandeja > 0 && (
+                  <span aria-label={`${pendientesBandeja} pendientes`}
+                        style={{ marginLeft: (collapsed && !isMobile) ? 0 : "auto", minWidth: 20, height: 20,
+                                 padding: "0 6px", borderRadius: 999, background: "var(--red)", color: "#fff",
+                                 fontSize: 11.5, fontWeight: 700, display: "inline-flex",
+                                 alignItems: "center", justifyContent: "center" }}>
+                    {pendientesBandeja > 99 ? "99+" : pendientesBandeja}
+                  </span>
+                )}
               </a>
             );
           })}

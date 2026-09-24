@@ -136,6 +136,28 @@ class RecepcionAtiendeTests(Base):
         self.assertEqual(self.sol.estado, "pendiente")
         self.assertFalse(Appointment.objects.filter(patient=self.ana).exists())
 
+    def test_la_morosidad_se_aplica_igual_que_en_la_agenda(self):
+        """Moroso: 409 como en la agenda, la solicitud sigue pendiente, y
+        se puede forzar con override igual que allí."""
+        from unittest import mock
+
+        self.client.force_authenticate(self.recepcion)
+        inicio, fin = self._hueco()
+        cuerpo = {"doctor": str(self.doctor.id), "scheduled_start": inicio.isoformat(),
+                  "scheduled_end": fin.isoformat()}
+        with mock.patch("apps.billing.services.is_patient_delinquent", return_value=True):
+            r = self.client.post(f"/api/v1/bandeja-app/solicitudes/{self.sol.id}/agendar/", cuerpo, format="json")
+            self.assertEqual(r.status_code, 409)
+            self.assertEqual(r.data["error"]["code"], "patient_delinquent")
+            self.sol.refresh_from_db()
+            self.assertEqual(self.sol.estado, "pendiente")
+            self.assertFalse(Appointment.objects.filter(patient=self.ana).exists())
+
+            r = self.client.post(f"/api/v1/bandeja-app/solicitudes/{self.sol.id}/agendar/",
+                                 {**cuerpo, "override": True}, format="json")
+            self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(Appointment.objects.get(patient=self.ana).created_by, self.recepcion)
+
     def test_no_se_atiende_dos_veces(self):
         self.client.force_authenticate(self.recepcion)
         self.client.post(f"/api/v1/bandeja-app/solicitudes/{self.sol.id}/rechazar/",
