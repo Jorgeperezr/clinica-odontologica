@@ -66,8 +66,29 @@ def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
     width, height = style.page_size
     ml, mr = style.content_left, style.content_right
 
-    style.draw_watermark(c)
-    y = style.draw_header(c, clinic=clinic, professional=professional)
+    def encabezado():
+        style.draw_watermark(c)
+        return style.draw_header(c, clinic=clinic, professional=professional)
+
+    y = encabezado()
+
+    def sigue_en_otra_hoja():
+        """
+        Salta de hoja conservando encabezado, pie y marca de agua.
+
+        `paragraph` no comprobaba ningún suelo: seguía bajando la `y` y
+        con un texto largo escribía POR DEBAJO del papel. Medido: con
+        3808 caracteres de justificación se perdían 7 líneas con
+        coordenada negativa, y con 7616 se perdían 42. El PDF salía sin
+        una queja y con su firma en su sitio.
+
+        Una justificación clínica truncada en silencio invalida la orden
+        para lo único que sirve: explicarle al radiólogo qué se busca.
+        """
+        nonlocal y
+        style.draw_footer(c, clinic=clinic)
+        c.showPage()
+        y = encabezado()
 
     # ── Título ──
     c.setFillColor(style.title_color)
@@ -141,16 +162,25 @@ def build_exam_request_pdf(clinic, professional, patient, exam, style=None):
         # Envoltura simple de texto
         words = str(text or "—").split()
         line, maxw = "", mr - ml
+        # Suelo: por encima del bloque de firma, igual que en la receta.
+        suelo = style.margin_bottom + 58 * mm
+
+        def escribir(texto_linea):
+            nonlocal y
+            if y < suelo:
+                sigue_en_otra_hoja()
+            c.drawString(ml, y, texto_linea)
+            y -= 5 * mm
+
         for w in words:
             test = f"{line} {w}".strip()
             if c.stringWidth(test, style.font, style.size) > maxw:
-                c.drawString(ml, y, line)
-                y -= 5 * mm
+                escribir(line)
                 line = w
             else:
                 line = test
-        c.drawString(ml, y, line)
-        y -= 9 * mm
+        escribir(line)
+        y -= 4 * mm
 
     paragraph("Motivo / justificación clínica", exam.get("justification"))
     if exam.get("observations"):

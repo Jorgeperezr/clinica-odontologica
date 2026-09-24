@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import generics, status
 
 from apps.accounts.models import AuditLog
@@ -18,6 +20,8 @@ from apps.clinical.serializers import (
 )
 from apps.common.permissions import HasRole
 from apps.patients.models import Patient
+
+logger = logging.getLogger("apps.clinical")
 
 # Solo roles clínicos acceden a la historia clínica (matriz del SRS).
 CAN_EDIT_CLINICAL = HasRole.for_roles("admin", "doctor", "auxiliary")
@@ -138,7 +142,15 @@ class TreatmentPlanItemCreateView(generics.CreateAPIView):
         plan = generics.get_object_or_404(
             TreatmentPlan, pk=self.kwargs["pk"], tenant=self.request.tenant
         )
-        serializer.save(treatment_plan=plan)
+        # Misma regla que al editar: si en la petición viene un precio, lo
+        # ha decidido una persona y el tarifario no volverá a tocarlo. Sin
+        # esto, añadir una línea con un precio pactado y presupuestar
+        # después la reescribía con la tarifa del convenio. Lo cazó una
+        # prueba del Sprint 71 que ya existía.
+        serializer.save(
+            treatment_plan=plan,
+            price_is_manual="estimated_price" in self.request.data,
+        )
 
 
 class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
@@ -156,7 +168,15 @@ class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
         )
 
     def perform_update(self, serializer):
-        item = serializer.save()
+        # Que alguien mande `estimated_price` en un PATCH significa que una
+        # persona ha decidido esa cifra, y a partir de ahí el tarifario no
+        # vuelve a tocarla. Se deduce aquí y no en el panel para que valga
+        # igual venga del panel, de la app o de la propia API.
+        if "estimated_price" in self.request.data:
+            serializer.save(price_is_manual=True)
+        else:
+            serializer.save()
+        item = serializer.instance
         # Si el ítem pasa a 'done' y el tratamiento consume insumos, se
         # descuenta el stock automáticamente (RF-INV-05). El descuento es
         # resiliente: un fallo de inventario no revierte el cambio de estado.
@@ -168,7 +188,21 @@ class TreatmentPlanItemUpdateView(generics.UpdateAPIView):
 
                 consume_inventory_for_treatment_item(item)
             except Exception:
-                pass
+                # No revertir el acto clínico es lo correcto: el
+                # tratamiento SE HIZO, pase lo que pase con el almacén.
+                # Pero antes esto era un `pass` a secas, y eso no es ser
+                # resiliente sino no enterarse: el descuento fallaba, el
+                # stock quedaba por encima del real y nadie lo sabía
+                # hasta abrir el cajón y encontrarlo vacío.
+                logger.warning(
+                    "No se pudo descontar el inventario de un tratamiento realizado",
+                    exc_info=True,
+                    extra={
+                        "item_id": str(item.id),
+                        "treatment_id": str(item.treatment_id),
+                        "tenant_id": str(self.request.tenant.id),
+                    },
+                )
 
 
 class OdontogramStateListView(generics.ListAPIView):

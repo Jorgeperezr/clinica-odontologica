@@ -2,11 +2,12 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, currentUser } from "../../../lib/api";
+import { api, currentUser, readList, readObject, tieneFuncion } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import PatientPayments from "../../../lib/PatientPayments";
 import { VIEWS, getView, readPreferredView, savePreferredView } from "../../../lib/odontogram/registry";
 import Form033Panel from "../../../lib/Form033Panel";
+import Dictado from "../../../lib/dictado/Dictado";
 import DiagnosisSection from "../../../lib/DiagnosisTab";
 import CpoCeoCard from "../../../lib/CpoCeoCard";
 import OralHealthIndicators from "../../../lib/OralHealthIndicators";
@@ -32,18 +33,40 @@ export default function PatientDetailPage() {
 function PatientDetail() {
   const id = useSearchParams().get("id");
   const [patient, setPatient] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [role, setRole] = useState("");
+  const [puedeCobrar, setPuedeCobrar] = useState(false);
   const [tab, setTab] = useState("odontograma");
 
   useEffect(() => {
     (async () => {
-      try { const u = await currentUser(); setRole(u?.role || ""); } catch { /* opcional */ }
+      try {
+        const u = await currentUser();
+        setRole(u?.role || "");
+        setPuedeCobrar(tieneFuncion(u, "cobros"));
+      } catch { /* opcional */ }
     })();
   }, []);
 
   useEffect(() => {
-    api(`/patients/${id}/`).then(async (r) => setPatient(await r.json())).catch(() => {});
+    setLoadError("");
+    api(`/patients/${id}/`)
+      .then(async (r) => setPatient(await readObject(r)))
+      // Tragarse el motivo dejaba la ficha en «Cargando…» para siempre:
+      // el usuario se queda mirando un rótulo que nunca cambia y sin
+      // saber si es lentitud, un permiso o el límite de peticiones.
+      .catch((err) => setLoadError(err?.message || "No se pudo cargar el paciente."));
   }, [id]);
+
+  if (loadError) {
+    return (
+      <div>
+        <BackButton fallback="/panel/pacientes/" label="Pacientes" />
+        <div className="error-box" style={{ marginTop: 12 }}>{loadError}</div>
+        <button className="btn" onClick={() => window.location.reload()}>Reintentar</button>
+      </div>
+    );
+  }
 
   if (!patient) return <div className="empty">Cargando…</div>;
 
@@ -57,16 +80,29 @@ function PatientDetail() {
         </span>
       </div>
 
-      <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid var(--line)" }}>
+      <PatientAgreement patient={patient} canEdit={role === "admin" || role === "reception"}
+                        onChanged={(p) => setPatient(p)} />
+
+      {/* Las siete pestañas no caben a lo ancho de una tableta: medido,
+          a 1024 px la última llegaba a 1189 y arrastraba a TODA la página
+          a un scroll horizontal, así que el contenido de abajo también se
+          salía. Se deja que la tira se desplace sola, que es lo que hace
+          cualquier barra de pestañas en pantalla estrecha, y se le quita
+          a los botones la posibilidad de encogerse: partir «Plan de
+          tratamiento» en dos líneas es peor que deslizar. */}
+      <div className="tabs" style={{ display: "flex", gap: 4, margin: "16px 0 20px",
+                                     borderBottom: "1px solid var(--line)",
+                                     overflowX: "auto", scrollbarWidth: "thin",
+                                     WebkitOverflowScrolling: "touch" }}>
         {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"],
           ["odontograma3d", "Odontograma 3D"],
-          ...(["admin", "reception"].includes(role) ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
+          ...(puedeCobrar ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
-              fontWeight: 600, fontSize: 14,
+              fontWeight: 600, fontSize: 14, flexShrink: 0, whiteSpace: "nowrap",
               color: tab === key ? "var(--petrol)" : "var(--ink-soft)",
               borderBottom: tab === key ? "3px solid var(--petrol)" : "3px solid transparent",
             }}>
@@ -86,12 +122,29 @@ function PatientDetail() {
       )}
       {tab === "consentimientos" && <ConsentsTab patientId={id} />}
       {tab === "odontograma3d" && <OdontogramTab patientId={id} initialView="tridimensional" />}
-      {tab === "cobros" && <PatientPayments patientId={id} role={role} />}
+      {tab === "cobros" && <PatientPayments patientId={id} role={role} puedeCobrar={puedeCobrar} />}
     </div>
   );
 }
 
 /* ───────────────────────── Odontograma ───────────────────────── */
+
+/**
+ * Modelos de odontograma que esta persona puede usar. El 3D necesita dos
+ * cosas: que la clínica lo tenga contratado (lo decide el dueño de la
+ * plataforma) y que la persona no lo haya apagado en «Mis preferencias».
+ *
+ * Antes se enseñaban los cuatro siempre, así que apagar el 3D a una
+ * clínica desde la plataforma no tenía ningún efecto en la ficha.
+ * `!== false` por lo mismo que en la navegación: un perfil guardado por
+ * una versión anterior no trae estos campos, y eso no debe esconder nada.
+ */
+function vistasDisponibles() {
+  const u = currentUser() || {};
+  const con3d = (u.funcionalidades || {}).odontograma_3d !== false
+    && (u.preferencias || {}).odontograma_3d !== false;
+  return VIEWS.filter((v) => v.key !== "tridimensional" || con3d);
+}
 
 function OdontogramTab({ patientId, initialView }) {
   const [confirm, ConfirmUI] = useConfirm();
@@ -105,7 +158,15 @@ function OdontogramTab({ patientId, initialView }) {
   const [rmEdit, setRmEdit] = useState(null);      // { code, kind } en edición
   const [pendingReg, setPendingReg] = useState(null); // { stateId, label } desde la simbología
 
-  useEffect(() => { setViewKey(initialView || readPreferredView()); }, [initialView]);
+  const [vistas, setVistas] = useState(VIEWS);
+  useEffect(() => {
+    // En el navegador, no en el primer render: el perfil vive en localStorage.
+    const disponibles = vistasDisponibles();
+    setVistas(disponibles);
+    const pedida = initialView || readPreferredView();
+    // Si el último modelo usado era el 3D y ya no está, se vuelve al clásico.
+    setViewKey(disponibles.some((v) => v.key === pedida) ? pedida : disponibles[0].key);
+  }, [initialView]);
   const [history, setHistory] = useState([]);      // historial de la pieza
   const [error, setError] = useState("");
 
@@ -135,19 +196,21 @@ function OdontogramTab({ patientId, initialView }) {
       }
       setTeeth(map);
       setRm(rmMap);
-    } catch { setError("No se pudo cargar el odontograma."); }
+    } catch (err) { setError(err?.message ? `No se pudo cargar el odontograma. ${err.message}` : "No se pudo cargar el odontograma."); }
   }, [patientId]);
 
   useEffect(() => {
     loadCurrent();
-    api("/odontogram-states/").then(async (r) => setStates(await r.json())).catch(() => {});
+    // Es una LISTA y el odontograma la recorre con .map: si aquí entrara
+    // un objeto de error, el .map derribaría la ficha ENTERA, no solo el
+    // odontograma — todas las pestañas del paciente a la vez.
+    api("/odontogram-states/").then(async (r) => setStates(await readList(r))).catch(() => {});
   }, [loadCurrent]);
 
   const loadHistory = useCallback(async (tooth) => {
     try {
       const resp = await api(`/patients/${patientId}/tooth-records/?tooth_fdi_code=${tooth}`);
-      const data = await resp.json();
-      setHistory(data.results || data);
+      setHistory(await readList(resp));
     } catch { /* silencioso */ }
   }, [patientId]);
 
@@ -267,7 +330,7 @@ function OdontogramTab({ patientId, initialView }) {
                style={{ display: "inline-flex", gap: 2, padding: 3,
                         background: "var(--paper)", borderRadius: 999,
                         border: "1px solid var(--line)" }}>
-            {VIEWS.map((v) => (
+            {vistas.map((v) => (
               <button key={v.key} type="button" role="radio"
                       aria-checked={viewKey === v.key} title={v.description}
                       onClick={() => { setViewKey(v.key); savePreferredView(v.key); }}
@@ -447,9 +510,8 @@ function EvolutionsTab({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/evolutions/`);
-      const data = await resp.json();
-      setEvolutions(data.results || data);
-    } catch { setError("No se pudieron cargar las evoluciones."); }
+      setEvolutions(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las evoluciones. ${err.message}` : "No se pudieron cargar las evoluciones."); }
   }, [patientId]);
 
   useEffect(() => { load(); }, [load]);
@@ -522,7 +584,11 @@ function EvolutionsTab({ patientId }) {
         </div>
         <div className="field">
           <label>Notas *</label>
-          <textarea rows={4} required value={form.notes}
+          {/* Dictado: en la nota clínica ordena por secciones; en receta
+              e indicaciones, dictado corrido. Se AÑADE a lo escrito. */}
+          <Dictado conSecciones={form.type === "clinical_note"}
+                   onTexto={(texto) => setForm((f) => ({ ...f, notes: f.notes ? `${f.notes}\n${texto}` : texto }))} />
+          <textarea rows={Math.min(12, Math.max(4, form.notes.split("\n").length + 1))} required value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
         <div className="field">
@@ -625,6 +691,81 @@ function EvolutionsTab({ patientId }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * Convenio del paciente (Sprint 71).
+ *
+ * Se muestra junto a la cabecera porque condiciona el dinero de todo lo que
+ * venga después: el presupuesto que se genere desde el plan saldrá con la
+ * tarifa de este convenio. Tenerlo escondido en un formulario de edición
+ * llevaría a presupuestar con la tarifa equivocada sin enterarse.
+ *
+ * Solo administración y recepción lo cambian: es un dato administrativo, no
+ * clínico.
+ */
+function PatientAgreement({ patient, canEdit, onChanged }) {
+  const [agreements, setAgreements] = useState([]);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!editing || agreements.length) return;
+    api("/config/agreements/")
+      .then(async (r) => setAgreements((await readList(r)).filter((a) => a.is_active)))
+      .catch(() => setError("No se pudieron cargar los convenios."));
+  }, [editing, agreements.length]);
+
+  async function save(value) {
+    setSaving(true);
+    setError("");
+    try {
+      const resp = await api(`/patients/${patient.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ agreement: value || null }),
+      });
+      if (!resp.ok) throw new Error(`No se pudo guardar (error ${resp.status}).`);
+      onChanged(await resp.json());
+      setEditing(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                  fontSize: 13, color: "var(--ink-soft)", marginBottom: 4 }}>
+      <span>Convenio:</span>
+      {editing ? (
+        <select autoFocus disabled={saving} defaultValue={patient.agreement || ""}
+                aria-label="Convenio del paciente"
+                onChange={(e) => save(e.target.value)}
+                style={{ padding: "4px 8px", border: "1px solid var(--line)",
+                         borderRadius: "var(--radius-sm, 4px)" }}>
+          <option value="">Particular (sin convenio)</option>
+          {agreements.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      ) : (
+        <>
+          <strong style={{ color: "var(--ink)" }}>
+            {patient.agreement_name || "Particular"}
+          </strong>
+          {canEdit && (
+            <button type="button" onClick={() => setEditing(true)}
+                    style={{ background: "transparent", border: "none", padding: 0,
+                             color: "var(--petrol)", fontSize: 13, cursor: "pointer" }}>
+              Cambiar
+            </button>
+          )}
+        </>
+      )}
+      {error && <span style={{ color: "var(--red)" }}>{error}</span>}
     </div>
   );
 }

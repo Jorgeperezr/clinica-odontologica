@@ -81,3 +81,86 @@ class WhatsAppOptIn(TenantAwareModel):
     @property
     def is_active(self):
         return self.revoked_at is None
+
+
+class ConfiguracionWhatsApp(TenantAwareModel):
+    """
+    La cuenta de WhatsApp Business de UNA clínica.
+
+    Hasta ahora el gateway tenía una sola cuenta de Meta para toda la
+    plataforma: todos los recordatorios salían del mismo número. Eso no
+    vale cuando el paciente tiene que reconocer a su clínica en el
+    remitente, y tampoco cuando cada clínica responde de lo que envía.
+
+    **El token se guarda cifrado y no vuelve nunca al panel.** Se puede
+    escribir y se puede saber SI está puesto —y sus últimos cuatro
+    caracteres, para reconocerlo—, pero no leerlo. Un token de Meta
+    permite enviar mensajes en nombre de la clínica: devolverlo al
+    navegador lo expone a cualquier extensión instalada y a cualquiera
+    que mire la pestaña de red.
+    """
+
+    # Identificadores, no secretos: se guardan en claro a propósito,
+    # porque el panel tiene que poder enseñarlos para comprobarlos.
+    phone_number_id = models.CharField(
+        max_length=60, blank=True,
+        verbose_name="Identificador de número (Meta)",
+    )
+    numero_visible = models.CharField(
+        max_length=30, blank=True,
+        verbose_name="Número tal como lo ve el paciente",
+        help_text="Con código de país, p. ej. +593999111222.",
+    )
+    access_token_cifrado = models.TextField(blank=True, default="")
+
+    plantilla_recordatorio = models.CharField(
+        max_length=80, blank=True, default="recordatorio_cita",
+        help_text="Nombre de la plantilla aprobada en Meta.",
+    )
+    activo = models.BooleanField(
+        default=False,
+        help_text="Mientras esté apagado no sale ningún mensaje automático.",
+    )
+    comprobado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Configuración de WhatsApp"
+        verbose_name_plural = "Configuraciones de WhatsApp"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant"], name="una_configuracion_whatsapp_por_clinica",
+            ),
+        ]
+
+    def __str__(self):
+        return f"WhatsApp de {self.tenant_id}"
+
+    # ── El token, siempre por estos dos ──────────────────────────────
+
+    @property
+    def token(self):
+        from apps.common.secretos import descifrar
+        return descifrar(self.access_token_cifrado)
+
+    @token.setter
+    def token(self, valor):
+        from apps.common.secretos import cifrar
+        self.access_token_cifrado = cifrar(valor)
+
+    @property
+    def pista_del_token(self):
+        from apps.common.secretos import pista
+        return pista(self.token)
+
+    @property
+    def esta_configurada(self):
+        """
+        Con las tres cosas puestas. Se comprueba aquí y no en la vista
+        para que el panel, el envío y las pruebas coincidan en qué
+        significa «configurada».
+        """
+        return bool(self.phone_number_id and self.token and self.plantilla_recordatorio)
+
+    @property
+    def puede_enviar(self):
+        return self.activo and self.esta_configurada

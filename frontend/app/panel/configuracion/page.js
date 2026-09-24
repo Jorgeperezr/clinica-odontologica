@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, apiBase } from "../../../lib/api";
+import { api, apiBase, readList, currentUser} from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../../../lib/theme";
 import LogoCropper from "../../../lib/LogoCropper";
 import DocumentAppearance from "../../../lib/DocumentAppearance";
 import ClinicBackup from "../../../lib/ClinicBackup";
+import AgreementsTariffs from "../../../lib/AgreementsTariffs";
+import RachasYLogros from "../../../lib/RachasYLogros";
+import WhatsAppClinica from "../../../lib/WhatsAppClinica";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
@@ -19,6 +22,10 @@ const PARAM_LABELS = {
 
 export default function ConfiguracionPage() {
   const [tab, setTab] = useState("tratamientos");
+  // Igual que en la navegación: `!== false` para que un perfil viejo no
+  // deje al administrador sin pestañas.
+  const contratadas = (currentUser() || {}).funcionalidades || {};
+  const hay = (clave) => contratadas[clave] !== false;
 
   return (
     <div>
@@ -26,7 +33,10 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div className="tabs" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ...(hay("convenios") ? [["convenios", "Convenios y tarifarios"]] : []),
+          ...(hay("logros") ? [["logros", "Rachas y logros"]] : []),
+          ...(hay("whatsapp") ? [["whatsapp", "WhatsApp"]] : []),
+          ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
           ["documentos", "Apariencia de documentos"],
           ["respaldo", "Copia de seguridad"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
@@ -45,6 +55,9 @@ export default function ConfiguracionPage() {
       {tab === "especialidades" && <SpecialtiesTab />}
       {tab === "plantillas" && <TemplatesTab />}
       {tab === "usuarios" && <UsersTab />}
+      {tab === "convenios" && <AgreementsTariffs />}
+      {tab === "logros" && <RachasYLogros />}
+      {tab === "whatsapp" && <WhatsAppClinica />}
       {tab === "parametros" && <ParametersTab />}
       {tab === "consentimientos" && <ConsentTemplatesTab />}
       {tab === "personalizacion" && <BrandingTab />}
@@ -66,9 +79,9 @@ function TreatmentsTab() {
       const [tResp, sResp] = await Promise.all([
         api("/config/treatments/"), api("/specialties/"),
       ]);
-      const t = await tResp.json(); setTreatments(t.results || t);
-      const s = await sResp.json(); setSpecialties(s.results || s);
-    } catch { setError("No se pudo cargar el catálogo."); }
+      setTreatments(await readList(tResp));
+      setSpecialties(await readList(sResp));
+    } catch (err) { setError(err?.message ? `No se pudo cargar el catálogo. ${err.message}` : "No se pudo cargar el catálogo."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -139,9 +152,8 @@ function SpecialtiesTab() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/specialties/");
-      const data = await resp.json();
-      setSpecialties(data.results || data);
-    } catch { setError("No se pudieron cargar las especialidades."); }
+      setSpecialties(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las especialidades. ${err.message}` : "No se pudieron cargar las especialidades."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -199,9 +211,8 @@ function ParametersTab() {
   const load = useCallback(async () => {
     try {
       const resp = await api("/config/parameters/");
-      const data = await resp.json();
-      setParams(data.results || data);
-    } catch { setError("No se pudieron cargar los parámetros."); }
+      setParams(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar los parámetros. ${err.message}` : "No se pudieron cargar los parámetros."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -270,27 +281,77 @@ const ROLE_OPTIONS = {
   auxiliary: "Auxiliar", admin: "Administrador",
 };
 
+/**
+ * Casillas de funciones de un profesional. El catálogo —nombres, textos
+ * y lo sugerido por rol— lo da la API (`/users/funciones/`): el panel no
+ * guarda su propia copia, así que no puede quedarse desfasado.
+ */
+function ChecklistFunciones({ catalogo, valor, onChange }) {
+  return (
+    <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+      {catalogo.map((f) => (
+        <label key={f.clave} title={f.disponible ? "" : "Tu clínica no tiene contratado este módulo."}
+               style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5,
+                        opacity: f.disponible ? 1 : 0.5, cursor: f.disponible ? "pointer" : "not-allowed" }}>
+          <input type="checkbox" disabled={!f.disponible}
+                 checked={Boolean(valor?.[f.clave]) && f.disponible}
+                 onChange={(e) => onChange({ ...valor, [f.clave]: e.target.checked })}
+                 style={{ marginTop: 3 }} />
+          <span>
+            <strong style={{ fontWeight: 600 }}>{f.etiqueta}</strong>
+            <span style={{ display: "block", fontSize: 12, color: "var(--ink-soft)" }}>
+              {f.disponible ? f.descripcion : "Tu clínica no tiene contratado este módulo."}
+            </span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** Las sugeridas para un rol, según el catálogo. */
+function sugeridas(catalogo, rol) {
+  return Object.fromEntries(catalogo.map((f) => [f.clave, Boolean(f.al_crear?.[rol])]));
+}
+
 function UsersTab() {
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({ full_name: "", email: "", role: "doctor", password: "" });
+  const [catalogo, setCatalogo] = useState([]);
+  const vacio = { full_name: "", email: "", role: "doctor", password: "", funciones: {} };
+  const [form, setForm] = useState(vacio);
+  const [editando, setEditando] = useState(null);   // { id, funciones }
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
       const resp = await api("/users/");
-      const data = await resp.json();
-      setUsers(data.results || data);
-    } catch { setError("No se pudieron cargar los usuarios."); }
+      setUsers(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar los usuarios. ${err.message}` : "No se pudieron cargar los usuarios."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api("/users/funciones/").then(readList).then((c) => {
+      setCatalogo(c);
+      // Al abrir, el formulario ya trae marcadas las sugeridas del rol.
+      setForm((f) => ({ ...f, funciones: sugeridas(c, f.role) }));
+    }).catch(() => setError("No se pudo cargar el catálogo de funciones."));
+  }, []);
+
+  function cambiarRol(role) {
+    // Cambiar el rol vuelve a proponer lo sugerido para ese rol: lo que
+    // tiene sentido marcar para una recepcionista no es lo de un doctor.
+    setForm({ ...form, role, funciones: sugeridas(catalogo, role) });
+  }
 
   async function submit(e) {
     e.preventDefault();
     setError(""); setOkMsg("");
     try {
-      const resp = await api("/users/", { method: "POST", body: JSON.stringify(form) });
+      const cuerpo = { ...form };
+      if (form.role === "admin") delete cuerpo.funciones;   // el administrador las tiene todas
+      const resp = await api("/users/", { method: "POST", body: JSON.stringify(cuerpo) });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         const detail = data?.error?.details || data;
@@ -300,10 +361,25 @@ function UsersTab() {
       setOkMsg(form.role === "doctor"
         ? `Usuario creado. ${form.full_name} ya aparece como doctor en la Agenda.`
         : "Usuario creado.");
-      setForm({ full_name: "", email: "", role: "doctor", password: "" });
+      setForm({ ...vacio, funciones: sugeridas(catalogo, vacio.role) });
       load();
     } catch (err) { setError(err.message); }
   }
+
+  async function guardarFunciones() {
+    setError(""); setOkMsg("");
+    try {
+      const resp = await api(`/users/${editando.id}/`, {
+        method: "PATCH", body: JSON.stringify({ funciones: editando.funciones }),
+      });
+      if (!resp.ok) throw new Error(`No se pudieron guardar las funciones (error ${resp.status}).`);
+      setEditando(null);
+      setOkMsg("Funciones actualizadas. Se aplican la próxima vez que esa persona entre al panel.");
+      load();
+    } catch (err) { setError(err.message); }
+  }
+
+  const etiqueta = Object.fromEntries(catalogo.map((f) => [f.clave, f.etiqueta]));
 
   return (
     <div>
@@ -327,7 +403,7 @@ function UsersTab() {
             <input type="email" required value={form.email}
                    onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
           <div className="field" style={{ marginBottom: 0 }}><label>Rol *</label>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <select value={form.role} onChange={(e) => cambiarRol(e.target.value)}>
               {Object.entries(ROLE_OPTIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select></div>
           <div className="field" style={{ marginBottom: 0 }}><label>Contraseña * (10+)</label>
@@ -335,17 +411,66 @@ function UsersTab() {
                    onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
           <button className="btn btn-primary">Crear</button>
         </div>
+
+        {/* El administrador las tiene todas: enseñarle casillas que no
+            cambian nada solo confundiría. */}
+        {form.role !== "admin" && catalogo.length > 0 && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <strong style={{ fontSize: 14 }}>Funciones</strong>
+              <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>
+                Van marcadas las recomendadas para {ROLE_OPTIONS[form.role]?.toLowerCase()}; cámbialas si en tu
+                clínica se trabaja distinto. Lo clínico (historia, recetas) lo sigue decidiendo el rol.
+              </span>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: "2px 10px", marginLeft: "auto" }}
+                      onClick={() => setForm({ ...form, funciones: sugeridas(catalogo, form.role) })}>
+                Volver a las recomendadas
+              </button>
+            </div>
+            <ChecklistFunciones catalogo={catalogo} valor={form.funciones}
+                                onChange={(funciones) => setForm({ ...form, funciones })} />
+          </div>
+        )}
       </form>
 
       <div className="card" style={{ padding: 0 }}>
         <table>
-          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Activo</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Funciones</th><th>Activo</th></tr></thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
                 <td style={{ fontWeight: 600 }}>{u.full_name || "—"}</td>
                 <td>{u.email}</td>
                 <td><span className="badge badge-ok">{ROLE_OPTIONS[u.role] || u.role}</span></td>
+                <td>
+                  {u.role === "admin" ? <span style={{ color: "var(--ink-soft)" }}>Todas</span> : (
+                    editando?.id === u.id ? (
+                      <div style={{ minWidth: 300, padding: "6px 0" }}>
+                        <ChecklistFunciones catalogo={catalogo} valor={editando.funciones}
+                                            onChange={(funciones) => setEditando({ ...editando, funciones })} />
+                        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                          <button type="button" className="btn btn-primary" style={{ fontSize: 12.5 }}
+                                  onClick={guardarFunciones}>Guardar</button>
+                          <button type="button" className="btn btn-ghost" style={{ fontSize: 12.5 }}
+                                  onClick={() => setEditando(null)}>Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+                        {Object.entries(u.funciones || {}).filter(([, v]) => v).map(([k]) => (
+                          <span key={k} className="badge" style={{ fontSize: 11 }}>{etiqueta[k] || k}</span>
+                        ))}
+                        {!Object.values(u.funciones || {}).some(Boolean) && (
+                          <span style={{ color: "var(--ink-soft)" }}>Ninguna</span>
+                        )}
+                        <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: "1px 8px" }}
+                                onClick={() => setEditando({ id: u.id, funciones: { ...(u.funciones || {}) } })}>
+                          Cambiar
+                        </button>
+                      </div>
+                    )
+                  )}
+                </td>
                 <td>{u.is_active ? "Sí" : "No"}</td>
               </tr>
             ))}
@@ -371,9 +496,9 @@ function TemplatesTab() {
       const [tResp, trResp] = await Promise.all([
         api("/clinical/plan-templates/"), api("/config/treatments/?is_active=true"),
       ]);
-      const t = await tResp.json(); setTemplates(t.results || t);
-      const tr = await trResp.json(); setTreatments(tr.results || tr);
-    } catch { setError("No se pudieron cargar las plantillas."); }
+      setTemplates(await readList(tResp));
+      setTreatments(await readList(trResp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las plantillas. ${err.message}` : "No se pudieron cargar las plantillas."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -514,7 +639,7 @@ function BrandingTab() {
       setAddress(data.address || "");
       setPhone(data.phone || "");
       setContactEmail(data.email || "");
-    } catch { setError("No se pudo cargar la personalización."); }
+    } catch (err) { setError(err?.message ? `No se pudo cargar la personalización. ${err.message}` : "No se pudo cargar la personalización."); }
   }
   useEffect(() => { load(); }, []);
 
@@ -767,9 +892,8 @@ function ConsentTemplatesTab() {
   async function load() {
     try {
       const resp = await api("/consent-templates/");
-      const data = await resp.json();
-      setTemplates(data.results || data);
-    } catch { setError("No se pudieron cargar las plantillas."); }
+      setTemplates(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar las plantillas. ${err.message}` : "No se pudieron cargar las plantillas."); }
   }
   useEffect(() => { load(); }, []);
 

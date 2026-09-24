@@ -35,6 +35,30 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=20, choices=Role.choices)
 
     is_active = models.BooleanField(default=True)  # baja lógica — RF-USR-06
+    preferencias = models.JSONField(
+        default=dict, blank=True,
+        help_text=(
+            "Preferencias de la propia persona (p. ej. usar o no el "
+            "odontograma 3D). Ver apps/accounts/preferencias.py."
+        ),
+    )
+    funciones = models.JSONField(
+        default=dict, blank=True,
+        help_text=(
+            "Módulos de gestión que puede usar (agenda, cobros, inventario…). "
+            "Vacío = los que su rol tenía antes de existir las funciones. "
+            "Ver apps/accounts/funciones.py."
+        ),
+    )
+    must_change_password = models.BooleanField(
+        default=False,
+        verbose_name="Debe cambiar la contraseña",
+        help_text=(
+            "Se marca cuando la contraseña la puso otra persona: el alta de "
+            "una clínica o un restablecimiento. Mientras esté marcada, la "
+            "cuenta solo puede hacer una cosa: elegir su propia contraseña."
+        ),
+    )
     is_staff = models.BooleanField(default=False)  # acceso al admin de Django
 
     created_at = models.DateTimeField(auto_now_add=True)

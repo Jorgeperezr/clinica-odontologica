@@ -199,8 +199,10 @@ export function gingivaNormalTexture(THREE) {
       Math.exp(-((v - 0.18) ** 2) / 0.006),
       Math.exp(-((v - 0.84) ** 2) / 0.006),
     );
-    const stipple = fbm(noise, (x / SIZE) * 30, (y / SIZE) * 30, 2);
+    // Punteado de la encía adherida: más fino, ahora que la textura ya
+    // no sale estirada (era 30: puntos de casi 2 mm).
+    const stipple = fbm(noise, (x / SIZE) * 64, (y / SIZE) * 64, 2);
     const grain = fbm(noise, (x / SIZE) * 6, (y / SIZE) * 6, 3);
-    return 0.5 + (stipple - 0.5) * 0.75 * band + (grain - 0.5) * 0.12;
+    return 0.5 + (stipple - 0.5) * 0.75 * band + (grain - 0.5) * 0.05;
   }, 3.0);
 }

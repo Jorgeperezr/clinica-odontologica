@@ -31,20 +31,29 @@
  *
  * El guardado es diferido (450 ms desde la última tecla) para que
  * escribir una serie de sondajes no genere una petición por dígito.
+ *
+ * ── Presentación de periodontograma ──
+ * Se lee como las fichas periodontales de uso clínico: cada arcada con
+ * su cara externa (vestibular) y su cara interna (palatina o lingual),
+ * cada una con sus filas de datos y un diagrama de las piezas en el que
+ * se trazan el margen gingival y el fondo de la bolsa (ver
+ * `DiagramaPeriodontal.js`). La cara interna queda hacia el centro de la
+ * ficha, entre las dos arcadas, como en la boca. Los datos, el guardado
+ * y la navegación con teclado son los mismos de antes.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "../api";
+import { api, readList } from "../api";
 import {
   PERM_LOWER_L, PERM_LOWER_R, PERM_UPPER_L, PERM_UPPER_R,
   SURFACE_LABELS,
 } from "../odontogram/contract";
-import ToothArt from "../odontogram/ToothArt";
 import {
   CELL_W, FurcationMark, GradeSelect, ImplantCheck, PresenceSwitch,
-  SiteFlagRow, SiteNumberRow, SurfaceStateCell,
+  SiteFlagRow, SiteNumberRow, SurfaceStateCell, ordenSitios,
 } from "./cells";
+import { DiagramaCara, LeyendaPeriodontal } from "./DiagramaPeriodontal";
 
 const LABEL_W = 132;
 
@@ -53,8 +62,8 @@ const dot = (code) => `${String(code)[0]}.${String(code).slice(1)}`;
 
 /* Arcadas con sus dos cuadrantes; la línea media los separa. */
 const ARCHES = [
-  { key: "sup", label: "Superior", upper: true, right: PERM_UPPER_R, left: PERM_UPPER_L },
-  { key: "inf", label: "Inferior", upper: false, right: PERM_LOWER_R, left: PERM_LOWER_L },
+  { key: "sup", label: "Superior", interna: "Palatino", upper: true, right: PERM_UPPER_R, left: PERM_UPPER_L },
+  { key: "inf", label: "Inferior", interna: "Lingual", upper: false, right: PERM_LOWER_R, left: PERM_LOWER_L },
 ];
 const SEQUENCE = ARCHES.flatMap((a) => [...a.right, ...a.left]);
 
@@ -93,8 +102,7 @@ export default function AdvancedCompactView({
     try {
       const resp = await api(`/patients/${patientId}/periodontal-exams/`);
       if (!resp.ok) throw new Error(`No se pudo cargar la ficha (error ${resp.status}).`);
-      const data = await resp.json();
-      const filas = data.results || data;
+      const filas = await readList(resp);
       setExam(filas.length > 0 ? filas[0] : null);
     } catch (err) {
       setError(err.message);
@@ -132,8 +140,7 @@ export default function AdvancedCompactView({
       // Se recarga para traer derivados y estadísticas recalculadas
       const resp = await api(`/patients/${patientId}/periodontal-exams/`);
       if (resp.ok) {
-        const data = await resp.json();
-        const filas = data.results || data;
+        const filas = await readList(resp);
         if (filas.length > 0) setExam(filas[0]);
       }
     } catch {
@@ -223,8 +230,11 @@ export default function AdvancedCompactView({
 
   const editable = Boolean(exam);
 
-  /* ── Filas periodontales ── */
-  function perioRows(codes) {
+  /* ── Filas periodontales ──
+     En tres grupos: los datos de la pieza entera y los de cada cara. Las
+     filas de sitio muestran los tres valores en el orden anatómico de la
+     pantalla (mesial hacia la línea media), igual que el diagrama. */
+  function perioRows(interna) {
     const flag = (t, campo, idx) => {
       if (!t) return;
       const arr = [...(t[campo] || [false, false, false, false, false, false])];
@@ -238,63 +248,51 @@ export default function AdvancedCompactView({
       arr[idx] = n;
       queue(t.id, { [campo]: arr });
     };
-    return [
-      { key: "present", label: "Presente", render: (code, t) => t && (
-        <PresenceSwitch on={t.is_present} label={`Pieza ${code} presente`}
-                        onToggle={() => queue(t.id, { is_present: !t.is_present })} /> ) },
-      { key: "implant", label: "Implante", render: (code, t) => t && (
-        <ImplantCheck on={t.has_implant} disabled={!t.is_present}
-                      label={`Implante en ${code}`}
-                      onToggle={() => queue(t.id, { has_implant: !t.has_implant })} /> ) },
-      { key: "mobility", label: "Movilidad", render: (code, t) => t && (
-        <GradeSelect value={t.mobility} disabled={!t.is_present}
-                     label={`Movilidad de ${code}`}
-                     onChange={(v) => queue(t.id, { mobility: v })} /> ) },
-      { key: "furc", label: "Furcación", render: (code, t) => t && (
-        <FurcationMark grade={t.furcation_buccal} disabled={!t.is_present}
-                       label={`Furcación de ${code}`}
-                       onCycle={() => queue(t.id, { furcation_buccal: (t.furcation_buccal + 1) % 4 })} /> ) },
-      { key: "bop_b", label: "Sangrado (V)", render: (code, t) => t && (
-        <SiteFlagRow values={t.bleeding} base={0} color="var(--red)" disabled={!t.is_present}
-                     label={`Sangrado vestibular de ${code}`}
+    const cara = (base, nombre, superficie) => ({
+      sangrado: { key: `bop-${base}`, label: "Sangrado", render: (code, t) => t && (
+        <SiteFlagRow values={t.bleeding} base={base} color="var(--red)" disabled={!t.is_present}
+                     orden={ordenSitios(code)} label={`Sangrado ${nombre} de ${code}`}
                      onToggle={(i) => flag(t, "bleeding", i)} /> ) },
-      { key: "pl_b", label: "Placa (V)", render: (code, t) => t && (
-        <SiteFlagRow values={t.plaque} base={0} color="var(--petrol)" disabled={!t.is_present}
-                     label={`Placa vestibular de ${code}`}
+      placa: { key: `pl-${base}`, label: "Placa", render: (code, t) => t && (
+        <SiteFlagRow values={t.plaque} base={base} color="#7c4dcc" disabled={!t.is_present}
+                     orden={ordenSitios(code)} label={`Placa ${nombre} de ${code}`}
                      onToggle={(i) => flag(t, "plaque", i)} /> ) },
-      { key: "gm_b", label: "Margen ging. (V)", render: (code, t) => t && (
-        <SiteNumberRow values={t.gingival_margin} base={0} disabled={!t.is_present}
-                       label={`Margen gingival vestibular de ${code}`}
+      margen: { key: `gm-${base}`, label: "Margen gingival", render: (code, t) => t && (
+        <SiteNumberRow values={t.gingival_margin} base={base} disabled={!t.is_present}
+                       orden={ordenSitios(code)} alerta={3} negativos
+                       label={`Margen gingival ${nombre} de ${code}`}
                        activeSite={selectedTooth === code ? activeSite : null}
-                       onFocusSite={(i) => { setActiveSite(i); onSurfaceClick(code, "vestibular"); }}
+                       onFocusSite={(i) => { setActiveSite(i); onSurfaceClick(code, superficie); }}
                        onChange={(i, v) => num(t, "gingival_margin", i, v)} /> ) },
-      { key: "pd_b", label: "Sondaje (V)", render: (code, t) => t && (
-        <SiteNumberRow values={t.probing_depth} base={0} disabled={!t.is_present}
-                       label={`Sondaje vestibular de ${code}`}
+      sondaje: { key: `pd-${base}`, label: "Prof. de sondaje", render: (code, t) => t && (
+        <SiteNumberRow values={t.probing_depth} base={base} disabled={!t.is_present}
+                       orden={ordenSitios(code)}
+                       label={`Sondaje ${nombre} de ${code}`}
                        activeSite={selectedTooth === code ? activeSite : null}
-                       onFocusSite={(i) => { setActiveSite(i); onSurfaceClick(code, "vestibular"); }}
+                       onFocusSite={(i) => { setActiveSite(i); onSurfaceClick(code, superficie); }}
                        onChange={(i, v) => num(t, "probing_depth", i, v)} /> ) },
-      { key: "pd_l", label: "Sondaje (P/L)", render: (code, t) => t && (
-        <SiteNumberRow values={t.probing_depth} base={3} disabled={!t.is_present}
-                       label={`Sondaje palatino de ${code}`}
-                       activeSite={selectedTooth === code ? activeSite : null}
-                       onFocusSite={(i) => { setActiveSite(i); onSurfaceClick(code, "palatal_lingual"); }}
-                       onChange={(i, v) => num(t, "probing_depth", i, v)} /> ) },
-      { key: "gm_l", label: "Margen ging. (P/L)", render: (code, t) => t && (
-        <SiteNumberRow values={t.gingival_margin} base={3} disabled={!t.is_present}
-                       label={`Margen gingival palatino de ${code}`}
-                       activeSite={selectedTooth === code ? activeSite : null}
-                       onFocusSite={(i) => { setActiveSite(i); onSurfaceClick(code, "palatal_lingual"); }}
-                       onChange={(i, v) => num(t, "gingival_margin", i, v)} /> ) },
-      { key: "pl_l", label: "Placa (P/L)", render: (code, t) => t && (
-        <SiteFlagRow values={t.plaque} base={3} color="var(--petrol)" disabled={!t.is_present}
-                     label={`Placa palatina de ${code}`}
-                     onToggle={(i) => flag(t, "plaque", i)} /> ) },
-      { key: "bop_l", label: "Sangrado (P/L)", render: (code, t) => t && (
-        <SiteFlagRow values={t.bleeding} base={3} color="var(--red)" disabled={!t.is_present}
-                     label={`Sangrado palatino de ${code}`}
-                     onToggle={(i) => flag(t, "bleeding", i)} /> ) },
-    ];
+    });
+    return {
+      pieza: [
+        { key: "present", label: "Presente", render: (code, t) => t && (
+          <PresenceSwitch on={t.is_present} label={`Pieza ${code} presente`}
+                          onToggle={() => queue(t.id, { is_present: !t.is_present })} /> ) },
+        { key: "implant", label: "Implante", render: (code, t) => t && (
+          <ImplantCheck on={t.has_implant} disabled={!t.is_present}
+                        label={`Implante en ${code}`}
+                        onToggle={() => queue(t.id, { has_implant: !t.has_implant })} /> ) },
+        { key: "mobility", label: "Movilidad", render: (code, t) => t && (
+          <GradeSelect value={t.mobility} disabled={!t.is_present}
+                       label={`Movilidad de ${code}`}
+                       onChange={(v) => queue(t.id, { mobility: v })} /> ) },
+        { key: "furc", label: "Furcación", render: (code, t) => t && (
+          <FurcationMark grade={t.furcation_buccal} disabled={!t.is_present}
+                         label={`Furcación de ${code}`}
+                         onCycle={() => queue(t.id, { furcation_buccal: (t.furcation_buccal + 1) % 4 })} /> ) },
+      ],
+      vestibular: cara(0, "vestibular", "vestibular"),
+      interna: cara(3, interna.toLowerCase(), "palatal_lingual"),
+    };
   }
 
   const stats = exam?.statistics;
@@ -356,45 +354,29 @@ export default function AdvancedCompactView({
                             transition: "transform var(--dur) var(--ease)",
                             width: `${100 * zoom}%` }}>
                 {ARCHES.map((arch) => {
-                  const filasPerio = editable ? perioRows() : [];
-                  const cabecera = (
-                    <div key="head" style={{ display: "flex", alignItems: "flex-end",
-                                             background: "var(--petrol-soft)" }}>
+                  const grupos = editable ? perioRows(arch.interna) : null;
+
+                  const numeros = (
+                    <div key="num" style={{ display: "flex", alignItems: "center",
+                                            background: "var(--petrol-soft)",
+                                            borderTop: "1px solid var(--line)" }}>
                       {rowLabel(arch.label)}
                       {[arch.right, arch.left].map((codes, ci) => (
                         <div key={ci} style={{ display: "flex" }}>
                           {ci === 1 && midline}
                           {codes.map((code) => (
                             <div key={code} ref={(el) => { colRefs.current[code] = el; }}
-                                 style={{ width: CELL_W + 8, flexShrink: 0, textAlign: "center",
-                                          background: selectedTooth === code ? "var(--petrol-soft)" : "transparent" }}>
-                              {!arch.upper && (
-                                <div style={{ lineHeight: 0 }}>
-                                  <ToothArt code={code} size={24}
-                                            fill={surfacesByTooth[code]?.occlusal?.color}
-                                            selected={selectedTooth === code} />
-                                </div>
-                              )}
+                                 style={{ width: CELL_W + 8, flexShrink: 0, textAlign: "center" }}>
                               <button type="button" onClick={() => onSurfaceClick(code, "whole")}
                                       className="tabular" aria-label={`Pieza ${code}`}
                                       title={`Pieza ${dot(code)}`}
                                       style={{ width: "100%", border: "none", cursor: "pointer",
-                                               borderRadius: 3, padding: "1px 0", fontSize: 10,
-                                               fontWeight: 700, lineHeight: 1.2,
+                                               borderRadius: 3, padding: "3px 0", fontSize: 12.5,
+                                               fontWeight: 700, lineHeight: 1.1,
                                                background: selectedTooth === code ? "var(--petrol)" : "transparent",
                                                color: selectedTooth === code ? "var(--on-brand)" : "var(--ink)" }}>
                                 {code}
-                                <span style={{ display: "block", fontSize: 8, fontWeight: 500, opacity: .7 }}>
-                                  {dot(code)}
-                                </span>
                               </button>
-                              {arch.upper && (
-                                <div style={{ lineHeight: 0 }}>
-                                  <ToothArt code={code} size={24}
-                                            fill={surfacesByTooth[code]?.occlusal?.color}
-                                            selected={selectedTooth === code} />
-                                </div>
-                              )}
                             </div>
                           ))}
                         </div>
@@ -404,11 +386,35 @@ export default function AdvancedCompactView({
 
                   const fila = (key, label, sigla, render) => (
                     <div key={key} style={{ display: "flex", alignItems: "center",
-                                            borderTop: "1px solid var(--line)" }}>
+                                            borderTop: "1px solid var(--line)", minHeight: 22 }}>
                       {rowLabel(label, sigla)}
                       {cells(arch.right, render)}
                       {midline}
                       {cells(arch.left, render)}
+                    </div>
+                  );
+
+                  /* Diagrama de una cara: la etiqueta dice cuál es, porque
+                     el dibujo de la pieza es el mismo por fuera y por dentro. */
+                  const diagrama = (cara, nombre) => (
+                    <div key={`dg-${cara}`} style={{ display: "flex", alignItems: "stretch",
+                                                    borderTop: "1px solid var(--line)" }}>
+                      <div style={{ width: LABEL_W, flexShrink: 0, position: "sticky", left: 0, zIndex: 3,
+                                    background: "var(--card)", display: "flex", alignItems: "center",
+                                    padding: "0 8px", borderRight: "1px solid var(--line)",
+                                    fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em",
+                                    textTransform: "uppercase", color: "var(--petrol)" }}>
+                        {nombre}
+                      </div>
+                      {[arch.right, arch.left].map((codes, ci) => (
+                        <div key={ci} style={{ display: "flex" }}>
+                          {ci === 1 && midline}
+                          <DiagramaCara codes={codes} cara={cara} byCode={byCode}
+                                        surfacesByTooth={surfacesByTooth}
+                                        selectedTooth={selectedTooth} onSurfaceClick={onSurfaceClick}
+                                        etiqueta={`Diagrama ${nombre.toLowerCase()} ${arch.label.toLowerCase()}`} />
+                        </div>
+                      ))}
                     </div>
                   );
 
@@ -421,20 +427,35 @@ export default function AdvancedCompactView({
                                         onSelect={onSurfaceClick} />
                     )));
 
-                  const filasMedicion = filasPerio.map((r) =>
-                    fila(r.key, r.label, null, r.render));
+                  const f = (r) => fila(r.key, r.label, null, r.render);
+                  /* Cara: de fuera hacia el diagrama van sangrado, placa,
+                     margen y sondaje, así los números quedan pegados a las
+                     líneas que dibujan. */
+                  const haciaDiagrama = (c) => (c ? [c.sangrado, c.placa, c.margen, c.sondaje].map(f) : []);
+                  const desdeDiagrama = (c) => (c ? [c.sondaje, c.margen, c.placa, c.sangrado].map(f) : []);
+                  const pieza = grupos ? grupos.pieza.map(f) : [];
+
+                  const bloque = arch.upper
+                    ? [...filasEstado, ...pieza, ...haciaDiagrama(grupos?.vestibular),
+                       diagrama("v", "Vestibular"), numeros, diagrama("l", arch.interna),
+                       ...desdeDiagrama(grupos?.interna)]
+                    : [...haciaDiagrama(grupos?.interna), diagrama("l", arch.interna), numeros,
+                       diagrama("v", "Vestibular"), ...desdeDiagrama(grupos?.vestibular),
+                       ...[...pieza].reverse(), ...filasEstado];
 
                   return (
-                    <div key={arch.key} style={{ borderBottom: "2px solid var(--line-strong)" }}>
-                      {arch.upper
-                        ? [cabecera, ...filasEstado, ...filasMedicion]
-                        : [...filasMedicion, ...filasEstado, cabecera]}
+                    <div key={arch.key} style={{ borderBottom: "3px solid var(--line-strong)" }}>
+                      {bloque}
                     </div>
                   );
                 })}
               </div>
             </div>
           )}
+
+          <div style={{ padding: "8px 12px", borderTop: "1px solid var(--line)" }}>
+            <LeyendaPeriodontal />
+          </div>
 
           {/* Índices agregados, como el pie de la ficha original */}
           {stats && (

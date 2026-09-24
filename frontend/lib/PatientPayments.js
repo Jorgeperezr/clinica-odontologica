@@ -13,11 +13,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { api } from "./api";
+import { api, readList } from "./api";
 
 const METHODS = { cash: "Efectivo", transfer: "Transferencia", card: "Tarjeta" };
 
-export default function PatientPayments({ patientId, role }) {
+export default function PatientPayments({ patientId, role, puedeCobrar }) {
   const [rows, setRows] = useState([]);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({
@@ -27,15 +27,16 @@ export default function PatientPayments({ patientId, role }) {
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
 
-  const canCharge = ["admin", "reception"].includes(role);
+  // La función «cobros» de quien mira (ver lib/api.js → tieneFuncion). Si
+  // no se pasa, se mira el rol, que es lo que hacía antes.
+  const canCharge = puedeCobrar ?? ["admin", "reception"].includes(role);
 
   const load = useCallback(async () => {
     if (!canCharge) return;
     try {
       const resp = await api(`/patients/${patientId}/payments/`);
       if (!resp.ok) return;
-      const data = await resp.json();
-      setRows(data.results || data);
+      setRows(await readList(resp));
     } catch { /* sin cobros: la ficha sigue funcionando */ }
   }, [patientId, canCharge]);
 

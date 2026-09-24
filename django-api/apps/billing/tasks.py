@@ -16,7 +16,7 @@ def mark_overdue_installments():
 
     from apps.billing.models import Installment
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     updated = (
         Installment.objects.filter(
             due_date__lt=today, status=Installment.Status.PENDING

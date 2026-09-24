@@ -1,3 +1,5 @@
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -535,3 +537,257 @@ class TenantBackupTests(APITestCase):
         self.assertIn("decrypt_backup", actions)
         for log in AuditLog.objects.filter(entity_type="TenantBackup"):
             self.assertNotIn(self.phrase, str(log.metadata))
+
+
+class PricingTests(APITestCase):
+    """
+    Convenios y tarifarios (Sprint 71).
+
+    Lo que se fija aquí es, sobre todo, la PRECEDENCIA: el orden en que se
+    consulta tarifario pactado → descuento del convenio → tarifario general →
+    catálogo. Es la regla que decide cuánto se le cobra al paciente, así que
+    un cambio accidental en ese orden tiene que romper una prueba y no
+    aparecer en la factura de alguien.
+    """
+
+    def setUp(self):
+        from apps.configuration.models import Agreement, Tariff
+
+        self.Agreement, self.Tariff = Agreement, Tariff
+        self.tenant = Tenant.objects.create(name="Clínica Tarifas", ruc="1790000000001")
+        self.admin = User.objects.create_user(
+            email="admin@tarifas.com", password="superseguro123",
+            role="admin", tenant=self.tenant,
+        )
+        self.reception = User.objects.create_user(
+            email="recep@tarifas.com", password="superseguro123",
+            role="reception", tenant=self.tenant,
+        )
+        self.specialty = Specialty.objects.create(tenant=self.tenant, name="Rehabilitación")
+        self.treatment = Treatment.objects.create(
+            tenant=self.tenant, name="Corona de zirconio",
+            specialty=self.specialty, base_price="400.00",
+        )
+        self.agreement = Agreement.objects.create(
+            tenant=self.tenant, name="Aseguradora Sur", discount_percentage="10.00",
+        )
+
+    # ── Precedencia ──────────────────────────────────────────────────
+    def _price(self, agreement=None):
+        from apps.configuration.pricing import price_for
+        return price_for(self.treatment, agreement)
+
+    def test_sin_convenio_ni_tarifario_manda_el_precio_base(self):
+        self.assertEqual(str(self._price()), "400.00")
+
+    def test_el_tarifario_general_manda_sobre_el_precio_base(self):
+        self.Tariff.objects.create(
+            tenant=self.tenant, treatment=self.treatment, agreement=None, price="350.00",
+        )
+        self.assertEqual(str(self._price()), "350.00")
+
+    def test_el_descuento_del_convenio_se_aplica_al_precio_base(self):
+        self.assertEqual(str(self._price(self.agreement)), "360.00")
+
+    def test_el_descuento_se_aplica_sobre_el_tarifario_general_no_sobre_el_base(self):
+        """
+        Si la clínica fija su precio de lista, el convenio porcentual tiene
+        que seguir a ese precio y no al del catálogo: si no, subir la lista
+        obligaría a repasar todos los convenios uno a uno.
+        """
+        self.Tariff.objects.create(
+            tenant=self.tenant, treatment=self.treatment, agreement=None, price="300.00",
+        )
+        self.assertEqual(str(self._price(self.agreement)), "270.00")
+
+    def test_el_tarifario_pactado_manda_sobre_el_descuento(self):
+        self.Tariff.objects.create(
+            tenant=self.tenant, treatment=self.treatment,
+            agreement=self.agreement, price="280.00",
+        )
+        self.assertEqual(str(self._price(self.agreement)), "280.00")
+
+    def test_un_convenio_inactivo_no_descuenta(self):
+        self.agreement.is_active = False
+        self.agreement.save()
+        self.assertEqual(str(self._price(self.agreement)), "400.00")
+
+    def test_un_convenio_sin_porcentaje_no_descuenta(self):
+        sin_pct = self.Agreement.objects.create(tenant=self.tenant, name="Empresa X")
+        self.assertEqual(str(self._price(sin_pct)), "400.00")
+
+    def test_el_redondeo_es_comercial_a_dos_decimales(self):
+        """33 % de 400 = 268.00; 33.333 % da 266.668 → 266.67, no 266.66."""
+        self.agreement.discount_percentage = "33.333"
+        self.agreement.save()
+        self.assertEqual(str(self._price(self.agreement)), "266.67")
+
+    def test_un_porcentaje_absurdo_no_devuelve_dinero(self):
+        """Un 150 % mal cargado deja el precio en cero, nunca en negativo."""
+        self.agreement.discount_percentage = "100.00"
+        self.agreement.save()
+        self.assertEqual(str(self._price(self.agreement)), "0.00")
+
+    # ── Rejilla ──────────────────────────────────────────────────────
+    def test_la_rejilla_distingue_el_precio_pactado_del_heredado(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse("price-matrix"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        fila = resp.data["treatments"][0]
+        self.assertEqual(fila["prices"]["general"]["source"], "base")
+        self.assertEqual(fila["prices"][str(self.agreement.id)]["source"], "discount")
+        self.assertEqual(fila["prices"][str(self.agreement.id)]["value"], "360.00")
+
+        self.Tariff.objects.create(
+            tenant=self.tenant, treatment=self.treatment,
+            agreement=self.agreement, price="275.00",
+        )
+        resp = self.client.get(reverse("price-matrix"))
+        celda = resp.data["treatments"][0]["prices"][str(self.agreement.id)]
+        self.assertEqual(celda["source"], "tariff")
+        self.assertEqual(celda["value"], "275.00")
+
+    def test_la_rejilla_no_consulta_por_celda(self):
+        """
+        Con una consulta por celda la pantalla se vuelve inusable en cuanto
+        la clínica tiene catálogo de verdad: 60 tratamientos por 8 convenios
+        son 480 consultas para pintar una tabla.
+
+        Se comprueba que el número de consultas NO CRECE al multiplicar por
+        diez el tamaño de la rejilla, en vez de fijar una cifra exacta: la
+        cifra exacta se rompe con cualquier cambio de middleware y no es lo
+        que se quiere proteger.
+        """
+        from apps.configuration.models import Agreement
+
+        self.client.force_authenticate(user=self.admin)
+        with CaptureQueriesContext(connection) as pequena:
+            self.client.get(reverse("price-matrix"))
+
+        for i in range(30):
+            Treatment.objects.create(
+                tenant=self.tenant, name=f"Tratamiento {i}",
+                specialty=self.specialty, base_price="100.00",
+            )
+        for i in range(5):
+            Agreement.objects.create(tenant=self.tenant, name=f"Convenio {i}")
+
+        with CaptureQueriesContext(connection) as grande:
+            resp = self.client.get(reverse("price-matrix"))
+
+        # 31 tratamientos × 7 columnas = 217 celdas, las mismas consultas.
+        self.assertEqual(len(resp.data["treatments"]), 31)
+        self.assertEqual(len(grande.captured_queries), len(pequena.captured_queries))
+
+    def test_la_rejilla_fija_y_despues_borra_un_precio(self):
+        self.client.force_authenticate(user=self.admin)
+        url = reverse("price-matrix")
+        payload = {
+            "treatment": str(self.treatment.id),
+            "agreement": str(self.agreement.id),
+            "price": "290.00",
+        }
+        resp = self.client.put(url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        # Repetir el PUT actualiza en vez de chocar con la unicidad.
+        payload["price"] = "285.00"
+        resp = self.client.put(url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.Tariff.objects.count(), 1)
+        self.assertEqual(str(self.Tariff.objects.get().price), "285.00")
+
+        # price nulo borra la fila y la celda vuelve a heredar.
+        payload["price"] = None
+        resp = self.client.put(url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.Tariff.objects.count(), 0)
+        self.assertEqual(str(self._price(self.agreement)), "360.00")
+
+    def test_recepcion_ve_la_rejilla_pero_no_la_edita(self):
+        self.client.force_authenticate(user=self.reception)
+        self.assertEqual(
+            self.client.get(reverse("price-matrix")).status_code, status.HTTP_200_OK
+        )
+        resp = self.client.put(
+            reverse("price-matrix"),
+            {"treatment": str(self.treatment.id), "agreement": None, "price": "1.00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_la_rejilla_no_alcanza_tratamientos_de_otra_clinica(self):
+        otra = Tenant.objects.create(name="Otra Clínica", ruc="1790000000002")
+        esp = Specialty.objects.create(tenant=otra, name="Endodoncia")
+        ajeno = Treatment.objects.create(
+            tenant=otra, name="Ajeno", specialty=esp, base_price="99.00",
+        )
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.put(
+            reverse("price-matrix"),
+            {"treatment": str(ajeno.id), "agreement": None, "price": "1.00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.Tariff.objects.count(), 0)
+
+    # ── Aislamiento del tarifario ────────────────────────────────────
+    def test_no_se_puede_tarifar_un_tratamiento_de_otra_clinica(self):
+        """
+        El `queryset` que DRF deduce de un ForeignKey no filtra por tenant.
+        Sin la validación, esta fila se guardaba con el tenant propio y el
+        nombre del tratamiento ajeno aparecía en la rejilla.
+        """
+        otra = Tenant.objects.create(name="Clínica Vecina", ruc="1790000000003")
+        esp = Specialty.objects.create(tenant=otra, name="Cirugía")
+        ajeno = Treatment.objects.create(
+            tenant=otra, name="Exodoncia ajena", specialty=esp, base_price="80.00",
+        )
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse("tariff-list"),
+            {"treatment": str(ajeno.id), "price": "10.00"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.Tariff.objects.count(), 0)
+
+    def test_no_se_puede_tarifar_bajo_un_convenio_de_otra_clinica(self):
+        otra = Tenant.objects.create(name="Clínica Lejana", ruc="1790000000004")
+        convenio_ajeno = self.Agreement.objects.create(tenant=otra, name="Convenio ajeno")
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse("tariff-list"),
+            {
+                "treatment": str(self.treatment.id),
+                "agreement": str(convenio_ajeno.id),
+                "price": "10.00",
+            },
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_el_descuento_fuera_de_rango_se_rechaza(self):
+        self.client.force_authenticate(user=self.admin)
+        for valor in ("-5", "101"):
+            resp = self.client.post(
+                reverse("agreement-list"),
+                {"name": f"Convenio {valor}", "discount_percentage": valor},
+            )
+            self.assertEqual(
+                resp.status_code, status.HTTP_400_BAD_REQUEST, msg=f"aceptó {valor} %"
+            )
+
+    def test_la_lista_de_convenios_cuenta_sus_pacientes(self):
+        from apps.patients.models import Patient
+
+        Patient.objects.create(
+            tenant=self.tenant, first_name="Ana", last_name="Pérez",
+            national_id="0102030405", agreement=self.agreement,
+        )
+        Patient.objects.create(
+            tenant=self.tenant, first_name="Luis", last_name="Mora",
+            national_id="0102030406",
+        )
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse("agreement-list"))
+        fila = (resp.data["results"] if "results" in resp.data else resp.data)[0]
+        self.assertEqual(fila["patient_count"], 1)

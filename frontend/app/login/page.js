@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { login } from "../../lib/api";
+import { login, RUTA_CAMBIO } from "../../lib/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -14,8 +14,12 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      window.location.href = "/panel/";
+      const sesion = await login(email, password);
+      // Entrar con una contraseña temporal funciona —si no, no habría
+      // forma de cambiarla—, pero el panel entero está bloqueado hasta
+      // que se elija la propia, así que se va derecho allí en vez de a
+      // un escritorio donde todo fallaría.
+      window.location.href = sesion?.must_change_password ? RUTA_CAMBIO : "/panel/";
     } catch (err) {
       setError(err.message);
     } finally {
@@ -74,7 +78,7 @@ const styles = {
   },
   brandInner: { maxWidth: 320 },
   tooth: { fontSize: 64, lineHeight: 1, color: "var(--mint)", marginBottom: 18 },
-  brandTitle: { fontSize: 40, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.02em" },
+  brandTitle: { color: "#fff", fontSize: 40, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.02em" },
   brandSub: { marginTop: 12, color: "var(--mint)", fontSize: 15 },
   formSide: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
   form: { width: "100%", maxWidth: 380 },

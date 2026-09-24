@@ -1,0 +1,124 @@
+# Convenciones del proyecto
+
+Notas para cualquier sesión que trabaje en este repositorio. Están aquí
+porque el entorno de desarrollo remoto es efímero: lo que no esté
+escrito en el repositorio se pierde al arrancar el siguiente contenedor.
+
+## Autoría de los commits
+
+Antes del primer commit de la sesión:
+
+```sh
+git config user.name  "Jorgeperezr"
+git config user.email "148003448+Jorgeperezr@users.noreply.github.com"
+```
+
+No es cosmético. GitHub solo cuenta un commit en el gráfico de
+contribuciones si el **correo del autor** está ligado a la cuenta; con
+el valor por defecto del entorno remoto —`Claude
+<noreply@anthropic.com>`— el trabajo de este repositorio no aparecía en
+el perfil de su dueño. Se usa la dirección `users.noreply` de GitHub y no
+la personal: cuenta igual y no publica un correo privado en la historia.
+
+Los mensajes de commit siguen llevando su línea `Co-Authored-By:`.
+
+## Validar como valida el CI, no como sea más cómodo
+
+```sh
+python manage.py test --settings=config.settings_test
+```
+
+`python manage.py test` a secas usa `config.settings`: PostgreSQL y el
+hasher real, unos 265 segundos. El CI usa `config.settings_test`: SQLite
+en memoria y MD5, unos once. **La diferencia no es solo de velocidad.**
+El cupo de peticiones anónimas (20/min por IP) vive en la caché y se
+comparte entre pruebas: en once segundos la suite entera cae dentro de
+una misma ventana de un minuto y el cupo se agota; en 265 segundos la
+ventana se renueva varias veces y el problema no se ve. Una suite puede
+estar verde en local y roja en el CI por esto solo.
+
+El CI hace además una segunda pasada con `DJANGO_TIME_ZONE=Pacific/Kiritimati`
+(UTC+14), para que la fecha del servidor y la de la clínica no coincidan
+nunca. Varios fallos de frontera de fecha han salido de ahí.
+
+Antes de subir: los tests con los settings del CI, `ruff check apps
+config` y, si se tocó el panel, `npx next build`.
+
+## Comandos de Django fuera de `start-local.sh`
+
+```sh
+bash scripts/manage.sh shell
+```
+
+No `python manage.py …` a secas. `settings.py` toma `POSTGRES_HOST` con
+valor por omisión `postgres` —el nombre del servicio en Docker—, así que
+en cualquier terminal nueva revienta con «could not translate host name
+"postgres"», que no se parece a «falta una variable de entorno». El
+envoltorio pone el entorno y usa el intérprete de `.venv`.
+
+**No se arregla con un `.env` en la raíz:** `docker-compose.yml` lo carga
+con `env_file: .env` en django-api y celery-worker, así que un
+`POSTGRES_HOST=127.0.0.1` ahí haría que el contenedor se buscara la base
+a sí mismo. El arreglo cómodo para el Mac rompería Docker.
+
+## App móvil (`movil/`)
+
+Flutter, para el paciente. El SDK no viene con el repositorio; con
+Flutter 3.47 o posterior:
+
+```sh
+cd movil && flutter pub get && flutter analyze && flutter test
+```
+
+`flutter analyze` tiene que decir «No issues found!». Las pruebas de
+`test/fixtures/` usan respuestas **capturadas de la API real**, no
+escritas a mano: si se renombra un campo en `apps/app_paciente/views.py`
+hay que recapturarlas (el cómo está en `movil/README.md`) y no
+«arreglar» el test a mano, que es tapar el cambio de contrato.
+
+Compilar para iOS necesita un Mac con Xcode **completo**: las Command
+Line Tools no bastan y `xcodebuild` falla con «requires Xcode». Para
+verla sin nada de eso, `bash scripts/movil.sh --web` la abre en Chrome.
+
+`bash scripts/movil.sh --comprobar` dice qué falta, y
+`movil/EN-MI-MAC.md` tiene el paso a paso, incluida la URL de la API,
+que NO es la misma desde iOS (`localhost:8000`) que desde el emulador de
+Android (`10.0.2.2:8000`).
+
+**Comandos que se le pasan a alguien en macOS: sin comentarios detrás.**
+En zsh `interactive_comments` puede estar desactivada y entonces el `#`
+llega como argumento —`xcode-select --install # …` falla con «invalid
+argument '#'»—. Ya pasó dos veces; los comentarios van en su propia
+línea.
+
+## Archivos que no se tocan
+
+El odontograma está fuera de alcance salvo permiso explícito:
+
+- `frontend/lib/odontogram/meshProvider.js`
+- `frontend/lib/odontogram/contract.js`
+- `frontend/lib/odontogram/registry.js`
+- `frontend/lib/odontogram/Odontogram3D.js`
+- `frontend/lib/ClinicalTabs.js`
+- `frontend/lib/Odontogram.js` (clásico) y
+  `frontend/lib/periodontal/PeriodontalMatrix.js`
+
+Tampoco se tocan la lógica clínica, la sincronización entre
+odontogramas, el raycasting, la historia ni los tratamientos. La
+canalización GLTF/GLB debe seguir operativa: dejar mallas en
+`public/models/teeth` tiene que bastar para sustituir la geometría
+procedural, y el sistema de lóbulos de desarrollo se mantiene.
+
+## Otras reglas en vigor
+
+- **Sin dependencias nuevas.** Cambios incrementales, sin regresiones y
+  con tiempos de generación parecidos.
+- **El formulario MSP/MCP (HCU-033/2021) conserva su propio diseño** y no
+  usa el motor de estilos de documentos.
+- **Las copias de seguridad son del administrador de la clínica**, no del
+  superadministrador de la plataforma.
+
+## Idioma
+
+Código, comentarios, mensajes de commit y textos de interfaz en
+castellano, como el resto del repositorio.

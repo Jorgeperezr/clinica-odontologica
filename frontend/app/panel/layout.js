@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, currentUser, logout } from "../../lib/api";
+import { api, currentUser, logout, tieneFuncion } from "../../lib/api";
 import { applyBrandingChrome, applyTheme, initColorMode, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 import NavIcon from "../../lib/NavIcons";
 import ThemeSwitch from "../../lib/ThemeSwitch";
@@ -11,12 +11,18 @@ const NAV = [
   { href: "/panel/plataforma/", label: "Plataforma", iconName: "plataforma", roles: ["superadmin"] },
   { href: "/panel/", label: "Inicio", iconName: "inicio", roles: ["admin", "reception", "doctor", "auxiliary"] },
   { href: "/panel/pacientes/", label: "Pacientes", iconName: "pacientes", roles: ["admin", "reception", "doctor", "auxiliary"] },
+  // Lo que piden los pacientes desde la app; con contador de pendientes.
+  { href: "/panel/bandeja/", label: "Bandeja de la app", iconName: "bandeja", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "app_paciente", contador: "bandeja" },
   { href: "/panel/agenda/", label: "Agenda", iconName: "agenda", roles: ["admin", "reception", "doctor"] },
   { href: "/panel/firma/", label: "Mi firma", iconName: "firma", roles: ["doctor"] },
-  { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception"] },
-  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "auxiliary"] },
-  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin"] },
+  // Los módulos de gestión siguen la FUNCIÓN de cada profesional (ver
+  // lib/api.js → tieneFuncion), no solo su rol.
+  { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception", "doctor", "auxiliary"], funcion: "cobros" },
+  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "inventario", funcion: "inventario" },
+  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "reportes", funcion: "reportes" },
   { href: "/panel/configuracion/", label: "Configuración", iconName: "configuracion", roles: ["admin"] },
+  // De cada persona para sí misma: por eso la ven todos los roles de clínica.
+  { href: "/panel/preferencias/", label: "Mis preferencias", iconName: "preferencias", roles: ["admin", "reception", "doctor", "auxiliary"] },
 ];
 
 const ROLE_LABELS = {
@@ -98,9 +104,39 @@ export default function PanelLayout({ children }) {
     return () => { document.body.style.overflow = ""; };
   }, [isMobile, drawerOpen]);
 
+  /* Pendientes de la bandeja de la app, para el número del menú. Se
+     pide al entrar, cada 2 minutos y cuando la propia bandeja avisa de
+     que atendió algo. Si la clínica no tiene la app, la API responde 403
+     y el número simplemente no aparece. */
+  const [pendientesBandeja, setPendientesBandeja] = useState(0);
+  useEffect(() => {
+    if (!ready || !user || user.role === "superadmin" || (user.funcionalidades || {}).app_paciente === false) return;
+    let vivo = true;
+    const pedir = () => api("/bandeja-app/resumen/")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo && d) setPendientesBandeja(d.solicitudes_pendientes + d.mensajes_sin_responder); })
+      .catch(() => {});
+    pedir();
+    const cada = setInterval(pedir, 120000);
+    window.addEventListener("bandeja-actualizada", pedir);
+    return () => { vivo = false; clearInterval(cada); window.removeEventListener("bandeja-actualizada", pedir); };
+  }, [ready, user]);
+
   if (!ready) return null;
 
-  const items = NAV.filter((n) => n.roles.includes(user.role));
+  // Rol Y funcionalidad. Esconder el módulo es cortesía; lo que de
+  // verdad lo cierra es `RequiereFuncionalidad` en la API, porque quien
+  // conozca la URL entraría igual.
+  //
+  // `!== false` y no `=== true`: si el perfil viene de una sesión
+  // anterior y todavía no trae `funcionalidades`, se enseña todo en vez
+  // de dejar al usuario sin menú hasta que vuelva a entrar.
+  const contratadas = user.funcionalidades || {};
+  const items = NAV.filter(
+    (n) => n.roles.includes(user.role)
+      && (!n.funcionalidad || contratadas[n.funcionalidad] !== false)
+      && (!n.funcion || tieneFuncion(user, n.funcion)),
+  );
   const path = typeof window !== "undefined" ? window.location.pathname : "";
   const W = isMobile ? 264 : (collapsed ? 64 : 220);
 
@@ -184,6 +220,15 @@ export default function PanelLayout({ children }) {
                   <NavIcon name={item.iconName} />
                 </span>
                 {(!collapsed || isMobile) && <span>{item.label}</span>}
+                {item.contador === "bandeja" && pendientesBandeja > 0 && (
+                  <span aria-label={`${pendientesBandeja} pendientes`}
+                        style={{ marginLeft: (collapsed && !isMobile) ? 0 : "auto", minWidth: 20, height: 20,
+                                 padding: "0 6px", borderRadius: 999, background: "var(--red)", color: "#fff",
+                                 fontSize: 11.5, fontWeight: 700, display: "inline-flex",
+                                 alignItems: "center", justifyContent: "center" }}>
+                    {pendientesBandeja > 99 ? "99+" : pendientesBandeja}
+                  </span>
+                )}
               </a>
             );
           })}

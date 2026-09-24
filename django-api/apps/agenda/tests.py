@@ -160,7 +160,11 @@ class Sprint20AgendaTests(APITestCase):
         self._create_appt(1)
         self._create_appt(15)
         self.client.force_authenticate(user=self.reception)
-        first_of_month = timezone.now().strftime("%Y-%m-01")
+        # La MISMA fuente de fecha con la que se crearon las citas. Usando
+        # `timezone.now()` se tomaba la fecha UTC: en las horas en que el
+        # servidor ya ha cambiado de día —y de mes— la prueba creaba las
+        # citas en diciembre y consultaba enero.
+        first_of_month = timezone.localdate().strftime("%Y-%m-01")
         resp = self.client.get(f"/api/v1/agenda/view/?mode=monthly&date={first_of_month}")
         self.assertEqual(resp.status_code, 200)
         results = resp.data.get("results", resp.data)
@@ -221,6 +225,10 @@ class ReminderNoDuplicatesTest(APITestCase):
         tenant = Tenant.objects.create(name="T remind")
         from django.core.management import call_command
         call_command("bootstrap", tenant_name=tenant.name)
+        # Cada clínica envía desde su cuenta: sin conectarla no hay
+        # recordatorio que duplicar.
+        from apps.whatsapp.tests import conectar_whatsapp
+        conectar_whatsapp(tenant)
         du = User.objects.create_user(
             email="d@rem.ec", password="superseguro123", role="doctor", tenant=tenant,
         )

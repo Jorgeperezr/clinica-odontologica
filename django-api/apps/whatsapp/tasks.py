@@ -34,13 +34,20 @@ def send_appointment_reminders():
 
     from apps.agenda.models import Appointment
     from apps.configuration.models import SystemParameter
-    from apps.whatsapp.gateway_client import send_whatsapp_template
+    from apps.whatsapp.gateway_client import configuracion_lista, send_whatsapp_template
 
     now = timezone.now()
     sent = 0
 
     # Agrupar por tenant para leer su ventana de recordatorio
     for param in SystemParameter.objects.filter(key="ventana_recordatorio_horas"):
+        config = configuracion_lista(param.tenant)
+        if config is None:
+            # Sin cuenta de WhatsApp lista no se envía NADA, y las citas
+            # se quedan sin marcar: si se marcaran como recordadas, el
+            # día que la clínica conecte su cuenta nadie recibiría el
+            # recordatorio de las citas que ya estaban en la ventana.
+            continue
         try:
             window_hours = int(param.value)
         except (ValueError, TypeError):
@@ -60,7 +67,9 @@ def send_appointment_reminders():
                 continue
             send_whatsapp_template(
                 to_phone=appt.patient.phone,
-                template_name="recordatorio_cita",
+                # La que la clínica tiene aprobada en SU cuenta de Meta:
+                # un nombre de plantilla fijo solo funcionaría en una.
+                template_name=config.plantilla_recordatorio,
                 language="es",
                 variables={
                     "1": appt.patient.full_name,
@@ -71,6 +80,7 @@ def send_appointment_reminders():
                 },
                 patient_id=str(appt.patient.id),
                 context={"appointment_id": str(appt.id)},
+                tenant=param.tenant,
             )
             appt.reminder_sent_at = now
             appt.save(update_fields=["reminder_sent_at"])
@@ -90,7 +100,7 @@ def send_payment_reminders():
     from apps.billing.models import Installment
     from apps.whatsapp.gateway_client import send_whatsapp_template
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     soon = today + timedelta(days=3)
     sent = 0
 
@@ -101,7 +111,7 @@ def send_payment_reminders():
     for inst in installments:
         if not _has_active_optin(inst.patient, inst.tenant):
             continue
-        send_whatsapp_template(
+        resultado = send_whatsapp_template(
             to_phone=inst.patient.phone,
             template_name="recordatorio_pago",
             language="es",
@@ -112,7 +122,10 @@ def send_payment_reminders():
             },
             patient_id=str(inst.patient.id),
             context={"installment_id": str(inst.id)},
+            tenant=inst.tenant,
         )
+        if resultado.get("status") == "skipped":
+            continue
         sent += 1
 
     return {"payment_reminders_sent": sent}
@@ -139,12 +152,15 @@ def notify_doctor_patient_arrived(appointment_id):
     if not doctor_phone:
         return {"sent": False, "reason": "doctor sin teléfono"}
 
-    send_whatsapp_template(
+    resultado = send_whatsapp_template(
         to_phone=doctor_phone,
         template_name="aviso_llegada",
         language="es",
         variables={"1": appt.patient.full_name},
         patient_id=str(appt.patient.id),
         context={"appointment_id": str(appt.id)},
+        tenant=appt.tenant,
     )
+    if resultado.get("status") == "skipped":
+        return {"sent": False, "reason": "la clínica no tiene WhatsApp configurado"}
     return {"sent": True}

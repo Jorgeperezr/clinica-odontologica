@@ -1,9 +1,14 @@
+from decimal import Decimal, InvalidOperation
+
+from django.core.exceptions import ValidationError
+from django.db.models import Count, Q
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.permissions import HasRole, IsClinicAdmin
 from apps.configuration.models import Agreement, SystemParameter, Tariff, Treatment
+from apps.configuration.pricing import price_matrix
 from apps.configuration.serializers import (
     AgreementSerializer,
     SystemParameterSerializer,
@@ -57,7 +62,15 @@ class AgreementListCreateView(_ConfigListCreate):
     serializer_class = AgreementSerializer
 
     def get_queryset(self):
-        return Agreement.objects.filter(tenant=self.request.tenant).order_by("name")
+        # Cuántos pacientes cubre cada convenio: es el dato que decide si se
+        # puede desactivar sin dejar a nadie con una tarifa a medias.
+        return (
+            Agreement.objects.filter(tenant=self.request.tenant)
+            .annotate(
+                patient_count=Count("patients", filter=Q(patients__is_active=True))
+            )
+            .order_by("name")
+        )
 
 
 class AgreementDetailView(_ConfigDetail):
@@ -82,6 +95,78 @@ class TariffDetailView(_ConfigDetail):
 
     def get_queryset(self):
         return Tariff.objects.filter(tenant=self.request.tenant)
+
+
+class PriceMatrixView(APIView):
+    """
+    GET  /api/v1/config/price-matrix/ — rejilla tratamiento × convenio.
+    PUT  /api/v1/config/price-matrix/ — fija o borra el precio de una celda.
+
+    Existe porque la rejilla es el modo natural de trabajar un tarifario —se
+    revisa por columnas, «qué me paga esta aseguradora por cada cosa»— y
+    montarla desde `/config/tarifarios/` obligaba al panel a pedir
+    tratamientos, convenios y tarifarios por separado y a cruzarlos a mano,
+    resolviendo la herencia de precios en el navegador. Esa herencia es una
+    regla de negocio y va en el servidor (ver `pricing.price_for`).
+
+    El PUT hace alta-o-actualización porque una celda no distingue las dos
+    cosas: el usuario escribe un precio donde antes había uno heredado y no
+    tiene por qué saber si eso crea una fila o modifica la que había. Un
+    POST daría 400 por la restricción de unicidad la segunda vez.
+
+    Cuerpo del PUT:
+      {"treatment": uuid, "agreement": uuid | null, "price": "45.00" | null}
+
+    `price: null` **borra** la fila y devuelve la celda a su valor heredado.
+    Es la única forma de deshacer un precio pactado sin dejarlo clavado.
+    """
+
+    permission_classes = [CAN_VIEW]
+
+    def get_permissions(self):
+        return [CAN_MANAGE()] if self.request.method == "PUT" else [CAN_VIEW()]
+
+    def get(self, request):
+        return Response(price_matrix(request.tenant))
+
+    def put(self, request):
+        treatment_id = request.data.get("treatment")
+        agreement_id = request.data.get("agreement") or None
+        raw_price = request.data.get("price", None)
+
+        try:
+            treatment = Treatment.objects.get(id=treatment_id, tenant=request.tenant)
+        except (Treatment.DoesNotExist, ValidationError, ValueError):
+            return Response({"detail": "Tratamiento no encontrado."}, status=404)
+
+        agreement = None
+        if agreement_id:
+            try:
+                agreement = Agreement.objects.get(id=agreement_id, tenant=request.tenant)
+            except (Agreement.DoesNotExist, ValidationError, ValueError):
+                return Response({"detail": "Convenio no encontrado."}, status=404)
+
+        if raw_price in (None, ""):
+            deleted, _ = Tariff.objects.filter(
+                tenant=request.tenant, treatment=treatment, agreement=agreement
+            ).delete()
+            return Response({"deleted": bool(deleted)}, status=status.HTTP_200_OK)
+
+        try:
+            price = Decimal(str(raw_price))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "Precio inválido."}, status=400)
+        if price < 0:
+            return Response({"detail": "El precio no puede ser negativo."}, status=400)
+
+        tariff, created = Tariff.objects.update_or_create(
+            tenant=request.tenant, treatment=treatment, agreement=agreement,
+            defaults={"price": price},
+        )
+        return Response(
+            TariffSerializer(tariff).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class SystemParameterListView(generics.ListAPIView):

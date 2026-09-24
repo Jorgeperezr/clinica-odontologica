@@ -6,6 +6,7 @@ staticfiles/
 media/
 node_modules/
 .next/
+.next-build/
 .venv/
 venv/
 celerybeat-schedule

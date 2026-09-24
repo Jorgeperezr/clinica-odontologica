@@ -60,6 +60,20 @@
   --tooth-stroke: #93a6b4;
   --tooth-groove: #8fa3b2;
 
+  /* Lámina anatómica (vista «Anatómico»): colores de diente natural,
+     no de interfaz. Esmalte marfil que gana croma hacia el cuello,
+     borde incisal translúcido y raíz de cemento, más amarilla. */
+  --anat-incisal: #dde5ea;
+  --anat-esmalte-claro: #fbf8f1;
+  --anat-esmalte: #f0e8d8;
+  --anat-esmalte-cuello: #e2d1b0;
+  --anat-raiz: #ecdcbc;
+  --anat-raiz-apice: #d6bb8a;
+  --anat-sombra: rgba(96, 72, 36, .30);
+  --anat-contorno: #a48d66;
+  --anat-surco: #97805b;
+  --anat-division: rgba(120, 98, 64, .38);
+
   /* ── Semánticos ── */
   --amber: #b7791f;
   --amber-soft: #fdf3e0;
@@ -139,6 +153,19 @@
   --tooth-root: #b6a595;
   --tooth-stroke: #6a7f90;
   --tooth-groove: #7a8d9c;
+
+  /* La lámina no se invierte: un diente sigue siendo claro. Solo baja
+     el brillo para no deslumbrar sobre el fondo oscuro. */
+  --anat-incisal: #bcc6cd;
+  --anat-esmalte-claro: #e2ddd2;
+  --anat-esmalte: #d3c9b6;
+  --anat-esmalte-cuello: #bfad8b;
+  --anat-raiz: #c9b894;
+  --anat-raiz-apice: #ad9366;
+  --anat-sombra: rgba(40, 28, 10, .40);
+  --anat-contorno: #86724f;
+  --anat-surco: #7c6947;
+  --anat-division: rgba(70, 56, 34, .45);
 
   --amber: #e0a145;
   --amber-soft: #2f2611;

@@ -1,123 +1,102 @@
 "use client";
 
 /**
- * Modelo ANATÓMICO (Sprint 46, ilustrado en Sprint 47).
+ * Modelo ANATÓMICO (Sprint 46, ilustrado en Sprint 47 y redibujado
+ * después como lámina de atlas).
  *
- * Cada pieza se dibuja con su ilustración anatómica real —corona con
- * cúspides y surcos, raíces según el cuadrante— acompañada de una rueda
- * de cinco superficies para el registro preciso. La arcada inferior se
- * refleja, de modo que la boca se lee como se ve en el sillón.
+ * Se lee como una ficha anatómica impresa: cada pieza en vista
+ * vestibular —corona y raíces a escala real— y en vista oclusal, con
+ * sus cúspides y surcos. Las coronas superiores e inferiores se
+ * encuentran en el plano oclusal, como en la boca.
+ *
+ * La vista oclusal ES la rueda de superficies de antes: las mismas
+ * cinco regiones pulsables, ahora con la forma real de la pieza y con
+ * mesial mirando a la línea media en cada cuadrante (la rueda anterior
+ * lo ponía siempre a la derecha, lo que en los cuadrantes 2 y 3 dejaba
+ * mesial y distal cambiados respecto al dibujo).
  *
  * Se compone en HTML (una celda por pieza) en vez de un único SVG: cada
- * diente es entonces un objetivo táctil independiente, y la rejilla se
- * reordena sola en tablet sin recalcular coordenadas.
+ * diente es un objetivo táctil independiente y la fila se desplaza sola
+ * en pantallas estrechas.
  *
  * Cumple el contrato de `contract.js`: solo dibuja y emite intenciones.
  */
 
 import {
   PERM_LOWER_L, PERM_LOWER_R, PERM_UPPER_L, PERM_UPPER_R,
-  SURFACES, TEMP_LOWER_L, TEMP_LOWER_R, TEMP_UPPER_L, TEMP_UPPER_R,
+  TEMP_LOWER_L, TEMP_LOWER_R, TEMP_UPPER_L, TEMP_UPPER_R,
   dominantState,
 } from "./contract";
-import ToothArt, { isUpper } from "./ToothArt";
+import { ALTO_OCLUSAL, VistaOclusal, VistaVestibular, medidas } from "./AnatomiaDental";
+import { isUpper } from "./ToothArt";
 
-const WHEEL = 34;
+/**
+ * Píxeles por milímetro. Con 5, la arcada permanente ocupa unos 700 px
+ * de ancho, y el incisivo inferior —la pieza más estrecha— sigue dando
+ * un objetivo de unos 25 px.
+ */
+const ESCALA = 5;
+const ANCHO_MINIMO = 24;
 
-/** Rueda de cinco superficies: cuatro cuadrantes y centro oclusal. */
-function SurfaceWheel({ code, surfaces, selectedSurface, selected, onClick }) {
-  const r = WHEEL / 2, c = WHEEL / 2, inner = r * 0.44;
-  const p = (a, rad) => [c + rad * Math.cos(a), c + rad * Math.sin(a)];
-  const quad = (a0, a1) => {
-    const [x0, y0] = p(a0, r), [x1, y1] = p(a1, r);
-    const [x2, y2] = p(a1, inner), [x3, y3] = p(a0, inner);
-    return `M${x0} ${y0} A${r} ${r} 0 0 1 ${x1} ${y1} L${x2} ${y2} A${inner} ${inner} 0 0 0 ${x3} ${y3} Z`;
-  };
-  const D = Math.PI / 4;
-  const geom = {
-    vestibular: quad(-3 * D, -D),
-    mesial: quad(-D, D),
-    palatal_lingual: quad(D, 3 * D),
-    distal: quad(3 * D, 5 * D),
-  };
-
-  return (
-    <svg width={WHEEL} height={WHEEL} viewBox={`0 0 ${WHEEL} ${WHEEL}`}
-         aria-label={`Superficies de la pieza ${code}`}>
-      {SURFACES.filter((s) => s !== "occlusal").map((s) => {
-        const on = selected && selectedSurface === s;
-        return (
-          <path key={s} d={geom[s]}
-                fill={surfaces?.[s]?.color || "var(--elev)"}
-                stroke={on ? "var(--petrol)" : "var(--line-strong)"}
-                strokeWidth={on ? 1.8 : 0.8}
-                onClick={(e) => { e.stopPropagation(); onClick(code, s); }}
-                style={{ cursor: "pointer" }}>
-            <title>{`Pieza ${code} — ${s}`}</title>
-          </path>
-        );
-      })}
-      <circle cx={c} cy={c} r={inner}
-              fill={surfaces?.occlusal?.color || "var(--elev)"}
-              stroke={(selected && selectedSurface === "occlusal") ? "var(--petrol)" : "var(--line-strong)"}
-              strokeWidth={(selected && selectedSurface === "occlusal") ? 1.8 : 0.8}
-              onClick={(e) => { e.stopPropagation(); onClick(code, "occlusal"); }}
-              style={{ cursor: "pointer" }}>
-        <title>{`Pieza ${code} — oclusal`}</title>
-      </circle>
-    </svg>
-  );
-}
-
-/** Celda: ilustración + número + rueda, ordenados según la arcada. */
-function ToothCell({ code, surfaces, selectedTooth, selectedSurface, onSurfaceClick }) {
+/** Celda: vista vestibular, vista oclusal y número, en espejo según la arcada. */
+function ToothCell({ code, temporal, surfaces, selectedTooth, selectedSurface, onSurfaceClick }) {
   const selected = selectedTooth === code;
   const up = isUpper(code);
   const state = dominantState(surfaces);
+  const ancho = Math.max(medidas(code).w * ESCALA, ANCHO_MINIMO);
+  const altoOclusal = ALTO_OCLUSAL[temporal ? "temporal" : "permanente"] * ESCALA;
 
-  const art = (
-    <ToothArt code={code} fill={state?.color} selected={selected} size={56}
-              title={`Pieza ${code}${state?.label ? ` — ${state.label}` : ""}`}
-              onClick={() => onSurfaceClick(code, "whole")} />
+  const vestibular = (
+    <VistaVestibular code={code} estado={state} seleccionado={selected} escala={ESCALA}
+                     onClick={() => onSurfaceClick(code, "whole")} />
+  );
+  const oclusal = (
+    // Alto fijo por fila para que los números queden alineados aunque
+    // un molar sea el doble de grueso que un incisivo; la pieza se pega
+    // al lado de su vista vestibular.
+    <div style={{ height: altoOclusal, display: "flex", alignItems: up ? "flex-start" : "flex-end" }}>
+      <VistaOclusal code={code} surfaces={surfaces} selected={selected}
+                    selectedSurface={selectedSurface} escala={ESCALA} onClick={onSurfaceClick} />
+    </div>
   );
   const num = (
     <button type="button" onClick={() => onSurfaceClick(code, "whole")}
             className="tabular"
+            aria-label={`Pieza ${code}: seleccionar toda la pieza`}
             style={{ background: "none", border: "none", padding: "1px 4px", cursor: "pointer",
-                     fontSize: 11.5, fontWeight: 700, borderRadius: 4,
+                     fontSize: 11.5, fontWeight: 700, borderRadius: 4, lineHeight: 1.3,
                      color: selected ? "var(--on-brand)" : "var(--ink)",
                      backgroundColor: selected ? "var(--petrol)" : "transparent" }}>
       {code}
     </button>
   );
-  const wheel = (
-    <SurfaceWheel code={code} surfaces={surfaces} selected={selected}
-                  selectedSurface={selectedSurface} onClick={onSurfaceClick} />
-  );
 
-  // Superior: diente arriba, número, rueda. Inferior: espejo vertical.
-  const orden = up ? [art, num, wheel] : [wheel, num, art];
+  // Superior: raíces arriba, corona, cara oclusal y número hacia el plano
+  // oclusal. Inferior: el mismo orden reflejado.
+  const orden = up ? [vestibular, oclusal, num] : [num, oclusal, vestibular];
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
-                  gap: 3, minWidth: 46 }}>
+                  gap: 4, width: ancho, flex: "none" }}>
       {orden.map((el, i) => <div key={i} style={{ lineHeight: 0 }}>{el}</div>)}
     </div>
   );
 }
 
-function Arch({ right, left, ...rest }) {
-  const row = (codes) => (
-    <div style={{ display: "flex", gap: 3 }}>
+function Arch({ right, left, temporal, ...rest }) {
+  const row = (codes, lado) => (
+    <div style={{ display: "flex", gap: 2, justifyContent: lado === "d" ? "flex-end" : "flex-start",
+                  flex: 1 }}>
       {codes.map((code) => (
-        <ToothCell key={code} code={code} surfaces={rest.surfacesByTooth[code]} {...rest} />
+        <ToothCell key={code} code={code} temporal={temporal}
+                   surfaces={rest.surfacesByTooth[code]} {...rest} />
       ))}
     </div>
   );
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", gap: 14 }}>
-      {row(right)}
-      <div style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} aria-hidden="true" />
-      {row(left)}
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "stretch", gap: 10 }}>
+      {row(right, "d")}
+      <div style={{ width: 1, background: "var(--line)" }} aria-hidden="true" />
+      {row(left, "i")}
     </div>
   );
 }
@@ -128,10 +107,12 @@ export default function AnatomicalView({
   const shared = { surfacesByTooth, selectedTooth, selectedSurface, onSurfaceClick };
   return (
     <div style={{ overflowX: "auto", paddingBottom: 4 }}>
-      <div style={{ display: "grid", gap: 18, minWidth: 720 }}>
+      <div style={{ display: "grid", gap: 14, minWidth: 740 }}>
         <Arch right={PERM_UPPER_R} left={PERM_UPPER_L} {...shared} />
-        <Arch right={TEMP_UPPER_R} left={TEMP_UPPER_L} {...shared} />
-        <Arch right={TEMP_LOWER_R} left={TEMP_LOWER_L} {...shared} />
+        <Arch right={TEMP_UPPER_R} left={TEMP_UPPER_L} temporal {...shared} />
+        {/* Plano oclusal: aquí se encuentran las dos arcadas. */}
+        <div style={{ height: 1, background: "var(--line-strong)", margin: "2px 0" }} aria-hidden="true" />
+        <Arch right={TEMP_LOWER_R} left={TEMP_LOWER_L} temporal {...shared} />
         <Arch right={PERM_LOWER_R} left={PERM_LOWER_L} {...shared} />
       </div>
     </div>
