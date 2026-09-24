@@ -60,11 +60,18 @@ Para volver a capturarlas, con la API levantada y un paciente con datos:
 
 ```sh
 TOK=…   # el `access` que devuelve /auth/otp/verify/
-for r in me citas saldo indicaciones; do
+for r in me citas saldo indicaciones solicitudes-cita mensajes; do
   curl -s -H "Authorization: Bearer $TOK" \
     "http://localhost/api/v1/app/$r/" -o "test/fixtures/$r.json"
 done
 ```
+
+`solicitudes-cita` y `mensajes` necesitan algo dentro para valer:
+antes de capturar, pide desde la app (o con `curl -X POST` a esas mismas
+rutas) al menos tres citas y dos mensajes, y desde la «Bandeja de la
+app» del panel agenda una, rechaza otra con su explicación y contesta un
+mensaje. Así la captura trae los tres estados (pendiente, agendada,
+rechazada) y un mensaje con respuesta y otro sin ella.
 
 ## La app se pinta con la marca de la clínica
 

@@ -189,10 +189,17 @@ class ClienteApi {
   Future<List<dynamic>> lista(String ruta) async =>
       await _pedir(ruta) as List<dynamic>;
 
-  Future<Object?> _pedir(String ruta) async {
-    var r = await _get(ruta);
+  /// Envía datos (POST) con la misma renovación de sesión que las
+  /// lecturas: pedir cita o escribir a la clínica con el token caducado
+  /// no debe dar un error, sino renovarlo y reintentar una vez.
+  Future<Map<String, dynamic>> enviar(String ruta, Map<String, dynamic> cuerpo) async =>
+      await _pedir(ruta, cuerpo: cuerpo) as Map<String, dynamic>;
+
+  Future<Object?> _pedir(String ruta, {Map<String, dynamic>? cuerpo}) async {
+    Future<http.Response> hacer() => cuerpo == null ? _get(ruta) : _post(ruta, cuerpo);
+    var r = await hacer();
     if (r.statusCode == 401 && await _refrescar()) {
-      r = await _get(ruta);
+      r = await hacer();
     }
     if (r.statusCode >= 400) {
       if (r.statusCode == 401) await sesion.borrar();
@@ -207,6 +214,16 @@ class ClienteApi {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     });
+  }
+
+  Future<http.Response> _post(String ruta, Map<String, dynamic> cuerpo) async {
+    final token = await sesion.acceso;
+    return _http.post(_uri(ruta),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(cuerpo));
   }
 
   /// Un solo refresco a la vez, compartido por todas las peticiones que

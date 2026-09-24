@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import '../api/cliente.dart';
 import '../api/formato.dart';
 import '../api/modelos.dart';
+import 'consultorio.dart';
 import 'logros.dart';
 import 'perfil.dart';
 
@@ -66,6 +67,15 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             ),
           ],
         ),
+        actions: [
+          // Pedir cita o escribir a la clínica, a mano desde cualquier
+          // pestaña: es lo primero que busca quien abre la app con dolor.
+          IconButton(
+            tooltip: 'Pedir cita o escribir a la clínica',
+            icon: const Icon(Icons.forum_outlined),
+            onPressed: () => abrirConsultorio(context, widget.api, pestana: 1),
+          ),
+        ],
       ),
       body: paginas[_indice],
       bottomNavigationBar: NavigationBar(
@@ -359,15 +369,33 @@ class _Citas extends StatelessWidget {
     return _Cargador<Agenda>(
       pedir: () async => Agenda.desdeJson(await api.objeto('/app/citas/')),
       construir: (context, a) {
+        final pedir = Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: FilledButton.icon(
+            onPressed: () => abrirConsultorio(context, api),
+            icon: const Icon(Icons.add),
+            label: const Text('Pedir una cita'),
+          ),
+        );
         if (a.vacia) {
-          return const _Vacio(
-            icono: Icons.event_busy_outlined,
-            texto: 'Todavía no tienes citas registradas.',
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              pedir,
+              const SizedBox(
+                height: 280,
+                child: _Vacio(
+                  icono: Icons.event_busy_outlined,
+                  texto: 'Todavía no tienes citas registradas.',
+                ),
+              ),
+            ],
           );
         }
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            pedir,
             if (a.proximas.isNotEmpty) ...[
               const _Titulo('Próximas'),
               for (final c in a.proximas) _FilaCita(cita: c, proxima: true),
@@ -540,4 +568,11 @@ class _Indicaciones extends StatelessWidget {
       },
     );
   }
+}
+
+/// Abre «Tu clínica» (pedir cita / mensajes) en la pestaña indicada.
+void abrirConsultorio(BuildContext context, ClienteApi api, {int pestana = 0}) {
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    builder: (_) => PantallaConsultorio(api: api, pestanaInicial: pestana),
+  ));
 }

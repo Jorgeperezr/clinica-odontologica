@@ -302,4 +302,51 @@ void _pruebasDeMarca() {
       expect(ida.telefono, '099');
     });
   });
+
+  group('Solicitudes de cita, tal como las devuelve /app/solicitudes-cita/', () {
+    late List<SolicitudCita> s;
+    setUp(() => s = _lista('solicitudes-cita')
+        .map((e) => SolicitudCita.desdeJson(e as Map<String, dynamic>))
+        .toList());
+
+    test('llegan los tres estados', () {
+      expect(s.map((x) => x.estado).toSet(), {'pendiente', 'rechazada', 'agendada'});
+      expect(s.where((x) => x.pendiente).length, 1);
+    });
+
+    test('un rechazo trae siempre la explicación de la clínica', () {
+      final r = s.firstWhere((x) => x.estado == 'rechazada');
+      expect(r.respuesta, isNotEmpty);
+      expect(r.estadoTexto, 'No se pudo agendar');
+      expect(r.citaInicio, isNull);
+    });
+
+    test('la agendada trae la hora de la cita, pasada a la hora del teléfono', () {
+      final a = s.firstWhere((x) => x.estado == 'agendada');
+      expect(a.citaInicio, isNotNull);
+      expect(a.citaInicio!.isUtc, isFalse);
+      expect(a.citaInicio!.toUtc(), DateTime.utc(2026, 9, 26, 14, 30));
+    });
+
+    test('la fecha preferida es un día, sin hora que se pueda correr', () {
+      for (final x in s) {
+        expect(x.fechaPreferida.hour, 0);
+      }
+    });
+  });
+
+  group('Mensajes, tal como los devuelve /app/mensajes/', () {
+    late List<MensajeConsultorio> m;
+    setUp(() => m = _lista('mensajes')
+        .map((e) => MensajeConsultorio.desdeJson(e as Map<String, dynamic>))
+        .toList());
+
+    test('uno con respuesta y otro esperando', () {
+      expect(m.where((x) => x.tieneRespuesta).length, 1);
+      expect(m.where((x) => !x.tieneRespuesta).length, 1);
+      expect(m.firstWhere((x) => x.tieneRespuesta).respuesta, contains('400 mg'));
+      expect(m.firstWhere((x) => !x.tieneRespuesta).respuesta, isEmpty);
+    });
+  });
 }
+

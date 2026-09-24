@@ -328,3 +328,85 @@ int colorDesdeHex(Object? valor, int porDefecto) {
   final n = int.tryParse(texto.substring(1), radix: 16);
   return n == null ? porDefecto : 0xFF000000 | n;
 }
+
+/// Una cita que el paciente pidió desde la app. No es una cita todavía:
+/// la crea la recepción, que es quien conoce la agenda.
+class SolicitudCita {
+  const SolicitudCita({
+    required this.id,
+    required this.fechaPreferida,
+    required this.franja,
+    required this.franjaTexto,
+    required this.motivo,
+    required this.estado,
+    required this.estadoTexto,
+    required this.respuesta,
+    required this.creada,
+    this.citaInicio,
+  });
+
+  final String id;
+  final DateTime fechaPreferida;
+  final String franja;
+  final String franjaTexto;
+  final String motivo;
+
+  /// `pendiente`, `agendada` o `rechazada`.
+  final String estado;
+
+  /// El estado ya traducido por el servidor («No se pudo agendar»…).
+  final String estadoTexto;
+
+  /// Lo que contestó la clínica; en un rechazo, siempre hay algo.
+  final String respuesta;
+  final DateTime creada;
+
+  /// Cuándo quedó la cita, si se agendó.
+  final DateTime? citaInicio;
+
+  bool get pendiente => estado == 'pendiente';
+
+  factory SolicitudCita.desdeJson(Map<String, dynamic> j) {
+    final cita = j['cita'] as Map<String, dynamic>?;
+    return SolicitudCita(
+      id: j['id'] as String,
+      // La fecha preferida es un día sin hora: se lee como fecha local.
+      fechaPreferida: DateTime.parse(j['fecha_preferida'] as String),
+      franja: j['franja'] as String? ?? 'cualquiera',
+      franjaTexto: j['franja_texto'] as String? ?? '',
+      motivo: j['motivo'] as String? ?? '',
+      estado: j['estado'] as String? ?? 'pendiente',
+      estadoTexto: j['estado_texto'] as String? ?? '',
+      respuesta: j['respuesta'] as String? ?? '',
+      creada: DateTime.parse(j['creada'] as String).toLocal(),
+      citaInicio: cita == null ? null : DateTime.parse(cita['inicio'] as String).toLocal(),
+    );
+  }
+}
+
+/// Un mensaje del paciente a su clínica, con la respuesta si ya la hay.
+class MensajeConsultorio {
+  const MensajeConsultorio({
+    required this.id,
+    required this.texto,
+    required this.creado,
+    required this.respuesta,
+    this.respondido,
+  });
+
+  final String id;
+  final String texto;
+  final DateTime creado;
+  final String respuesta;
+  final DateTime? respondido;
+
+  bool get tieneRespuesta => respondido != null;
+
+  factory MensajeConsultorio.desdeJson(Map<String, dynamic> j) => MensajeConsultorio(
+        id: j['id'] as String,
+        texto: j['texto'] as String? ?? '',
+        creado: DateTime.parse(j['creado'] as String).toLocal(),
+        respuesta: j['respuesta'] as String? ?? '',
+        respondido: j['respondido'] == null ? null : DateTime.parse(j['respondido'] as String).toLocal(),
+      );
+}

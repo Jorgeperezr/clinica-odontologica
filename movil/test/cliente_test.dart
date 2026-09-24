@@ -81,6 +81,48 @@ void main() {
       expect(peticiones, 8);
     });
 
+    test('ENVIAR también renueva la sesión y reintenta con el mismo cuerpo', () async {
+      // Un paciente que escribe a la clínica con el token caducado no debe
+      // ver un error ni perder el mensaje: se renueva y se reenvía igual.
+      final cuerpos = <String>[];
+      var refrescos = 0;
+      final falso = MockClient((req) async {
+        if (req.url.path.endsWith('/auth/token/refresh/')) {
+          refrescos++;
+          return http.Response(jsonEncode({'access': 'nuevo', 'refresh': 'nuevo-r'}), 200);
+        }
+        expect(req.method, 'POST');
+        cuerpos.add(req.body);
+        if (req.headers['Authorization'] == 'Bearer viejo') {
+          return http.Response('{"detail":"caducado"}', 401);
+        }
+        return http.Response(jsonEncode({'id': 'm1', 'texto': 'hola'}), 201);
+      });
+      final sesion = SesionFalsa();
+      await sesion.guardar('viejo', 'viejo-r');
+      final api = ClienteApi(urlBase: 'http://x', sesion: sesion, http_: falso);
+
+      final r = await api.enviar('/app/mensajes/', {'texto': 'hola'});
+
+      expect(r['id'], 'm1');
+      expect(refrescos, 1);
+      expect(cuerpos, hasLength(2));
+      expect(cuerpos.first, cuerpos.last, reason: 'el reintento no llevaba el mismo mensaje');
+      expect(jsonDecode(cuerpos.last), {'texto': 'hola'});
+    });
+
+    test('un rechazo de la API al enviar llega con su motivo', () async {
+      final falso = MockClient((req) async => http.Response(
+          jsonEncode({'detail': 'Tienes 5 mensajes sin responder. La clínica te contestará pronto.'}), 400));
+      final sesion = SesionFalsa();
+      await sesion.guardar('a', 'r');
+      final api = ClienteApi(urlBase: 'http://x', sesion: sesion, http_: falso);
+      expect(
+        () => api.enviar('/app/mensajes/', {'texto': 'x'}),
+        throwsA(isA<ErrorDeApi>().having((e) => e.mensaje, 'mensaje', contains('5 mensajes'))),
+      );
+    });
+
     test('sin refresh guardado, la sesión se borra y se avisa', () async {
       final falso = MockClient((req) async => http.Response('{"detail":"no"}', 401));
       final sesion = SesionFalsa();

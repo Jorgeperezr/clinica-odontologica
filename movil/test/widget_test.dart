@@ -10,9 +10,11 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:clinica_paciente/api/cliente.dart';
 import 'package:clinica_paciente/api/modelos.dart';
+import 'package:clinica_paciente/pantallas/consultorio.dart';
 import 'package:clinica_paciente/pantallas/ingreso.dart';
 import 'package:clinica_paciente/pantallas/principal.dart';
 import 'package:flutter/material.dart';
@@ -277,4 +279,78 @@ void main() {
     // el corto y por eso la barra lo prefiere.
     expect(find.text('Sonrisa'), findsOneWidget);
   });
+
+  group('Tu clínica: pedir cita y mensajes', () {
+    String fixture(String n) => File('test/fixtures/$n.json').readAsStringSync();
+
+    Future<ClienteApi> api(Future<http.Response> Function(http.Request) responder) async {
+      final sesion = SesionFalsa();
+      await sesion.guardar('a', 'r');
+      return ClienteApi(urlBase: 'http://x', sesion: sesion, http_: MockClient(responder));
+    }
+
+    testWidgets('las solicitudes se ven con su estado y la respuesta de la clínica', (tester) async {
+      final cliente = await api((req) async => http.Response(
+          fixture(req.url.path.endsWith('/mensajes/') ? 'mensajes' : 'solicitudes-cita'), 200,
+          headers: {'content-type': 'application/json; charset=utf-8'}));
+      await tester.pumpWidget(_envoltorio(PantallaConsultorio(api: cliente)));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.text('No se pudo agendar'), 200,
+          scrollable: find.byType(Scrollable).last);
+      expect(find.text('No se pudo agendar'), findsOneWidget);
+      expect(find.textContaining('de congreso'), findsOneWidget);
+      expect(find.textContaining('Cita:'), findsOneWidget);
+      expect(find.text('Pendiente'), findsOneWidget);
+    });
+
+    testWidgets('pedir una cita manda el día elegido y la franja', (tester) async {
+      Map<String, dynamic>? enviado;
+      final cliente = await api((req) async {
+        if (req.method == 'POST') {
+          enviado = jsonDecode(req.body) as Map<String, dynamic>;
+          return http.Response('{}', 201);
+        }
+        return http.Response('[]', 200);
+      });
+      await tester.pumpWidget(_envoltorio(PantallaConsultorio(api: cliente)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Tarde'));
+      await tester.pump();
+      final boton = find.textContaining('Pedir cita para el');
+      await tester.ensureVisible(boton);
+      await tester.tap(boton);
+      await tester.pumpAndSettle();
+
+      final manana = DateTime.now().add(const Duration(days: 1));
+      expect(enviado, isNotNull);
+      expect(enviado!['franja'], 'tarde');
+      expect(enviado!['fecha_preferida'],
+          '${manana.year}-${manana.month.toString().padLeft(2, '0')}-${manana.day.toString().padLeft(2, '0')}');
+      expect(find.textContaining('te confirmará la hora'), findsOneWidget);
+    });
+
+    testWidgets('si la clínica no admite más mensajes, se explica por qué', (tester) async {
+      final cliente = await api((req) async {
+        if (req.method == 'POST') {
+          return http.Response(
+              jsonEncode({'detail': 'Tienes 5 mensajes sin responder. La clínica te contestará pronto.'}), 400);
+        }
+        return http.Response(fixture(req.url.path.endsWith('/mensajes/') ? 'mensajes' : 'solicitudes-cita'), 200,
+            headers: {'content-type': 'application/json; charset=utf-8'});
+      });
+      await tester.pumpWidget(_envoltorio(PantallaConsultorio(api: cliente, pestanaInicial: 1)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Esperando respuesta'), findsOneWidget);
+      expect(find.textContaining('400 mg'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '¿Y los domingos?');
+      await tester.tap(find.byTooltip('Enviar'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('5 mensajes sin responder'), findsOneWidget);
+    });
+  });
 }
+
