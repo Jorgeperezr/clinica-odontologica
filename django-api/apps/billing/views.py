@@ -7,6 +7,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.funciones import TieneFuncion
 from apps.billing.models import (
     Budget,
     DoctorFee,
@@ -27,8 +28,10 @@ from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.common.permissions import HasRole
 from apps.patients.models import Patient
 
-CAN_MANAGE_BILLING = HasRole.for_roles("admin", "reception")
-CAN_VIEW_BILLING = HasRole.for_roles("admin", "reception", "doctor")
+# Cobrar es una función de cada profesional (apps/accounts/funciones.py);
+# ver lo cobrado, también de quien la tenga aunque su rol no lo incluyera.
+CAN_MANAGE_BILLING = TieneFuncion.para("cobros")
+CAN_VIEW_BILLING = HasRole.for_roles("admin", "reception", "doctor") | TieneFuncion.para("cobros")
 
 
 class BudgetListCreateView(generics.ListCreateAPIView):
@@ -244,7 +247,7 @@ class FinancialReportView(APIView):
     Ingresos por período, desglosados por método de pago.
     """
 
-    permission_classes = [HasRole.for_roles("admin"),
+    permission_classes = [TieneFuncion.para("reportes"),
                           RequiereFuncionalidad.para("reportes")]
 
     def get(self, request):
@@ -325,7 +328,7 @@ class DelinquencyReportView(APIView):
     Lista de pacientes con cuotas vencidas: quién debe, cuánto y desde cuándo.
     """
 
-    permission_classes = [HasRole.for_roles("admin", "reception")]
+    permission_classes = [CAN_MANAGE_BILLING]
 
     def get(self, request):
         from apps.billing.services import get_delinquency_days
@@ -409,7 +412,7 @@ class NewPatientsReportView(APIView):
     GET /api/v1/reports/new-patients/?date_from=&date_to=&format=json|excel — RF-REP-04.
     """
 
-    permission_classes = [HasRole.for_roles("admin")]
+    permission_classes = [TieneFuncion.para("reportes")]
 
     def get(self, request):
         from django.http import HttpResponse
@@ -461,7 +464,7 @@ class InventoryReportView(APIView):
     GET /api/v1/reports/inventory/?format=json|excel — RF-REP-05.
     """
 
-    permission_classes = [HasRole.for_roles("admin", "auxiliary")]
+    permission_classes = [TieneFuncion.para("inventario")]
 
     def get(self, request):
         from django.http import HttpResponse
@@ -509,7 +512,7 @@ class AppointmentsSummaryReportView(APIView):
     (completadas frente a completadas + no asistió) y tasa de cancelación.
     """
 
-    permission_classes = [HasRole.for_roles("admin")]
+    permission_classes = [TieneFuncion.para("reportes")]
 
     def get(self, request):
         from django.utils.dateparse import parse_date
@@ -550,7 +553,7 @@ class PatientPaymentListCreateView(generics.ListCreateAPIView):
     modelo ya contempla; los abonos a un plan siguen usando su endpoint.
     """
 
-    permission_classes = [HasRole.for_roles("admin", "reception")]
+    permission_classes = [CAN_MANAGE_BILLING]
 
     def get_serializer_class(self):
         from apps.billing.serializers import PaymentSerializer

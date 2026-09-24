@@ -14,6 +14,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.funciones import tiene
 from apps.accounts.models import User
 from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.whatsapp.models import ConfiguracionWhatsApp
@@ -35,7 +36,7 @@ class PuedeGestionarWhatsApp(BasePermission):
             return False
         if u.role == User.Role.ADMIN or u.is_superuser:
             return True
-        return bool(getattr(u, "puede_gestionar_whatsapp", False))
+        return tiene(u, "whatsapp")
 
 
 class ConfiguracionWhatsAppView(APIView):

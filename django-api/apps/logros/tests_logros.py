@@ -198,8 +198,9 @@ class QuienPuedeOtorgarTests(Base):
         self.assertEqual(r.status_code, 403)
 
     def test_un_doctor_con_el_permiso_si(self):
-        self.doctor_user.puede_gestionar_logros = True
-        self.doctor_user.save(update_fields=["puede_gestionar_logros"])
+        # Ahora es una función del profesional (apps/accounts/funciones.py).
+        self.doctor_user.funciones = {"logros": True}
+        self.doctor_user.save(update_fields=["funciones"])
         self.entrar(self.doctor_user)
         r = self.client.post("/api/v1/logros/otorgar/",
                              {"logro": str(self.logro.id),

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, currentUser, readList, readObject } from "../../../lib/api";
+import { api, currentUser, readList, readObject, tieneFuncion } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import PatientPayments from "../../../lib/PatientPayments";
 import { VIEWS, getView, readPreferredView, savePreferredView } from "../../../lib/odontogram/registry";
@@ -34,11 +34,16 @@ function PatientDetail() {
   const [patient, setPatient] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [role, setRole] = useState("");
+  const [puedeCobrar, setPuedeCobrar] = useState(false);
   const [tab, setTab] = useState("odontograma");
 
   useEffect(() => {
     (async () => {
-      try { const u = await currentUser(); setRole(u?.role || ""); } catch { /* opcional */ }
+      try {
+        const u = await currentUser();
+        setRole(u?.role || "");
+        setPuedeCobrar(tieneFuncion(u, "cobros"));
+      } catch { /* opcional */ }
     })();
   }, []);
 
@@ -92,7 +97,7 @@ function PatientDetail() {
           ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"],
           ["odontograma3d", "Odontograma 3D"],
-          ...(["admin", "reception"].includes(role) ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
+          ...(puedeCobrar ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
               padding: "9px 16px", border: "none", background: "transparent",
@@ -116,7 +121,7 @@ function PatientDetail() {
       )}
       {tab === "consentimientos" && <ConsentsTab patientId={id} />}
       {tab === "odontograma3d" && <OdontogramTab patientId={id} initialView="tridimensional" />}
-      {tab === "cobros" && <PatientPayments patientId={id} role={role} />}
+      {tab === "cobros" && <PatientPayments patientId={id} role={role} puedeCobrar={puedeCobrar} />}
     </div>
   );
 }

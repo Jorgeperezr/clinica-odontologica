@@ -119,8 +119,9 @@ class QuienPuedeConfigurarTests(Base):
         self.assertEqual(self.client.get(RUTA).status_code, 403)
 
     def test_un_doctor_con_permiso_si(self):
-        self.doctor.puede_gestionar_whatsapp = True
-        self.doctor.save(update_fields=["puede_gestionar_whatsapp"])
+        # Ahora es una función del profesional (apps/accounts/funciones.py).
+        self.doctor.funciones = {"whatsapp": True}
+        self.doctor.save(update_fields=["funciones"])
         self.entrar(self.doctor)
         self.assertEqual(self.client.get(RUTA).status_code, 200)
 

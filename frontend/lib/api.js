@@ -44,6 +44,27 @@ export function currentUser() {
   try { return JSON.parse(localStorage.getItem("user")); } catch { return null; }
 }
 
+/* Lo que cada rol podía hacer antes de que existieran las funciones por
+   profesional. Es el MISMO criterio que `HEREDADAS` en
+   django-api/apps/accounts/funciones.py y solo se usa con un perfil en
+   caché de una sesión anterior, que aún no trae `funciones`. */
+const FUNCIONES_HEREDADAS = {
+  reception: ["agenda", "cobros", "mensajes_app"],
+  doctor: ["mensajes_app"],
+  auxiliary: ["inventario"],
+};
+
+/**
+ * ¿Esta persona tiene esta función de gestión? Esconder un botón es
+ * cortesía: quien de verdad lo cierra es `TieneFuncion` en la API.
+ */
+export function tieneFuncion(usuario, clave) {
+  if (!usuario) return false;
+  if (usuario.role === "admin") return true;
+  if (usuario.funciones && clave in usuario.funciones) return Boolean(usuario.funciones[clave]);
+  return (FUNCIONES_HEREDADAS[usuario.role] || []).includes(clave);
+}
+
 export async function login(email, password) {
   const resp = await fetch(`${apiBase()}/api/v1/auth/login/`, {
     method: "POST",

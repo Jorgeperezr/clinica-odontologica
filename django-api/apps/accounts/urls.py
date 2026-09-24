@@ -18,6 +18,7 @@ urlpatterns = [
     path("auth/recovery/confirm/", views.StaffRecoveryConfirmView.as_view(), name="recovery-confirm"),
     # Gestión de usuarios — RF-USR-03, 06
     path("users/", views.UserListCreateView.as_view(), name="user-list"),
+    path("users/funciones/", views.CatalogoFuncionesView.as_view(), name="user-funciones"),
     path("users/<uuid:pk>/", views.UserDetailView.as_view(), name="user-detail"),
     # Auditoría — RF-USR-05
     path("audit-logs/", views.AuditLogListView.as_view(), name="audit-log-list"),

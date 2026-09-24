@@ -26,6 +26,7 @@ from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.funciones import TieneFuncion
 from apps.app_paciente.models import MensajeConsultorio, SolicitudCita
 from apps.app_paciente.permissions import ficha_del_paciente
 from apps.app_paciente.views import BaseVistaPaciente
@@ -40,8 +41,10 @@ MAX_TEXTO = 1000
 
 APP = RequiereFuncionalidad.para("app_paciente")
 VEN = [HasRole.for_roles("admin", "reception", "doctor", "auxiliary"), APP]
-AGENDAN = [HasRole.for_roles("admin", "reception"), APP]
-RESPONDEN = [HasRole.for_roles("admin", "reception", "doctor"), APP]
+# Agendar y responder siguen las funciones de cada profesional
+# (apps/accounts/funciones.py): las mismas que la agenda y los mensajes.
+AGENDAN = [TieneFuncion.para("agenda"), APP]
+RESPONDEN = [TieneFuncion.para("mensajes_app")]
 
 
 # ── Formato de salida ───────────────────────────────────────────────────

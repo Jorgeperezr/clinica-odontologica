@@ -2,6 +2,7 @@
 
 from rest_framework.permissions import BasePermission
 
+from apps.accounts.funciones import tiene
 from apps.accounts.models import User
 
 
@@ -24,4 +25,4 @@ class PuedeGestionarLogros(BasePermission):
             return False
         if u.role == User.Role.ADMIN or u.is_superuser:
             return True
-        return bool(getattr(u, "puede_gestionar_logros", False))
+        return tiene(u, "logros")

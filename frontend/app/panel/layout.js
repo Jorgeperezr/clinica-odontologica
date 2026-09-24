@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, currentUser, logout } from "../../lib/api";
+import { api, currentUser, logout, tieneFuncion } from "../../lib/api";
 import { applyBrandingChrome, applyTheme, initColorMode, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 import NavIcon from "../../lib/NavIcons";
 import ThemeSwitch from "../../lib/ThemeSwitch";
@@ -13,9 +13,11 @@ const NAV = [
   { href: "/panel/pacientes/", label: "Pacientes", iconName: "pacientes", roles: ["admin", "reception", "doctor", "auxiliary"] },
   { href: "/panel/agenda/", label: "Agenda", iconName: "agenda", roles: ["admin", "reception", "doctor"] },
   { href: "/panel/firma/", label: "Mi firma", iconName: "firma", roles: ["doctor"] },
-  { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception"] },
-  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "auxiliary"], funcionalidad: "inventario" },
-  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin"], funcionalidad: "reportes" },
+  // Los módulos de gestión siguen la FUNCIÓN de cada profesional (ver
+  // lib/api.js → tieneFuncion), no solo su rol.
+  { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception", "doctor", "auxiliary"], funcion: "cobros" },
+  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "inventario", funcion: "inventario" },
+  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "reportes", funcion: "reportes" },
   { href: "/panel/configuracion/", label: "Configuración", iconName: "configuracion", roles: ["admin"] },
   // De cada persona para sí misma: por eso la ven todos los roles de clínica.
   { href: "/panel/preferencias/", label: "Mis preferencias", iconName: "preferencias", roles: ["admin", "reception", "doctor", "auxiliary"] },
@@ -112,7 +114,8 @@ export default function PanelLayout({ children }) {
   const contratadas = user.funcionalidades || {};
   const items = NAV.filter(
     (n) => n.roles.includes(user.role)
-      && (!n.funcionalidad || contratadas[n.funcionalidad] !== false),
+      && (!n.funcionalidad || contratadas[n.funcionalidad] !== false)
+      && (!n.funcion || tieneFuncion(user, n.funcion)),
   );
   const path = typeof window !== "undefined" ? window.location.pathname : "";
   const W = isMobile ? 264 : (collapsed ? 64 : 220);

@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from apps.accounts.funciones import funciones_de
 from apps.accounts.models import (
     AuditLog,
     DeviceToken,
@@ -323,22 +324,53 @@ class MeView(APIView):
 
     def get(self, request):
         u = request.user
+        funciones = funciones_de(u)
         return Response({
             "id": str(u.id),
             "email": u.email,
             "full_name": u.full_name,
             "role": u.role,
             "must_change_password": u.must_change_password,
-            "puede_gestionar_logros": (
-                u.role == User.Role.ADMIN or u.puede_gestionar_logros),
-            "puede_gestionar_whatsapp": (
-                u.role == User.Role.ADMIN or u.puede_gestionar_whatsapp),
+            # Funciones de gestión de esta persona. Las dos claves antiguas
+            # se siguen dando, derivadas, para un panel en caché de antes.
+            "funciones": funciones,
+            "puede_gestionar_logros": funciones["logros"],
+            "puede_gestionar_whatsapp": funciones["whatsapp"],
             # El panel esconde los módulos que la clínica no tiene. Es
             # cortesía: el candado de verdad está en la API, en
             # `RequiereFuncionalidad`.
             "funcionalidades": _funcionalidades_de(u),
             "preferencias": normalizar_preferencias(u.preferencias),
         })
+
+
+class CatalogoFuncionesView(APIView):
+    """
+    GET /api/v1/users/funciones/ — el catálogo de funciones para el alta
+    de profesionales.
+
+    El panel NO guarda su propia copia: la lista, los textos y lo que va
+    marcado por defecto salen de aquí, así que no pueden desincronizarse.
+    `disponible` dice si la clínica tiene contratada la funcionalidad de
+    la que depende; si no, el panel la enseña desactivada.
+    """
+
+    permission_classes = [HasRole.for_roles("admin")]
+
+    def get(self, request):
+        from apps.accounts.funciones import AL_CREAR, CATALOGO, ROLES_CON_FUNCIONES
+        from apps.common.funcionalidades import activa
+
+        return Response([
+            {
+                "clave": clave,
+                "etiqueta": d["etiqueta"],
+                "descripcion": d["descripcion"],
+                "disponible": d["funcionalidad"] is None or activa(request.tenant, d["funcionalidad"]),
+                "al_crear": {rol: clave in AL_CREAR.get(rol, set()) for rol in ROLES_CON_FUNCIONES},
+            }
+            for clave, d in CATALOGO.items()
+        ])
 
 
 class PreferenciasView(APIView):

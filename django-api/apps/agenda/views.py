@@ -7,6 +7,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.funciones import TieneFuncion
 from apps.agenda.models import Appointment, Doctor
 from apps.agenda.serializers import (
     AppointmentSerializer,
@@ -17,7 +18,9 @@ from apps.common.permissions import HasRole
 
 logger = logging.getLogger("apps.agenda")
 
-CAN_MANAGE_AGENDA = HasRole.for_roles("admin", "reception")
+# Crear, mover y cancelar citas es una FUNCIÓN de cada profesional (ver
+# apps/accounts/funciones.py); por defecto la tiene recepción, como antes.
+CAN_MANAGE_AGENDA = TieneFuncion.para("agenda")
 CAN_VIEW_AGENDA = HasRole.for_roles("admin", "reception", "doctor", "auxiliary")
 
 

@@ -5,6 +5,7 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.funciones import TieneFuncion
 from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.common.permissions import HasRole
 from apps.inventory.models import Batch, InventoryMovement, Product
@@ -14,7 +15,9 @@ from apps.inventory.serializers import (
     ProductSerializer,
 )
 
-CAN_MANAGE = HasRole.for_roles("admin", "auxiliary")
+# Gestionar el inventario es una función de cada profesional
+# (apps/accounts/funciones.py); por defecto la tiene el auxiliar, como antes.
+CAN_MANAGE = TieneFuncion.para("inventario")
 CAN_VIEW = HasRole.for_roles("admin", "auxiliary", "doctor", "reception")
 
 

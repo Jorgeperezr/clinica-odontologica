@@ -35,16 +35,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=20, choices=Role.choices)
 
     is_active = models.BooleanField(default=True)  # baja lógica — RF-USR-06
-    puede_gestionar_logros = models.BooleanField(
-        default=False,
-        verbose_name="Puede gestionar rachas y logros",
-        help_text=(
-            "Solo para profesionales. El administrador de la clínica "
-            "siempre puede; a un doctor se le concede al crearlo. Es un "
-            "permiso aparte del rol porque no todos los doctores de una "
-            "clínica deciden a quién se premia."
-        ),
-    )
     preferencias = models.JSONField(
         default=dict, blank=True,
         help_text=(
@@ -52,12 +42,12 @@ class User(AbstractBaseUser, PermissionsMixin):
             "odontograma 3D). Ver apps/accounts/preferencias.py."
         ),
     )
-    puede_gestionar_whatsapp = models.BooleanField(
-        default=False,
-        verbose_name="Puede configurar WhatsApp",
+    funciones = models.JSONField(
+        default=dict, blank=True,
         help_text=(
-            "Conectar la cuenta de WhatsApp de la clínica y encender los "
-            "recordatorios. El administrador siempre puede."
+            "Módulos de gestión que puede usar (agenda, cobros, inventario…). "
+            "Vacío = los que su rol tenía antes de existir las funciones. "
+            "Ver apps/accounts/funciones.py."
         ),
     )
     must_change_password = models.BooleanField(
