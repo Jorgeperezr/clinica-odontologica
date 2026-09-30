@@ -96,9 +96,14 @@ const PROFILE = [
 const BAND_SHADE = [
   [1.03, 0.98, 0.97],   // margen libre: más pálido y rosado que la adherida
   [1.00, 0.92, 0.91],   // encía adherida: queda como estaba (referencia)
-  [0.90, 0.70, 0.73],   // unión mucogingival: transición
-  [0.80, 0.54, 0.58],   // mucosa alveolar: más roja y oscura
+  [0.86, 0.64, 0.68],   // unión mucogingival: transición
+  [0.72, 0.44, 0.50],   // mucosa alveolar: más roja y oscura
 ];
+/* La mucosa se oscureció otro paso (era 0,80/0,54/0,58). La luz principal
+   llega desde arriba y aclaraba justo esa franja, así que en pantalla la
+   encía se leía como un único bloque rosa de arriba abajo: la señal más
+   clara de modelo de plástico. Con este contraste se vuelve a ver la
+   unión mucogingival, que además es referencia clínica. */
 /* Se subió el contraste entre la adherida y la mucosa: con los valores
    anteriores, en el tema claro toda la encía se leía como un único rosa
    y desaparecía la unión mucogingival, que es una referencia clínica. */

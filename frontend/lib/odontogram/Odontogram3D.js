@@ -71,7 +71,10 @@ import {
 
    (Los L*a*b* de VITA varían algo entre estudios y geometrías de medida.
    Se usan como referencia de las relaciones, no como calibración.) */
-const MARFIL_BASE = [253 / 255, 247 / 255, 236 / 255];   // el de antes ≈ A1
+/* Algo más cálido que el rgb(253,247,236) de antes, entre A1 y A2: con
+   la luz ambiente reducida (ver `applyTheme`) aquel valor se leía como
+   blanco grisáceo, el tono de una pieza de resina y no de un diente. */
+const MARFIL_BASE = [248 / 255, 239 / 255, 222 / 255];
 
 const MATIZ_VITA = {
   //            r       g       b     (proporción respecto a A1)
@@ -303,7 +306,12 @@ export default function Odontogram3D({
         themeLights.forEach(({ light, base }) => {
           light.intensity = base * (dark ? 0.86 : 1);
         });
-        if (scene.environment) scene.environmentIntensity = dark ? 0.65 : 1;
+        /* El entorno de estudio a intensidad plena bañaba cada cara con
+           la misma luz blanca: borraba el volumen, lavaba el color del
+           esmalte y la encía, y el conjunto se leía como un modelo de
+           plástico. A la mitad sigue dando reflejos al esmalte y deja que
+           la luz principal modele las piezas. */
+        if (scene.environment) scene.environmentIntensity = dark ? 0.36 : 0.5;
       }
       const themeObserver = new MutationObserver(applyTheme);
       themeObserver.observe(document.documentElement,
@@ -336,9 +344,11 @@ export default function Odontogram3D({
          partes iguales entre los cuatro focos ilumina cada cara por igual
          y aplana el volumen, que es lo que hacía que las arcadas se
          leyeran como una masa clara continua. */
-      scene.add(new THREE.HemisphereLight(0xfff6ee, 0xa9b8c6, 0.26));
+      scene.add(new THREE.HemisphereLight(0xfff6ee, 0xa9b8c6, 0.22));
 
-      const keyLight = new THREE.DirectionalLight(0xfff2e4, 1.95);
+      // Algo más fuerte que antes: recoge la luz que ya no aporta el
+      // entorno, pero desde UNA dirección, que es lo que da volumen.
+      const keyLight = new THREE.DirectionalLight(0xfff2e4, 2.35);
       keyLight.position.set(5.5, 13, 9);
       keyLight.castShadow = true;
       keyLight.shadow.mapSize.set(1024, 1024);
@@ -511,7 +521,7 @@ export default function Odontogram3D({
              dibujaba del revés). Vista por fuera, esa intensidad arrugaba
              el tejido como papel: el punteado de la encía adherida es una
              piel de naranja fina que solo se aprecia de cerca. */
-          normalScale: new THREE.Vector2(0.11, 0.11),
+          normalScale: new THREE.Vector2(0.08, 0.08),
           metalness: 0,
           /* Sin capa de barniz: en la encía el brillo húmedo lo da ya el
              mapa de rugosidad (margen brillante, encía adherida mate), y
