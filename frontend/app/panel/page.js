@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { api, currentUser, readList, tieneFuncion } from "../../lib/api";
 import DayAlerts from "../../lib/DayAlerts";
+import { hoyISO } from "../../lib/fechas.mjs";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => hoyISO();
 const fmtTime = (iso) =>
   new Date(iso).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
 

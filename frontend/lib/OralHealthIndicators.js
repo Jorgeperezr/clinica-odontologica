@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, readList } from "./api";
+import { hoyISO } from "./fechas.mjs";
 
 // Las 6 piezas índice del formulario (filas de la tabla de higiene)
 const INDEX_TEETH = [
@@ -76,7 +77,7 @@ export default function OralHealthIndicators({ patientId }) {
         // No hay Form033 aún: se crea uno con la fecha de hoy
         resp = await api(`/patients/${patientId}/form033/`, {
           method: "POST",
-          body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), ...payload }),
+          body: JSON.stringify({ date: hoyISO(), ...payload }),
         });
       }
       const saved = await resp.json();

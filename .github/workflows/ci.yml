@@ -120,6 +120,14 @@ jobs:
       - name: Instalar dependencias
         working-directory: frontend
         run: npm install --no-audit --no-fund
+      # Las pruebas de lógica pura del panel (fechas locales, dictado).
+      # Dos zonas: la de la clínica y una en la que el día UTC y el local
+      # no coinciden nunca, igual que la segunda pasada de Django.
+      - name: Pruebas de JavaScript
+        working-directory: frontend
+        run: |
+          TZ=America/Guayaquil node --test lib/*.test.mjs lib/dictado/*.test.mjs
+          TZ=Pacific/Kiritimati node --test lib/*.test.mjs lib/dictado/*.test.mjs
       - name: Build estático
         working-directory: frontend
         env:

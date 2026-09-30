@@ -448,11 +448,13 @@ class ClinicalHistoryExportView(generics.GenericAPIView):
         ).prefetch_related("items", "items__treatment")
 
         from apps.common.document_style import clinic_snapshot, get_document_style
+        from apps.patients.models import MedicalBackground
 
         pdf_bytes = generate_clinical_history_pdf(
-            patient, evolutions, diagnoses, plans,
+            patient, evolutions.select_related("doctor__user", "created_by"), diagnoses, plans,
             style=get_document_style(request.tenant),
             clinic=clinic_snapshot(request.tenant),
+            background=MedicalBackground.objects.filter(patient=patient).first(),
         )
         _audit(request, "export_clinical_history", "ClinicalRecord", patient.id)
 

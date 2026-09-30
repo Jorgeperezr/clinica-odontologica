@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, readList } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 import { useConfirm } from "../../../lib/ConfirmDialog";
+import { hoyISO } from "../../../lib/fechas.mjs";
 
 const METHODS = { cash: "Efectivo", transfer: "Transferencia", card: "Tarjeta" };
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
@@ -179,7 +180,7 @@ function BudgetsSection({ patient, budgets, treatments, confirm, onChange }) {
 
 function BudgetCard({ budget, treatments, confirm, onChange }) {
   const [item, setItem] = useState({ treatment: "", tooth_fdi_code: "", quantity: 1, unit_price: "" });
-  const [plan, setPlan] = useState({ installment_count: 3, first_due_date: new Date().toISOString().slice(0, 10) });
+  const [plan, setPlan] = useState({ installment_count: 3, first_due_date: hoyISO() });
   const [installments, setInstallments] = useState(null);
   const [paying, setPaying] = useState(null); // {id, amount, method}
   const [error, setError] = useState("");

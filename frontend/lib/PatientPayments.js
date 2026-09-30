@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api, readList } from "./api";
+import { hoyISO } from "./fechas.mjs";
 
 const METHODS = { cash: "Efectivo", transfer: "Transferencia", card: "Tarjeta" };
 
@@ -21,7 +22,7 @@ export default function PatientPayments({ patientId, role, puedeCobrar }) {
   const [rows, setRows] = useState([]);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({
-    amount: "", method: "cash", date: new Date().toISOString().slice(0, 10),
+    amount: "", method: "cash", date: hoyISO(),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +55,7 @@ export default function PatientPayments({ patientId, role, puedeCobrar }) {
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.detail || `No se pudo registrar (error ${resp.status}).`);
-      setForm({ amount: "", method: "cash", date: new Date().toISOString().slice(0, 10) });
+      setForm({ amount: "", method: "cash", date: hoyISO() });
       setAdding(false);
       setOkMsg("Cobro registrado.");
       load();

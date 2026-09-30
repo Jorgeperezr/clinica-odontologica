@@ -258,15 +258,26 @@ class PrescriptionPDFView(APIView):
         except Evolution.DoesNotExist:
             raise Http404
 
+        from apps.agenda.models import Doctor
+        from apps.clinical.exam_request_pdf import _age_from_birth
+
+        # Quién la emite. Si la registró alguien sin ficha de doctor
+        # asignada a la evolución (un administrador que también atiende),
+        # la receta salía sin nombre ni registro: un papel que no firma
+        # nadie. Se toma entonces de quien la escribió.
         doctor = evolution.doctor
+        if doctor is None and evolution.created_by_id:
+            doctor = Doctor.objects.filter(tenant=request.tenant, user_id=evolution.created_by_id).first()
         specialty = ""
         if doctor:
             specialty = ", ".join(s.name for s in doctor.specialties.all()) or ""
+        nombre = doctor.full_name if doctor else (
+            getattr(evolution.created_by, "full_name", "") or "")
 
         pdf_bytes = build_prescription_pdf(
             clinic=clinic_snapshot(request.tenant),
             professional={
-                "full_name": doctor.full_name if doctor else "",
+                "full_name": nombre,
                 "specialty": specialty,
                 "license_number": doctor.license_number if doctor else "",
                 "signature_b64": doctor.signature_image if doctor else None,
@@ -274,9 +285,10 @@ class PrescriptionPDFView(APIView):
             patient={
                 "full_name": evolution.patient.full_name,
                 "national_id": evolution.patient.national_id,
+                "age": _age_from_birth(evolution.patient.birth_date),
             },
             prescription={
-                "date": evolution.date.strftime("%d/%m/%Y"),
+                "date": evolution.date,
                 "notes": evolution.notes,
                 "reference": str(evolution.id),
             },

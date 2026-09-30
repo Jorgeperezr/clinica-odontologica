@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, readList } from "./api";
+import { hoyISO } from "./fechas.mjs";
 
 // D. Antecedentes patológicos PERSONALES (claves oficiales del formulario)
 const ANTEC_PERSONALES = [
@@ -159,7 +160,7 @@ function Field({ label, value }) {
 
 function Form033Editor({ patientId, onSaved, onCancel }) {
   const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
+    date: hoyISO(),
     motivo_consulta: "", embarazada: null, enfermedad_actual: "",
     temperatura: "", pulso: "", frecuencia_respiratoria: "", presion_arterial: "",
   });

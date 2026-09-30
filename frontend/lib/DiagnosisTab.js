@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, readList } from "./api";
+import { hoyISO } from "./fechas.mjs";
 
 export default function DiagnosisSection({ patientId }) {
   const [diagnoses, setDiagnoses] = useState([]);
@@ -74,7 +75,7 @@ function DiagnosisForm({ patientId, onSaved, onCancel }) {
   const [results, setResults] = useState([]);
   const [tooth, setTooth] = useState("");
   const [kind, setKind] = useState("pre");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(hoyISO());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const timer = useRef(null);

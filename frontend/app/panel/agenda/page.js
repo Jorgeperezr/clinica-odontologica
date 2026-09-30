@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, readList } from "../../../lib/api";
+import { fechaISO, hoyISO } from "../../../lib/fechas.mjs";
 
 const STATUS_STYLE = {
   pending:     { label: "Pendiente",   cls: "badge-warn" },
@@ -12,7 +13,7 @@ const STATUS_STYLE = {
   no_show:     { label: "No asistió",  cls: "badge-danger" },
 };
 
-function todayISO() { return new Date().toISOString().slice(0, 10); }
+function todayISO() { return hoyISO(); }
 
 function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
@@ -66,7 +67,7 @@ export default function AgendaPage() {
   function shiftDate(days) {
     const d = new Date(date + "T12:00:00");
     d.setDate(d.getDate() + days);
-    setDate(d.toISOString().slice(0, 10));
+    setDate(fechaISO(d));
   }
 
   async function doAction(appt, action) {
@@ -252,7 +253,7 @@ function MonthGrid({ date, appointments, onDayClick }) {
     cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = hoyISO();
   const monthName = base.toLocaleDateString("es-EC", { month: "long", year: "numeric" });
 
   return (

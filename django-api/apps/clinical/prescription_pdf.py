@@ -81,32 +81,26 @@ def _dibujar(clinic, professional, patient, prescription, style, total_paginas=N
 
     y = encabezado()
 
-    # ── Título ──
-    c.setFillColor(style.title_color)
-    c.setFont(style.font_bold, style.subtitle_size + 1)
-    c.drawRightString(mr, y, "RECETA")
-    c.setFillColor(style.secondary)
-    c.setFont(style.font, style.size - 1)
-    c.drawString(ml, y, f"Fecha: {prescription.get('date') or '—'}")
-    y -= 8 * mm
+    # ── Título y datos de control ──
+    from apps.common.document_style import fecha_documento
+
+    referencia = str(prescription.get("reference") or "")[:8].upper()
+    y = style.draw_title_block(c, y, "Receta médica", meta=[
+        ("N.º", referencia), ("Fecha", fecha_documento(prescription.get("date"))),
+    ])
 
     # ── Paciente ──
-    c.setFillColor(style.ink)
-    c.setFont(style.font, style.size)
-    c.drawString(ml, y, f"Paciente: {patient.get('full_name') or '—'}")
-    y -= 5 * mm
-    c.drawString(ml, y, f"CI: {patient.get('national_id') or '—'}")
-    y -= 4 * mm
-    c.setStrokeColor(style.separator)
-    c.setLineWidth(0.5)
-    c.line(ml, y, mr, y)
+    y = style.draw_fields(c, y, [
+        [("Paciente", patient.get("full_name"), 2), ("Identificación", patient.get("national_id"))],
+        [("Edad", patient.get("age")), ("Profesional", professional.get("full_name"), 2)],
+    ], columnas=3)
 
-    # ── Rx ──
-    y -= 10 * mm
+    # ── Rp. ──
+    y -= 2 * mm
     c.setFillColor(style.primary)
     c.setFont(style.font_bold, style.title_size)
-    c.drawString(ml, y, "Rx.")
-    y -= 8 * mm
+    c.drawString(ml, y - style.title_size * 0.6, "Rp.")
+    y -= style.title_size + 3 * mm
 
     c.setFillColor(style.ink)
     c.setFont(style.font, style.size)

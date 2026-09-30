@@ -41,7 +41,7 @@ configuración.
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, A5, LEGAL, LETTER, landscape
@@ -64,6 +64,72 @@ _FONT_FAMILIES = {
 }
 
 _FALLBACK_PRIMARY = "#0e5c63"
+
+
+def ahora_local():
+    """Fecha y hora en la zona de la clínica (TIME_ZONE), sin tzinfo."""
+    from django.utils import timezone
+
+    return timezone.localtime().replace(tzinfo=None)
+
+
+def fecha_documento(valor, con_hora=False):
+    """
+    Una fecha como se escribe en un documento: 30/09/2026 (y la hora si
+    se pide). Acepta date, datetime (con o sin zona) o texto ISO, y deja
+    tal cual cualquier otro texto. Los documentos mezclaban 2026-09-30,
+    30/09/2026 y horas en UTC.
+    """
+    from django.utils import timezone
+
+    if valor in (None, ""):
+        return "—"
+    if isinstance(valor, str):
+        try:
+            valor = datetime.fromisoformat(valor) if ("T" in valor or " " in valor) \
+                else date.fromisoformat(valor)
+        except ValueError:
+            return valor
+    if isinstance(valor, datetime):
+        if timezone.is_aware(valor):
+            valor = timezone.localtime(valor)
+        return valor.strftime("%d/%m/%Y %H:%M" if con_hora else "%d/%m/%Y")
+    if isinstance(valor, date):
+        return valor.strftime("%d/%m/%Y")
+    return str(valor)
+
+
+def ajustar(c, texto, fuente, cuerpo, ancho):
+    """Parte un texto en líneas que caben en `ancho`, respetando sus saltos."""
+    lineas = []
+    for parrafo in str(texto or "").splitlines() or [""]:
+        actual = ""
+        for palabra in parrafo.split():
+            prueba = f"{actual} {palabra}".strip()
+            if actual and c.stringWidth(prueba, fuente, cuerpo) > ancho:
+                lineas.append(actual)
+                actual = palabra
+            else:
+                actual = prueba
+        lineas.append(actual)
+    return lineas
+
+
+def recortar(c, texto, fuente, cuerpo, ancho):
+    """El texto en una línea; si no cabe, cortado con «…»."""
+    texto = str(texto)
+    if c.stringWidth(texto, fuente, cuerpo) <= ancho:
+        return texto
+    while texto and c.stringWidth(texto + "…", fuente, cuerpo) > ancho:
+        texto = texto[:-1]
+    return texto.rstrip() + "…"
+
+
+def _esc(texto):
+    """Escapa un texto para meterlo en un Paragraph de reportlab."""
+    from xml.sax.saxutils import escape
+
+    return escape(str(texto))
 
 
 def _color(value, fallback):
@@ -199,6 +265,20 @@ class DocumentStyle:
 
         align = h.get("align", "left")
 
+        # Qué líneas lleva, para centrarlas en la altura del membrete. Antes
+        # empezaban arriba del todo y dejaban un hueco en blanco bajo el
+        # texto, que es lo primero que se ve de cada documento.
+        lineas = []
+        if h.get("show_clinic_name", True) and clinic.get("name"):
+            lineas.append(self.subtitle_size + 3)
+        if h.get("show_professional", True) and professional.get("full_name"):
+            lineas.append(self.size + 2)
+        if any(h.get(k, d) and clinic.get(v) for k, v, d in (
+                ("show_address", "address", True), ("show_phone", "phone", True),
+                ("show_email", "email", True), ("show_website", "website", False))):
+            lineas.append(self.size)
+        alto_texto = sum(lineas)
+
         def put(text, size, bold, color, dy):
             if not text:
                 return 0
@@ -212,7 +292,7 @@ class DocumentStyle:
                 c.drawString(x, dy, text)
             return 1
 
-        y = top - 5 * mm
+        y = top - max(4 * mm, (height - alto_texto) / 2) - (self.subtitle_size if lineas else 0) * 0.75
         if h.get("show_clinic_name", True) and clinic.get("name"):
             put(clinic["name"], self.subtitle_size + 2, True, text_color, y)
             y -= self.subtitle_size + 3
@@ -238,11 +318,16 @@ class DocumentStyle:
             put(" · ".join(contact), self.size - 1.5, False, self.secondary, y)
             y -= self.size
 
+        # Filete doble: grueso del color de la clínica y fino gris debajo,
+        # el remate habitual de un membrete formal.
         line_y = top - height
-        c.setStrokeColor(self.separator)
-        c.setLineWidth(0.8)
+        c.setStrokeColor(self.primary)
+        c.setLineWidth(1.4)
         c.line(self.content_left, line_y, self.content_right, line_y)
-        return line_y - self.block_spacing
+        c.setStrokeColor(self.separator)
+        c.setLineWidth(0.5)
+        c.line(self.content_left, line_y - 1.2 * mm, self.content_right, line_y - 1.2 * mm)
+        return line_y - 1.2 * mm - self.block_spacing
 
     # ── Pie ───────────────────────────────────────────────────────────
     def draw_footer(self, c, page_number=None, total_pages=None, clinic=None):
@@ -264,7 +349,10 @@ class DocumentStyle:
         if f.get("text"):
             bits.append(f["text"])
         if f.get("show_date", True):
-            now = datetime.now()
+            # Hora de la clínica, no la del servidor: en un contenedor en
+            # UTC, `datetime.now()` fechaba las recetas de la tarde en
+            # Ecuador con el día siguiente.
+            now = ahora_local()
             bits.append(now.strftime("%d/%m/%Y %H:%M") if f.get("show_time")
                         else now.strftime("%d/%m/%Y"))
         if f.get("show_page_numbers", True) and page_number:
@@ -307,6 +395,116 @@ class DocumentStyle:
             # firma. A diferencia del logotipo o de la firma, nadie va a
             # preguntarse por qué falta.
             pass
+
+    # ── Piezas de los documentos formales ─────────────────────────────
+    #
+    # Título, secciones y cuadros de datos iguales en todos los
+    # documentos. Antes cada generador dibujaba los suyos —títulos
+    # centrados en unos y a la derecha en otros, datos sueltos sin
+    # recuadro— y los documentos de la misma clínica no se parecían.
+
+    def draw_title_block(self, c, y, title, subtitle=None, meta=None):
+        """
+        Título del documento a la izquierda y, a la derecha, sus datos de
+        control (número, fecha…). Debajo, un filete del color principal.
+        Devuelve la Y donde sigue el contenido.
+
+        meta: lista de (etiqueta, valor).
+        """
+        meta = [(k, v) for k, v in (meta or []) if v not in (None, "")]
+        ancho_meta = 0
+        for k, v in meta:
+            ancho_meta = max(ancho_meta, c.stringWidth(f"{k}  ", self.font, self.size - 2)
+                             + c.stringWidth(str(v), self.font_bold, self.size - 1))
+        ancho_titulo = self.content_width - ancho_meta - (6 * mm if meta else 0)
+
+        cuerpo = self.title_size - 2
+        c.setFillColor(self.title_color)
+        c.setFont(self.font_bold, cuerpo)
+        lineas = ajustar(c, title.upper(), self.font_bold, cuerpo, ancho_titulo)
+        yy = y - cuerpo * 0.8
+        for linea in lineas:
+            c.drawString(self.content_left, yy, linea)
+            yy -= cuerpo * 1.15
+        if subtitle:
+            c.setFillColor(self.primary)
+            c.setFont(self.font_bold, self.size + 0.5)
+            for linea in ajustar(c, subtitle, self.font_bold, self.size + 0.5, ancho_titulo):
+                c.drawString(self.content_left, yy + 1 * mm, linea)
+                yy -= self.size * 1.3
+        alto_izq = y - yy
+
+        ym = y - (self.size - 1) * 0.9
+        for k, v in meta:
+            c.setFillColor(self.secondary)
+            c.setFont(self.font, self.size - 2)
+            ancho_v = c.stringWidth(str(v), self.font_bold, self.size - 1)
+            c.drawRightString(self.content_right - ancho_v - 1.5 * mm, ym, k)
+            c.setFillColor(self.ink)
+            c.setFont(self.font_bold, self.size - 1)
+            c.drawRightString(self.content_right, ym, str(v))
+            ym -= self.size + 2
+        alto_der = y - ym
+
+        base = y - max(alto_izq, alto_der) - 1 * mm
+        c.setStrokeColor(self.primary)
+        c.setLineWidth(1)
+        c.line(self.content_left, base, self.content_right, base)
+        return base - self.block_spacing - 1 * mm
+
+    def draw_section(self, c, y, text, number=None):
+        """Encabezado de sección: banda suave con una barra del color principal."""
+        alto = self.size + 5
+        c.saveState()
+        c.setFillColor(self.primary)
+        c.setFillAlpha(0.08)
+        c.rect(self.content_left, y - alto, self.content_width, alto, stroke=0, fill=1)
+        c.restoreState()
+        c.setFillColor(self.primary)
+        c.rect(self.content_left, y - alto, 1.2 * mm, alto, stroke=0, fill=1)
+        c.setFont(self.font_bold, self.size - 0.5)
+        etiqueta = f"{number}. {text}" if number else text
+        c.drawString(self.content_left + 3.5 * mm, y - alto + (alto - self.size) / 2 + 1.2,
+                     etiqueta.upper())
+        return y - alto - 3 * mm
+
+    def draw_fields(self, c, y, filas, columnas=None):
+        """
+        Datos en una cuadrícula con bordes: cada celda lleva su etiqueta
+        pequeña y el valor debajo. Es la forma de un formulario formal y
+        se lee de un vistazo, a diferencia de pares sueltos en la página.
+
+        filas: lista de filas; cada fila, lista de (etiqueta, valor) o
+        (etiqueta, valor, columnas_que_ocupa). Devuelve la Y de debajo.
+        """
+        columnas = columnas or max(sum(celda[2] if len(celda) > 2 else 1 for celda in fila)
+                                   for fila in filas)
+        ancho_col = self.content_width / columnas
+        alto = self.size * 2.6 + 2
+        top = y
+        c.setLineWidth(0.5)
+        c.setStrokeColor(self.separator)
+        for fila in filas:
+            x = self.content_left
+            for celda in fila:
+                etiqueta, valor = celda[0], celda[1]
+                ocupa = celda[2] if len(celda) > 2 else 1
+                ancho = ancho_col * ocupa
+                c.rect(x, y - alto, ancho, alto, stroke=1, fill=0)
+                c.setFillColor(self.secondary)
+                c.setFont(self.font, self.size - 3)
+                c.drawString(x + 2 * mm, y - (self.size - 3) - 1.6 * mm, str(etiqueta).upper())
+                c.setFillColor(self.ink)
+                c.setFont(self.font, self.size - 0.5)
+                texto = "—" if valor in (None, "") else str(valor)
+                c.drawString(x + 2 * mm, y - alto + 2.2 * mm,
+                             recortar(c, texto, self.font, self.size - 0.5, ancho - 4 * mm))
+                x += ancho
+            y -= alto
+        # Borde exterior algo más marcado que las divisiones interiores.
+        c.setLineWidth(0.8)
+        c.rect(self.content_left, y, self.content_width, top - y, stroke=1, fill=0)
+        return y - self.block_spacing
 
     # ── Firmas ────────────────────────────────────────────────────────
     def draw_signature(self, c, y, slots):
@@ -431,7 +629,7 @@ class DocumentStyle:
         ))
         return ss
 
-    def page_furniture(self, clinic=None, professional=None):
+    def page_furniture(self, clinic=None, professional=None, total_pages=None):
         """
         Callback `onPage` para Platypus: dibuja marca de agua y pie en cada
         página. El encabezado de estos documentos va como contenido (ver
@@ -440,7 +638,7 @@ class DocumentStyle:
         """
         def draw(c, doc):
             self.draw_watermark(c)
-            self.draw_footer(c, page_number=doc.page, clinic=clinic)
+            self.draw_footer(c, page_number=doc.page, total_pages=total_pages, clinic=clinic)
         return draw
 
     def header_flowables(self, clinic=None, professional=None):
@@ -456,8 +654,10 @@ class DocumentStyle:
 
         lines = []
         if h.get("show_clinic_name", True) and clinic.get("name"):
-            lines.append(f'<font color="{self.primary.hexval().replace("0x", "#")}">'
-                         f'<b>{clinic["name"]}</b></font>')
+            # Mismo cuerpo que el membrete del canvas: antes aquí el nombre
+            # de la clínica salía en letra de nota al pie.
+            lines.append(f'<font color="{self.primary.hexval().replace("0x", "#")}" '
+                         f'size="{self.subtitle_size + 2}"><b>{_esc(clinic["name"])}</b></font>')
         if h.get("show_professional", True) and professional.get("full_name"):
             bits = [professional["full_name"]]
             if h.get("show_specialty", True) and professional.get("specialty"):
@@ -469,7 +669,11 @@ class DocumentStyle:
                    if h.get(flag, True) and clinic.get(k)]
         if contact:
             lines.append(" · ".join(str(x) for x in contact))
-        text = Paragraph("<br/>".join(lines), ss["DocSmall"]) if lines else Paragraph("", ss["DocSmall"])
+        from reportlab.lib.styles import ParagraphStyle
+
+        membrete = ParagraphStyle("membrete", parent=ss["DocSmall"], fontSize=self.size - 1,
+                                  leading=self.size + 3, textColor=self.secondary)
+        text = Paragraph("<br/>".join(lines), membrete) if lines else Paragraph("", membrete)
 
         lg = self.s["logo"]
         logo = clinic.get("logo_reader") if h.get("show_logo", True) else None
@@ -486,12 +690,102 @@ class DocumentStyle:
 
         table = Table(row, colWidths=widths, hAlign="LEFT")
         table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LINEBELOW", (0, 0), (-1, -1), 0.8, self.separator),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LINEBELOW", (0, 0), (-1, -1), 1.4, self.primary),
         ]))
-        return [table, Spacer(1, self.block_spacing)]
+        # Filete doble, como en el membrete del canvas.
+        fino = Table([[""]], colWidths=[self.content_width], rowHeights=[1.2 * mm])
+        fino.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.5, self.separator)]))
+        return [table, fino, Spacer(1, self.block_spacing)]
+
+    # Las mismas piezas formales que en el canvas (`draw_title_block`,
+    # `draw_section`, `draw_fields`), para los documentos con Platypus.
+    def title_flowables(self, title, subtitle=None, meta=None):
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+
+        hexa = self._hex
+        izq = [Paragraph(f"<b>{_esc(title.upper())}</b>", ParagraphStyle(
+            "t", fontName=self.font_bold, fontSize=self.title_size - 2,
+            leading=(self.title_size - 2) * 1.2, textColor=self.title_color))]
+        if subtitle:
+            izq.append(Paragraph(_esc(subtitle), ParagraphStyle(
+                "st", fontName=self.font_bold, fontSize=self.size + 0.5,
+                leading=self.size * 1.4, textColor=self.primary)))
+        meta = [(k, v) for k, v in (meta or []) if v not in (None, "")]
+        der = [Paragraph(f'<font color="{hexa(self.secondary)}" size="{self.size - 2}">{_esc(k)}</font>'
+                         f'&nbsp;&nbsp;<b>{_esc(v)}</b>', ParagraphStyle(
+                             "m", fontName=self.font, fontSize=self.size - 1,
+                             leading=self.size + 2, alignment=2, textColor=self.ink))
+               for k, v in meta]
+        t = Table([[izq, der]], colWidths=[self.content_width * 0.68, self.content_width * 0.32])
+        t.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LINEBELOW", (0, 0), (-1, -1), 1, self.primary),
+        ]))
+        return [t, Spacer(1, self.block_spacing)]
+
+    def section_flowable(self, text, number=None):
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import Paragraph, Table, TableStyle
+
+        etiqueta = f"{number}. {text}" if number else text
+        p = Paragraph(f"<b>{_esc(etiqueta.upper())}</b>", ParagraphStyle(
+            "sec", fontName=self.font_bold, fontSize=self.size - 0.5,
+            leading=self.size + 1, textColor=self.primary))
+        t = Table([["", p]], colWidths=[1.2 * mm, self.content_width - 1.2 * mm])
+        fondo = colors.Color(self.primary.red, self.primary.green, self.primary.blue, alpha=0.08)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, 0), self.primary),
+            ("BACKGROUND", (1, 0), (1, 0), fondo),
+            ("LEFTPADDING", (1, 0), (1, 0), 2.5 * mm), ("LEFTPADDING", (0, 0), (0, 0), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        t.spaceBefore = 8
+        t.spaceAfter = 6
+        return t
+
+    def fields_table(self, filas, columnas=3):
+        """Cuadrícula etiqueta/valor con bordes, como `draw_fields`."""
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import Paragraph, Table, TableStyle
+
+        est = ParagraphStyle("f", fontName=self.font, fontSize=self.size - 0.5,
+                             leading=self.size + 1.5, textColor=self.ink)
+        hexa = self._hex
+        datos, spans = [], []
+        for r, fila in enumerate(filas):
+            celdas, col = [], 0
+            for celda in fila:
+                etiqueta, valor = celda[0], celda[1]
+                ocupa = celda[2] if len(celda) > 2 else 1
+                texto = "—" if valor in (None, "") else _esc(valor)
+                celdas.append(Paragraph(
+                    f'<font size="{self.size - 3}" color="{hexa(self.secondary)}">'
+                    f'{_esc(str(etiqueta).upper())}</font><br/>{texto}', est))
+                celdas += [""] * (ocupa - 1)
+                if ocupa > 1:
+                    spans.append(("SPAN", (col, r), (col + ocupa - 1, r)))
+                col += ocupa
+            datos.append(celdas)
+        t = Table(datos, colWidths=[self.content_width / columnas] * columnas)
+        t.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, self.separator),
+            ("BOX", (0, 0), (-1, -1), 0.8, self.separator),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2 * mm),
+            *spans,
+        ]))
+        return t
+
+    @staticmethod
+    def _hex(color):
+        return "#" + color.hexval()[2:].rjust(6, "0")[-6:]
 
     # ── Tablas ────────────────────────────────────────────────────────
     def table_style(self, header_rows=1):

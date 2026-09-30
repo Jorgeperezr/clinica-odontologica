@@ -54,6 +54,7 @@ import {
   SiteFlagRow, SiteNumberRow, SurfaceStateCell, ordenSitios,
 } from "./cells";
 import { DiagramaCara, LeyendaPeriodontal } from "./DiagramaPeriodontal";
+import { hoyISO } from "../fechas.mjs";
 
 const LABEL_W = 132;
 
@@ -118,7 +119,7 @@ export default function AdvancedCompactView({
     try {
       const resp = await api(`/patients/${patientId}/periodontal-exams/`, {
         method: "POST",
-        body: JSON.stringify({ date: new Date().toISOString().slice(0, 10) }),
+        body: JSON.stringify({ date: hoyISO() }),
       });
       if (!resp.ok) throw new Error(`No se pudo crear la ficha (error ${resp.status}).`);
       setExam(await resp.json());

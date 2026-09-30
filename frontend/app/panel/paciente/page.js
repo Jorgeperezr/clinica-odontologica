@@ -16,6 +16,7 @@ import ExamRequestsSection from "../../../lib/ExamRequestsSection";
 import { useConfirm } from "../../../lib/ConfirmDialog";
 import AlertasPaciente, { revisarReceta, textoChoques } from "../../../lib/AlertasClinicas";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
+import { hoyISO } from "../../../lib/fechas.mjs";
 
 
 const SURFACE_NAMES = {
@@ -258,7 +259,7 @@ function OdontogramTab({ patientId, initialView }) {
         method: "POST",
         body: JSON.stringify({
           tooth_fdi_code: code, surface: "whole", state: sano,
-          [kind]: num, date: new Date().toISOString().slice(0, 10),
+          [kind]: num, date: hoyISO(),
           notes: `Registro de ${label}: ${num ?? "—"}`,
         }),
       });
@@ -309,7 +310,7 @@ function OdontogramTab({ patientId, initialView }) {
           surface: surface,
           state: stateId,
           notes: notes,
-          date: new Date().toISOString().slice(0, 10),
+          date: hoyISO(),
         }),
       });
       if (!resp.ok) {
@@ -557,7 +558,7 @@ function EvolutionsTab({ patientId }) {
         body: JSON.stringify({
           ...form,
           follow_up_date: form.follow_up_date || null,
-          date: new Date().toISOString().slice(0, 10),
+          date: hoyISO(),
         }),
       });
       if (!resp.ok) {
