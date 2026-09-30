@@ -14,6 +14,7 @@ import OralHealthIndicators from "../../../lib/OralHealthIndicators";
 import OdontogramLegend from "../../../lib/OdontogramLegend";
 import ExamRequestsSection from "../../../lib/ExamRequestsSection";
 import { useConfirm } from "../../../lib/ConfirmDialog";
+import AlertasPaciente, { revisarReceta, textoChoques } from "../../../lib/AlertasClinicas";
 import { ConsentsTab, DocumentsTab, PlanTab } from "../../../lib/ClinicalTabs";
 
 
@@ -79,6 +80,9 @@ function PatientDetail() {
           CI {patient.national_id} {patient.phone ? `· ${patient.phone}` : ""}
         </span>
       </div>
+
+      {/* Recepción no ve antecedentes médicos: ni se pide. */}
+      {["admin", "doctor", "auxiliary"].includes(role) && <AlertasPaciente patientId={id} />}
 
       <PatientAgreement patient={patient} canEdit={role === "admin" || role === "reception"}
                         onChanged={(p) => setPatient(p)} />
@@ -521,6 +525,17 @@ function EvolutionsTab({ patientId }) {
     setError("");
     setSaving(true);
     try {
+      // Receta: se cruza con las alertas del paciente antes de guardar.
+      // Avisa y deja seguir; no bloquea.
+      if (form.type === "prescription") {
+        const choques = await revisarReceta(patientId, form.notes);
+        if (choques.length && !(await confirm({
+          title: "Revisa la receta",
+          message: textoChoques(choques),
+          confirmLabel: "Guardar de todas formas",
+          danger: true,
+        }))) return;
+      }
       const resp = await api(`/patients/${patientId}/evolutions/`, {
         method: "POST",
         body: JSON.stringify({
