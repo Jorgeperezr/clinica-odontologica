@@ -199,7 +199,7 @@ class Sprint20AgendaTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.content.decode()
         self.assertIn("BEGIN:VCALENDAR", body)
-        self.assertIn(f"UID:{appt.id}@clinica-odontologica", body)
+        self.assertIn(f"UID:{appt.id}@clinube", body)
         self.assertIn("Mes Prueba", body)
 
     def test_calendar_feed_wrong_token_404(self):

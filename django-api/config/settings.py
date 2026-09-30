@@ -1,5 +1,5 @@
 """
-Django settings — Clínica Odontológica.
+Django settings — Clinube.
 
 Fase 8 / Sprint 0: fundamentos técnicos.
 Todo valor sensible viene de variables de entorno (.env en local;
@@ -225,8 +225,13 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "apps.common.exceptions.custom_exception_handler",
 }
 
+# Nombre de la plataforma, el que ven las clínicas en correos, títulos y
+# calendarios. El de cada clínica es otro (Tenant.name / su branding) y
+# va en todo lo que recibe el paciente. En el panel está en frontend/lib/marca.js.
+MARCA = "Clinube"
+
 SPECTACULAR_SETTINGS = {
-    "TITLE": "API — Clínica Odontológica",
+    "TITLE": f"API — {MARCA}",
     "DESCRIPTION": "Ver el documento 05-APIs-Clinica-Odontologica.md para el contrato completo.",
     "VERSION": "1.0.0",
     # En desarrollo el esquema y Swagger están abiertos para consultarlos
@@ -283,7 +288,7 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_TIMEOUT = 15
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Clínica <no-responder@localhost>")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=f"{MARCA} <no-responder@localhost>")
 
 # Producción: negarse a arrancar con valores de ejemplo (ver config/produccion.py).
 ENTORNO = config("DJANGO_ENTORNO", default="desarrollo")

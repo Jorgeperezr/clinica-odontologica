@@ -22,6 +22,7 @@
 
 import { useEffect, useState } from "react";
 import { api, cambiarContrasena, currentUser, logout } from "../../lib/api";
+import { LEMA, MARCA, SimboloClinube } from "../../lib/marca";
 
 export default function CambiarContrasenaPage() {
   const [obligatorio, setObligatorio] = useState(null);   // null = averiguándolo
@@ -69,9 +70,9 @@ export default function CambiarContrasenaPage() {
     <div style={estilos.wrap}>
       <div style={estilos.marca}>
         <div style={estilos.marcaInterior}>
-          <div style={estilos.diente} aria-hidden="true">◠</div>
-          <h1 style={estilos.marcaTitulo}>Clínica<br />Odontológica</h1>
-          <p style={estilos.marcaSub}>Sistema de gestión clínica</p>
+          <div style={estilos.simbolo}><SimboloClinube size={72} color="#fff" cruz="var(--petrol-deep)" /></div>
+          <h1 style={estilos.marcaTitulo}>{MARCA}</h1>
+          <p style={estilos.marcaSub}>{LEMA}</p>
         </div>
       </div>
 
@@ -140,7 +141,7 @@ const estilos = {
     display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
   },
   marcaInterior: { maxWidth: 320 },
-  diente: { fontSize: 64, lineHeight: 1, color: "var(--mint)", marginBottom: 18 },
+  simbolo: { marginBottom: 18 },
   marcaTitulo: { color: "#fff", fontSize: 40, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.02em" },
   marcaSub: { marginTop: 12, color: "var(--mint)", fontSize: 15 },
   ladoForm: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },

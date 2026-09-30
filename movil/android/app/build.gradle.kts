@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "ec.clinicaodontologica.clinica_paciente"
+    namespace = "com.clinube.paciente"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,8 +15,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "ec.clinicaodontologica.clinica_paciente"
+        // Identificador en Google Play: no se puede cambiar una vez publicada la app.
+        applicationId = "com.clinube.paciente"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

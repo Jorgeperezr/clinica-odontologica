@@ -1,8 +1,11 @@
 import "./globals.css";
 
+import { LEMA, MARCA } from "../lib/marca";
+
 export const metadata = {
-  title: "Clínica Odontológica",
-  description: "Sistema de gestión para clínica odontológica",
+  title: MARCA,
+  description: `${MARCA} — ${LEMA.toLowerCase()}`,
+  applicationName: MARCA,
 };
 
 /**

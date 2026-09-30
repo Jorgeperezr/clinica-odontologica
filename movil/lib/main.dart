@@ -20,7 +20,7 @@ import 'tema.dart';
 ///
 /// Se pasa al compilar y no se escribe aquí a fuego:
 ///
-///     flutter build apk --dart-define=API_URL=https://clinica.ejemplo.ec
+///     flutter build apk --dart-define=API_URL=https://app.clinube.com
 ///
 /// El valor por omisión es el del emulador de Android contra
 /// `scripts/start-local.sh`, que levanta Django en el 8000: dentro del
@@ -93,7 +93,7 @@ class _AppPacienteState extends State<AppPaciente> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mi clínica',
+      title: 'Clinube',
       debugShowCheckedModeBanner: false,
       theme: temaClaro(_marca.colorPrincipal),
       darkTheme: temaOscuro(_marca.colorPrincipal),

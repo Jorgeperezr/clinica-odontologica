@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, apiErrorMessage, readList } from "../../../lib/api";
 import { useConfirm } from "../../../lib/ConfirmDialog";
+import { MARCA } from "../../../lib/marca";
 
 /**
  * Las funcionalidades que se pueden contratar por clínica.
@@ -123,7 +124,7 @@ function PanelDeCredenciales({ cred, clinica, onClose }) {
 
   const url = typeof window !== "undefined" ? `${window.location.origin}/login/` : "";
   const nota = [
-    `Acceso al sistema de ${clinica || "su clínica"}`,
+    `Acceso a ${MARCA}, el sistema de ${clinica || "su clínica"}`,
     "",
     `Dirección: ${url}`,
     `Usuario: ${cred.email}`,

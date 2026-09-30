@@ -1,4 +1,4 @@
-# App del paciente
+# App del paciente — Clinube
 
 Aplicación Flutter para Android y iOS. Consume `apps/app_paciente` de la
 API (Sprint 89): las citas del paciente, lo que debe y las indicaciones
@@ -8,6 +8,21 @@ Lo que **no** enseña, y es deliberado: odontograma, notas clínicas
 internas, diagnósticos sin revisar, costes internos de los tratamientos
 y cualquier dato de otro paciente. La app es una ventana para que el
 paciente se organice, no una copia de su historia clínica.
+
+## Nombre e identificadores
+
+En las tiendas y en el teléfono la app se llama **Clinube**; dentro,
+lleva el nombre, el logotipo y los colores de la clínica del paciente.
+
+| | Valor |
+|---|---|
+| Paquete Dart | `clinube` |
+| Android (`applicationId`) | `com.clinube.paciente` |
+| iOS (`PRODUCT_BUNDLE_IDENTIFIER`) | `com.clinube.paciente` |
+
+Los identificadores **no se pueden cambiar** una vez publicada la app:
+cambiarlos después equivale a publicar otra app y perder las reseñas y
+las instalaciones de la anterior.
 
 ## Cómo se entra
 

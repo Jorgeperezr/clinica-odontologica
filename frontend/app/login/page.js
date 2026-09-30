@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { login, RUTA_CAMBIO } from "../../lib/api";
+import { LEMA, MARCA, SimboloClinube } from "../../lib/marca";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -31,9 +32,9 @@ export default function LoginPage() {
     <div style={styles.wrap}>
       <div style={styles.brandSide}>
         <div style={styles.brandInner}>
-          <div style={styles.tooth} aria-hidden="true">◠</div>
-          <h1 style={styles.brandTitle}>Clínica<br />Odontológica</h1>
-          <p style={styles.brandSub}>Sistema de gestión clínica</p>
+          <div style={styles.simbolo}><SimboloClinube size={72} color="#fff" cruz="var(--petrol-deep)" /></div>
+          <h1 style={styles.brandTitle}>{MARCA}</h1>
+          <p style={styles.brandSub}>{LEMA}</p>
         </div>
       </div>
 
@@ -77,7 +78,7 @@ const styles = {
     display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
   },
   brandInner: { maxWidth: 320 },
-  tooth: { fontSize: 64, lineHeight: 1, color: "var(--mint)", marginBottom: 18 },
+  simbolo: { marginBottom: 18 },
   brandTitle: { color: "#fff", fontSize: 40, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.02em" },
   brandSub: { marginTop: 12, color: "var(--mint)", fontSize: 15 },
   formSide: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },

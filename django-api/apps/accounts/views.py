@@ -3,6 +3,7 @@ import logging
 import secrets
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework import generics, permissions, status
@@ -197,7 +198,7 @@ class StaffRecoveryRequestView(APIView):
         # y nadie lo sabía.
         try:
             send_mail(
-                subject="Recuperación de acceso — Clínica",
+                subject=f"Recuperación de acceso — {settings.MARCA}",
                 message=f"Usa este código para restablecer tu contraseña: {raw_token}",
                 from_email=None,
                 recipient_list=[email],

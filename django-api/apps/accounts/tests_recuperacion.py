@@ -29,6 +29,8 @@ class RecuperacionPorCorreo(APITestCase):
         self.assertEqual(r.data["detail"], GENERICA)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["doc@correo.ec"])
+        # El correo dice de dónde viene: sin marca parecía un aviso cualquiera.
+        self.assertIn("Clinube", mail.outbox[0].subject)
         self.assertTrue(PasswordResetToken.objects.filter(user=self.doc).exists())
 
     def test_un_correo_desconocido_recibe_la_misma_respuesta_y_nada_sale(self):

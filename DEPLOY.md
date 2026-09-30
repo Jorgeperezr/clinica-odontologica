@@ -83,15 +83,15 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
    curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
    sudo dpkg -i cloudflared.deb
    cloudflared tunnel login
-   cloudflared tunnel create clinica
-   cloudflared tunnel route dns clinica clinica.tudominio.ec
+   cloudflared tunnel create clinube
+   cloudflared tunnel route dns clinube app.clinube.com
    ```
 4. Configurar `/etc/cloudflared/config.yml`:
    ```yaml
-   tunnel: clinica
+   tunnel: clinube
    credentials-file: /root/.cloudflared/<ID>.json
    ingress:
-     - hostname: clinica.tudominio.ec
+     - hostname: app.clinube.com
        service: http://localhost:80
      - service: http_status:404
    ```
@@ -142,7 +142,18 @@ Comparativa hecha en septiembre de 2026:
    VM en el Object Storage gratuito de Oracle (20 GB) o en Cloudflare R2
    (10 GB gratis), con `rclone`.
 
-**Lo único que se compra: el dominio.** Recomendado registrarlo en
+**Lo único que se compra: el dominio, `clinube.com`.** Cómo se reparte:
+
+| Dirección | Qué hay |
+|---|---|
+| `app.clinube.com` | El panel y la API (Nginx sirve los dos en el mismo nombre) |
+| `clinube.com` | Libre para la web comercial; mientras no exista, puede redirigir a `app.` |
+| `nombreclinica.clinube.com` | Reservado para la dirección propia de cada clínica (siguiente paso) |
+
+Un solo nivel por debajo de `clinube.com` a propósito: el certificado
+gratuito de Cloudflare cubre `*.clinube.com`, pero no `*.algo.clinube.com`.
+
+Recomendado registrarlo en
 **Cloudflare Registrar**, que lo vende a precio de coste (un `.com`
 ronda los 10–11 US$ al año) y deja el DNS y el túnel en el mismo sitio.
 Un `.ec` se compra en NIC.ec y cuesta bastante más; si se quiere, se
@@ -501,8 +512,8 @@ pip install pip-audit && pip-audit -r django-api/requirements.txt -r whatsapp-ga
 - [ ] **Correo** (`EMAIL_HOST` y compañía): sin él, la recuperación de
       contraseña del personal no sale.
 - [ ] Dominio con HTTPS: la app móvil se compila apuntando a esa dirección
-      (`--dart-define=API_URL=https://…`) y no se puede cambiar sin
-      publicar otra versión.
+      (`--dart-define=API_URL=https://app.clinube.com`) y no se puede
+      cambiar sin publicar otra versión.
 - [ ] Plantilla `recordatorio_cita` en Meta con 3 variables (nombre, fecha,
       instrucción de confirmación) — el webhook ya entiende "CONFIRMO"/"sí".
 - [ ] Credenciales de Meta en `.env` cuando la verificación esté aprobada

@@ -4,7 +4,7 @@
 /// prueba de escritorio no existen.
 library;
 
-import 'package:clinica_paciente/api/cliente.dart';
+import 'package:clinube/api/cliente.dart';
 
 class SesionFalsa implements Sesion {
   String? _acceso;

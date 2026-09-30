@@ -11,8 +11,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:clinica_paciente/api/modelos.dart';
-import 'package:clinica_paciente/tema.dart';
+import 'package:clinube/api/modelos.dart';
+import 'package:clinube/tema.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> _objeto(String nombre) =>

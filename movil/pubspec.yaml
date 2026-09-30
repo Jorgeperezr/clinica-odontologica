@@ -1,5 +1,5 @@
-name: clinica_paciente
-description: Aplicación del paciente de la clínica odontológica.
+name: clinube
+description: Clinube — la app del paciente para su clínica.
 publish_to: none
 version: 0.1.0+1
 

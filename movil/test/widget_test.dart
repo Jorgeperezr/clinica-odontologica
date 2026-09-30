@@ -12,11 +12,11 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:clinica_paciente/api/cliente.dart';
-import 'package:clinica_paciente/api/modelos.dart';
-import 'package:clinica_paciente/pantallas/consultorio.dart';
-import 'package:clinica_paciente/pantallas/ingreso.dart';
-import 'package:clinica_paciente/pantallas/principal.dart';
+import 'package:clinube/api/cliente.dart';
+import 'package:clinube/api/modelos.dart';
+import 'package:clinube/pantallas/consultorio.dart';
+import 'package:clinube/pantallas/ingreso.dart';
+import 'package:clinube/pantallas/principal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;

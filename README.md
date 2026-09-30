@@ -1,4 +1,15 @@
-# Sistema de Gestión — Clínica Odontológica
+# Clinube — gestión clínica en la nube
+
+Plataforma para clínicas: agenda, historia clínica, cobros, documentos,
+respaldos y la app del paciente. La odontología es la primera
+especialidad (odontograma, formulario MSP 033, indicadores de salud
+bucal); el nombre no dice «dental» porque no será la única.
+
+Cada clínica conserva su propia marca —nombre, logotipo y colores— en
+todo lo que ve el paciente. Clinube solo aparece donde todavía no hay
+clínica: la pantalla de acceso, los correos del sistema y la ficha de
+la app en las tiendas. Panel: `frontend/lib/marca.js`; servidor:
+`MARCA` en `django-api/config/settings.py`.
 
 ## Primeros pasos en una máquina nueva
 

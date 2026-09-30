@@ -1,4 +1,4 @@
-# PROJECT_ANALYSIS — Sistema de Gestión para Clínica Odontológica
+# PROJECT_ANALYSIS — Clinube (gestión para clínicas odontológicas)
 
 > Análisis de arquitectura y estado del proyecto, realizado sobre el código real
 > del repositorio (rama `main`, tras el Sprint 52). Verificado ejecutando la

@@ -1,11 +1,11 @@
 {
-    "name": "clinica_paciente",
-    "short_name": "clinica_paciente",
+    "name": "Clinube",
+    "short_name": "Clinube",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Clinube — tus citas, tu tratamiento y tu clínica en el teléfono.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -39,7 +39,7 @@ COMUNES_EN_ESPANOL = {
     "hola", "holahola", "holamundo", "tequiero", "amor", "familia",
     "estrella", "mariposa", "principal", "personal", "trabajo", "oficina",
     # El oficio: lo primero que se escribe cuando hay que inventar algo
-    "clinica", "clinicaodontologica", "odontologia", "odontologica",
+    "clinube", "clinica", "clinicaodontologica", "odontologia", "odontologica",
     "odontologo", "odontologa", "dentista", "dental", "consultorio",
     "diente", "dientes", "muela", "muelas", "sonrisa", "paciente",
     "pacientes", "doctor", "doctora", "doctorito", "salud", "medico",

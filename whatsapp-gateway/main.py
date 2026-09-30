@@ -20,7 +20,7 @@ from app.security import verify_internal_token, verify_meta_signature
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="WhatsApp Gateway — Clínica Odontológica", version="1.0.0")
+app = FastAPI(title="WhatsApp Gateway — Clinube", version="1.0.0")
 
 
 @app.get("/health", tags=["infra"])

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, currentUser, logout, tieneFuncion } from "../../lib/api";
+import { MARCA, SimboloClinube } from "../../lib/marca";
 import { applyBrandingChrome, applyTheme, initColorMode, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 import NavIcon from "../../lib/NavIcons";
 import ThemeSwitch from "../../lib/ThemeSwitch";
@@ -168,7 +169,7 @@ export default function PanelLayout({ children }) {
           )}
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-.01em",
                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {branding?.short_name || branding?.display_name || "Clínica"}
+            {branding?.short_name || branding?.display_name || MARCA}
           </span>
         </header>
       )}
@@ -194,13 +195,13 @@ export default function PanelLayout({ children }) {
                  style={{ height: (collapsed && !isMobile) ? 32 : 40, maxWidth: (collapsed && !isMobile) ? 46 : 70,
                           objectFit: "contain" }} />
           ) : (
-            <span style={{ fontSize: 26, color: "var(--mint)" }} aria-hidden="true">◠</span>
+            <SimboloClinube size={30} color="var(--mint)" cruz="var(--nav-bg)" />
           )}
           {(!collapsed || isMobile) && (
             <span style={{ ...styles.logoText, fontSize: 15, lineHeight: 1.15,
                            overflow: "hidden", display: "-webkit-box",
                            WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-              {branding?.short_name || branding?.display_name || "Clínica"}
+              {branding?.short_name || branding?.display_name || MARCA}
             </span>
           )}
         </div>
@@ -268,6 +269,13 @@ export default function PanelLayout({ children }) {
                   title="Cerrar sesión">
             {(collapsed && !isMobile) ? "⎋" : "Cerrar sesión"}
           </button>
+          {/* La marca de la clínica va arriba; la de la plataforma, aquí y discreta. */}
+          {(!collapsed || isMobile) && (
+            <div style={styles.plataforma}>
+              <SimboloClinube size={14} color="var(--nav-ink-soft)" cruz="var(--nav-bg)" />
+              {MARCA}
+            </div>
+          )}
         </div>
       </aside>
 
@@ -360,6 +368,10 @@ const styles = {
     marginTop: 10, background: "transparent", border: "1px solid var(--nav-line)",
     color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, width: "100%",
     cursor: "pointer",
+  },
+  plataforma: {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10,
+    fontSize: 11.5, fontWeight: 600, letterSpacing: ".02em", color: "var(--nav-ink-soft)",
   },
   // Main ahora ocupa TODO el ancho restante y centra su contenido.
   main: { flex: 1, minWidth: 0, width: "100%", padding: "clamp(16px, 3vw, 28px) clamp(14px, 3vw, 40px)", display: "flex", justifyContent: "center" },

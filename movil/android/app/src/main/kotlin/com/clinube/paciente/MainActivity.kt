@@ -1,4 +1,4 @@
-package ec.clinicaodontologica.clinica_paciente
+package com.clinube.paciente
 
 import io.flutter.embedding.android.FlutterActivity
 

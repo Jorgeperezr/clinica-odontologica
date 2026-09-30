@@ -92,7 +92,7 @@ class PlatformConfiguration(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    platform_name = models.CharField(max_length=120, default="Plataforma Odontológica")
+    platform_name = models.CharField(max_length=120, default="Clinube")
     logo_url = models.URLField(blank=True)
     smtp_host = models.CharField(max_length=255, blank=True)
     smtp_port = models.PositiveIntegerField(default=587)

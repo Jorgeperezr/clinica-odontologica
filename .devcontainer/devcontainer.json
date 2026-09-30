@@ -1,5 +1,5 @@
 {
-  "name": "Clínica Odontológica",
+  "name": "Clinube",
   "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}

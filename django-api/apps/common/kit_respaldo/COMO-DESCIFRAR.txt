@@ -1,5 +1,5 @@
 ============================================================
- COPIA DE SEGURIDAD CIFRADA — CÓMO ABRIRLA
+ COPIA DE SEGURIDAD CIFRADA (CLINUBE) — CÓMO ABRIRLA
 ============================================================
 
 $resumen
@@ -34,7 +34,7 @@ de donde guarde esta carpeta. No la envíe por el mismo correo o chat
 que la copia.
 
 ------------------------------------------------------------
- OPCIÓN 1 — Desde la plataforma
+ OPCIÓN 1 — Desde la plataforma (Clinube)
 ------------------------------------------------------------
 
 Si todavía tiene acceso al panel de la clínica:
