@@ -59,6 +59,9 @@ export default function PanelLayout({ children }) {
       applyBrandingChrome(cached);
     }
     (async () => {
+      // El Super Administrador no tiene clínica y por tanto no tiene
+      // marca: pedirla solo devolvía un 403 en cada pantalla.
+      if (u.role === "superadmin") return;
       try {
         const resp = await api("/config/branding/");
         if (resp.ok) {

@@ -36,8 +36,15 @@ function PatientDetail() {
   const [patient, setPatient] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [role, setRole] = useState("");
+  const [rolListo, setRolListo] = useState(false);
   const [puedeCobrar, setPuedeCobrar] = useState(false);
   const [tab, setTab] = useState("odontograma");
+  // Recepción no ve datos clínicos (el servidor responde 403). Antes la
+  // ficha le enseñaba igual el odontograma, las evoluciones y el plan,
+  // VACÍOS: parecía que la paciente no tenía ningún registro. Ahora solo
+  // ve lo que le toca y se le dice por qué.
+  const clinico = role !== "reception";
+  useEffect(() => { if (role === "reception") setTab("documentos"); }, [role]);
 
   useEffect(() => {
     (async () => {
@@ -46,6 +53,7 @@ function PatientDetail() {
         setRole(u?.role || "");
         setPuedeCobrar(tieneFuncion(u, "cobros"));
       } catch { /* opcional */ }
+      finally { setRolListo(true); }
     })();
   }, []);
 
@@ -69,7 +77,9 @@ function PatientDetail() {
     );
   }
 
-  if (!patient) return <div className="empty">Cargando…</div>;
+  // Sin el rol no se sabe qué pestañas tocan: pintar antes la del
+  // odontograma haría que recepción la pidiera y recibiera un 403.
+  if (!patient || !rolListo) return <div className="empty">Cargando…</div>;
 
   return (
     <div>
@@ -98,10 +108,10 @@ function PatientDetail() {
                                      borderBottom: "1px solid var(--line)",
                                      overflowX: "auto", scrollbarWidth: "thin",
                                      WebkitOverflowScrolling: "touch" }}>
-        {[["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
-          ["plan", "Plan de tratamiento"], ["documentos", "Documentos"],
+        {[...(clinico ? [["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
+          ["plan", "Plan de tratamiento"]] : []), ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"],
-          ["odontograma3d", "Odontograma 3D"],
+          ...(clinico ? [["odontograma3d", "Odontograma 3D"]] : []),
           ...(puedeCobrar ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{
@@ -115,7 +125,13 @@ function PatientDetail() {
         ))}
       </div>
 
-      {tab === "odontograma" && <OdontogramTab patientId={id} />}
+      {!clinico && (
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "-8px 0 16px" }}>
+          La historia clínica (odontograma, evoluciones y plan de tratamiento) solo la ven los
+          profesionales y la administración.
+        </p>
+      )}
+      {tab === "odontograma" && clinico && <OdontogramTab patientId={id} />}
       {tab === "evoluciones" && <EvolutionsTab patientId={id} />}
       {tab === "plan" && <PlanTab patientId={id} />}
       {tab === "documentos" && (
