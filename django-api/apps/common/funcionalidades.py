@@ -77,8 +77,24 @@ def normalizar(valor):
     }
 
 
-def activa(tenant, clave):
-    """¿Esta clínica tiene esta funcionalidad?"""
+def contratadas(tenant):
+    """Lo que la plataforma le ha dado de alta a la clínica."""
+    return normalizar(getattr(tenant, "funcionalidades", None))
+
+
+def efectivas(tenant):
+    """
+    Lo que la clínica usa de verdad: contratado por la plataforma Y no
+    apagado por la propia clínica. Dos llaves, cada una de quien le toca:
+    la plataforma decide qué se puede usar y la clínica, qué quiere usar.
+    """
     if tenant is None:
-        return False
-    return normalizar(getattr(tenant, "funcionalidades", None)).get(clave, False)
+        return {clave: False for clave in CATALOGO}
+    propias = getattr(tenant, "modulos_clinica", None) or {}
+    return {clave: activo and propias.get(clave, True) is not False
+            for clave, activo in contratadas(tenant).items()}
+
+
+def activa(tenant, clave):
+    """¿Esta clínica tiene y usa esta funcionalidad?"""
+    return efectivas(tenant).get(clave, False)

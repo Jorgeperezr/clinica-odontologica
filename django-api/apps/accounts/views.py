@@ -430,11 +430,11 @@ class PreferenciasView(APIView):
 
 
 def _funcionalidades_de(usuario):
-    from apps.common.funcionalidades import CATALOGO, normalizar
+    from apps.common.funcionalidades import CATALOGO, efectivas
 
     if usuario.tenant_id is None:
         # El Super Administrador opera sobre la plataforma, no dentro de
         # una clínica. Se le devuelve todo apagado para que el panel no
         # le pinte módulos de clínica que no le corresponden.
         return {clave: False for clave in CATALOGO}
-    return normalizar(usuario.tenant.funcionalidades)
+    return efectivas(usuario.tenant)

@@ -19,8 +19,8 @@ const OPCIONES = [
     texto: "Muestra el modelo tridimensional en la ficha de cada paciente, junto al clásico, "
       + "el anatómico y el periodontograma. Apágalo si trabajas mejor sin él o si tu equipo "
       + "lo mueve con dificultad: los datos clínicos son los mismos en todos los modelos.",
-    sinContrato: "Tu clínica no tiene contratado el odontograma 3D. Pídeselo al administrador "
-      + "de la plataforma si lo necesitas.",
+    sinContrato: "Tu clínica tiene el odontograma 3D apagado o no lo tiene contratado. Lo enciende "
+      + "la administración de la clínica en Configuración → Módulos.",
   },
 ];
 

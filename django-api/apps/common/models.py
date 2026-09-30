@@ -26,6 +26,15 @@ class Tenant(models.Model):
             "datos: deja de verse y de poder tocarse."
         ),
     )
+    # Lo que la PROPIA clínica decide no usar de lo que tiene contratado
+    # (p. ej. el odontograma 3D o las rachas y logros). Lo contratado lo
+    # decide la plataforma en `funcionalidades`; esto lo decide la
+    # administración de la clínica y solo puede apagar, nunca dar de alta
+    # algo que no está contratado. {clave: False} = apagado por la clínica.
+    modulos_clinica = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Módulos que la clínica decide usar",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

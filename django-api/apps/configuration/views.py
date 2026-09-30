@@ -509,3 +509,64 @@ class TenantBackupDecryptView(APIView):
             "generated_at": manifest.get("generated_at", ""),
         })
         return Response(payload)
+
+
+# ── Módulos que usa la clínica ─────────────────────────────────────────
+class ModulosClinicaView(APIView):
+    """
+    GET/PATCH /api/v1/config/modulos/ — qué módulos usa ESTA clínica.
+
+    Dos llaves distintas. La plataforma decide qué tiene contratado cada
+    clínica (Plataforma → Clínicas); la administración de la clínica
+    decide, dentro de eso, qué quiere usar: apagar el odontograma 3D o
+    las rachas y logros si en su consulta no se usan. Solo puede apagar y
+    volver a encender lo contratado: aquí no se da de alta nada.
+
+    Apagar no borra datos; al encenderlo de nuevo todo sigue ahí.
+    """
+
+    permission_classes = [IsClinicAdmin]
+
+    def _respuesta(self, tenant):
+        from apps.common.funcionalidades import CATALOGO, contratadas, efectivas
+
+        contratado, efectivo = contratadas(tenant), efectivas(tenant)
+        return Response([
+            {"clave": clave, "nombre": d["nombre"], "descripcion": d["descripcion"],
+             "contratado": contratado[clave], "activo": efectivo[clave]}
+            for clave, d in CATALOGO.items()
+        ])
+
+    def get(self, request):
+        return self._respuesta(request.tenant)
+
+    def patch(self, request):
+        from apps.common.funcionalidades import CATALOGO, contratadas
+
+        datos = request.data if isinstance(request.data, dict) else {}
+        desconocidas = sorted(set(datos) - set(CATALOGO))
+        if desconocidas:
+            return Response({"detail": f"Módulos desconocidos: {', '.join(desconocidas)}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if any(not isinstance(v, bool) for v in datos.values()):
+            return Response({"detail": "Cada módulo va con verdadero o falso."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        contratado = contratadas(request.tenant)
+        sin_contrato = sorted(k for k, v in datos.items() if v and not contratado[k])
+        if sin_contrato:
+            nombres = ", ".join(CATALOGO[k]["nombre"] for k in sin_contrato)
+            return Response(
+                {"detail": f"Tu clínica no tiene contratado: {nombres}. "
+                           "Pídeselo al administrador de la plataforma."},
+                status=status.HTTP_403_FORBIDDEN)
+
+        tenant = request.tenant
+        tenant.modulos_clinica = {**(tenant.modulos_clinica or {}), **datos}
+        tenant.save(update_fields=["modulos_clinica"])
+        from apps.accounts.models import AuditLog
+
+        AuditLog.objects.create(
+            tenant=tenant, user=request.user, action="update_modules",
+            entity_type="Tenant", entity_id=str(tenant.id), metadata=datos,
+        )
+        return self._respuesta(tenant)

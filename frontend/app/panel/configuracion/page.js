@@ -7,6 +7,7 @@ import { PRESETS, applyTheme, logoSrc, resetTheme, saveBrandingCache } from "../
 import LogoCropper from "../../../lib/LogoCropper";
 import DocumentAppearance from "../../../lib/DocumentAppearance";
 import ClinicBackup from "../../../lib/ClinicBackup";
+import ModulosClinica from "../../../lib/ModulosClinica";
 import AgreementsTariffs from "../../../lib/AgreementsTariffs";
 import RachasYLogros from "../../../lib/RachasYLogros";
 import WhatsAppClinica from "../../../lib/WhatsAppClinica";
@@ -33,7 +34,7 @@ export default function ConfiguracionPage() {
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Configuración</h1>
 
       <div className="tabs" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--line)" }}>
-        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ...(hay("convenios") ? [["convenios", "Convenios y tarifarios"]] : []),
+        {[["tratamientos", "Tratamientos"], ["plantillas", "Plantillas de plan"], ["especialidades", "Especialidades"], ["usuarios", "Usuarios"], ["modulos", "Módulos"], ...(hay("convenios") ? [["convenios", "Convenios y tarifarios"]] : []),
           ...(hay("logros") ? [["logros", "Rachas y logros"]] : []),
           ...(hay("whatsapp") ? [["whatsapp", "WhatsApp"]] : []),
           ["parametros", "Parámetros"], ["consentimientos", "Consentimientos"], ["personalizacion", "Personalización"],
@@ -55,6 +56,7 @@ export default function ConfiguracionPage() {
       {tab === "especialidades" && <SpecialtiesTab />}
       {tab === "plantillas" && <TemplatesTab />}
       {tab === "usuarios" && <UsersTab />}
+      {tab === "modulos" && <ModulosClinica />}
       {tab === "convenios" && <AgreementsTariffs />}
       {tab === "logros" && <RachasYLogros />}
       {tab === "whatsapp" && <WhatsAppClinica />}

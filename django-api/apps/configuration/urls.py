@@ -18,6 +18,7 @@ urlpatterns = [
          name="tenant-backup-tools"),
     path("config/backup/decrypt/", views.TenantBackupDecryptView.as_view(),
          name="tenant-backup-decrypt"),
+    path("config/modulos/", views.ModulosClinicaView.as_view(), name="modulos-clinica"),
     path("config/parameters/", views.SystemParameterListView.as_view(), name="parameter-list"),
     path("config/parameters/<uuid:pk>/", views.SystemParameterDetailView.as_view(), name="parameter-detail"),
 ]

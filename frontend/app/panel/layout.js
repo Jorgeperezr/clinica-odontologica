@@ -46,6 +46,10 @@ export default function PanelLayout({ children }) {
     if (!u) { window.location.href = "/login/"; return; }
     setUser(u);
     setReady(true);
+    // Módulos o preferencias cambiados en esta sesión: el menú se
+    // actualiza sin tener que volver a entrar.
+    const alCambiarPerfil = () => setUser(currentUser());
+    window.addEventListener("perfil-actualizado", alCambiarPerfil);
     // Apariencia (claro/oscuro/sistema) antes de pintar la marca, para
     // que los tonos se deriven ya con el modo correcto.
     const stopColorMode = initColorMode();
@@ -78,7 +82,10 @@ export default function PanelLayout({ children }) {
       applyTheme(b.theme);
       applyBrandingChrome(b);
     });
-    return () => { unsubscribe(); stopColorMode(); };
+    return () => {
+      unsubscribe(); stopColorMode();
+      window.removeEventListener("perfil-actualizado", alCambiarPerfil);
+    };
     // Recordar la preferencia de menú colapsado
     try {
       const saved = localStorage.getItem("sidebarCollapsed");
