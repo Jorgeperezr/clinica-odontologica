@@ -33,6 +33,16 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
    nano .env   # completar TODOS los CAMBIAR- y el dominio real
    python3 -c "import secrets; print(secrets.token_urlsafe(64))"  # para la SECRET_KEY
    ```
+   **El servidor no arranca si queda algo de ejemplo.** Con
+   `docker-compose.prod.yml` (que fija `DJANGO_ENTORNO=produccion`),
+   `config/produccion.py` exige `DJANGO_DEBUG=False`, una
+   `DJANGO_SECRET_KEY` propia de 50+ caracteres, un
+   `INTERNAL_SERVICE_TOKEN` de 32+ y una `POSTGRES_PASSWORD` de 12+, y
+   rechaza cualquier valor con «CAMBIAR» o «change-me». El contenedor
+   `django-api` se detiene con la lista de lo que falta:
+   `docker compose -f docker-compose.prod.yml logs django-api`.
+   Con la clave de ejemplo, cualquiera podría firmar tokens de acceso
+   válidos y entrar sin contraseña.
 4. **Levantar:**
    ```bash
    docker compose -f docker-compose.prod.yml up -d --build
@@ -42,7 +52,9 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
    docker compose -f docker-compose.prod.yml exec django-api python manage.py createsuperuser
    ```
 6. **Verificar:** `curl -I http://localhost` debe devolver 200 (panel) y
-   `http://localhost/api/v1/schema/swagger-ui/` debe cargar.
+   `curl http://localhost/api/v1/ready/` también. La documentación de la
+   API (`/api/v1/schema/swagger-ui/`) en producción pide sesión: publicarla
+   le daría a cualquiera el mapa completo de la API.
 
 ## Opción A — VM en GCP
 
@@ -385,6 +397,36 @@ paciente y permisos antes de devolver el binario.
 Con `USE_CLOUD_STORAGE=True` los archivos van al bucket y esto no aplica:
 las URLs son absolutas y el control de acceso lo da el propio bucket, que debe
 quedar **privado** por el mismo motivo.
+
+## Seguridad de las dependencias
+
+Revisado con `npm audit` y `pip-audit` (septiembre de 2026). Se
+actualizó todo lo que tenía arreglo sin cambiar de versión mayor del
+framework: Django 5.2 LTS (la 5.0 ya no recibe parches), DRF, SimpleJWT,
+Pillow, cryptography, FastAPI/Starlette, python-multipart, Next.js
+14.2.35 y jsPDF 4.
+
+Quedan dos avisos de `npm audit`, **sin efecto en producción**:
+
+- **Next.js 14**: los fallos que siguen abiertos en la rama 14
+  (optimizador de imágenes, acciones de servidor, middleware) exigen un
+  servidor Next en marcha. En producción no lo hay: el panel se exporta
+  a HTML estático y lo sirve Nginx. El servidor de desarrollo
+  (`next dev`) sí los tiene: no exponerlo fuera del equipo.
+- **postcss**: lo usa Next al compilar, sobre el CSS propio.
+
+Pasar a Next 15/16 los cierra también en desarrollo, pero es una
+actualización mayor (React 19) que conviene hacer aparte.
+
+Repetir la revisión antes de cada despliegue:
+
+```bash
+cd frontend && npm audit --omit=dev
+```
+
+```bash
+pip install pip-audit && pip-audit -r django-api/requirements.txt -r whatsapp-gateway/requirements.txt
+```
 
 ## Pendientes ANTES de pacientes reales
 

@@ -14,7 +14,11 @@ from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-me")
+# El valor por omisión es solo para desarrollo y pruebas: en producción
+# (DJANGO_ENTORNO=produccion) `config/produccion.py` no deja arrancar con
+# él. Tiene más de 32 bytes porque firma los JWT con HMAC-SHA256 y una
+# clave más corta hace que PyJWT avise en cada token.
+SECRET_KEY = config("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-me-never-use-in-production")
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
@@ -225,6 +229,12 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "API — Clínica Odontológica",
     "DESCRIPTION": "Ver el documento 05-APIs-Clinica-Odontologica.md para el contrato completo.",
     "VERSION": "1.0.0",
+    # En desarrollo el esquema y Swagger están abiertos para consultarlos
+    # cómodamente. En producción, no: publicarlos le da a cualquiera el
+    # mapa completo de la API —rutas, parámetros, qué devuelve cada una—
+    # de un sistema con datos clínicos.
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"] if DEBUG
+    else ["rest_framework.permissions.IsAuthenticated"],
 }
 
 SIMPLE_JWT = {
@@ -257,6 +267,13 @@ CELERY_TIMEZONE = TIME_ZONE
 # --------------------------------------------------------------------------
 WHATSAPP_GATEWAY_URL = config("WHATSAPP_GATEWAY_URL", default="http://whatsapp-gateway:8001")
 INTERNAL_SERVICE_TOKEN = config("INTERNAL_SERVICE_TOKEN", default="dev-only-shared-secret-change-me")
+
+# Producción: negarse a arrancar con valores de ejemplo (ver config/produccion.py).
+ENTORNO = config("DJANGO_ENTORNO", default="desarrollo")
+if ENTORNO == "produccion":
+    from config.produccion import exigir
+
+    exigir(globals())
 
 # --------------------------------------------------------------------------
 # Almacenamiento de archivos (Cloud Storage en producción — ver Arquitectura)

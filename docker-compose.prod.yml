@@ -42,6 +42,9 @@ services:
     build: ./django-api
     restart: unless-stopped
     env_file: .env
+    # No arranca con claves de ejemplo ni con DEBUG (config/produccion.py).
+    environment:
+      DJANGO_ENTORNO: produccion
     command: >
       sh -c "python manage.py migrate &&
              python manage.py bootstrap &&
@@ -66,6 +69,9 @@ services:
     build: ./django-api
     restart: unless-stopped
     env_file: .env
+    # No arranca con claves de ejemplo ni con DEBUG (config/produccion.py).
+    environment:
+      DJANGO_ENTORNO: produccion
     command: celery -A config worker -l info --concurrency 2
     depends_on:
       django-api:
@@ -77,6 +83,9 @@ services:
     build: ./django-api
     restart: unless-stopped
     env_file: .env
+    # No arranca con claves de ejemplo ni con DEBUG (config/produccion.py).
+    environment:
+      DJANGO_ENTORNO: produccion
     command: celery -A config beat -l info
     depends_on:
       django-api:

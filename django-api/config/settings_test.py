@@ -25,3 +25,14 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 # inmediatamente en el mismo proceso, sin necesidad de Redis/broker.
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+
+# Los archivos que suben las pruebas van a un directorio temporal que
+# desaparece al terminar. Antes caían en `media/` —el mismo que usa el
+# servidor de desarrollo— y se habían acumulado cientos de PDF e
+# imágenes de prueba mezclados con los de verdad.
+import atexit  # noqa: E402
+import shutil  # noqa: E402
+import tempfile  # noqa: E402
+
+MEDIA_ROOT = tempfile.mkdtemp(prefix="clinica-pruebas-media-")
+atexit.register(shutil.rmtree, MEDIA_ROOT, ignore_errors=True)
