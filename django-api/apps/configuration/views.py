@@ -334,19 +334,47 @@ def _audit_backup(request, action, metadata=None):
     )
 
 
+class PuedeRespaldar(IsClinicAdmin):
+    """
+    Quién puede generar y abrir copias:
+
+      · la administración de la clínica, la de toda la clínica;
+      · cada doctor o auxiliar con la función «respaldo», la de SUS
+        pacientes (ver `tenant_backup.collect_profesional`).
+
+    Hereda de `IsClinicAdmin` para que el Super Administrador siga fuera:
+    no tiene clínica y no es titular de los datos de ninguna.
+    """
+
+    message = "No tienes asignada la función de respaldo en la clínica."
+
+    def has_permission(self, request, view):
+        if super().has_permission(request, view):
+            return True
+        from apps.accounts.funciones import tiene
+
+        u = request.user
+        return bool(u and u.is_authenticated and u.tenant_id and not u.is_superuser
+                    and u.role in ("doctor", "auxiliary") and tiene(u, "respaldo"))
+
+
+def _es_admin_de_clinica(request):
+    return IsClinicAdmin().has_permission(request, None)
+
+
 class TenantBackupView(APIView):
     """
-    POST /api/v1/config/backup/ — genera la copia cifrada de la clínica y
-    la devuelve como descarga.
+    POST /api/v1/config/backup/ — genera la copia cifrada y la devuelve
+    como un .zip con la copia y lo necesario para abrirla sin la
+    plataforma (instrucciones y herramientas, ver `paquete_respaldo`).
 
     Cuerpo: {"passphrase": "...", "passphrase_confirm": "..."}
 
-    Solo la administradora o el administrador de la clínica. El Super
-    Administrador queda fuera a propósito: administra la plataforma, no
-    es titular de los datos de ninguna clínica (ver `IsClinicAdmin`).
+    La administración se lleva la de toda la clínica; un doctor o un
+    auxiliar, la de sus pacientes (ver `PuedeRespaldar`).
     """
 
-    permission_classes = [IsClinicAdmin]
+    permission_classes = [PuedeRespaldar]
 
     def post(self, request):
         passphrase = (request.data.get("passphrase") or "").strip()
@@ -366,20 +394,45 @@ class TenantBackupView(APIView):
 
         from django.http import HttpResponse
 
+        from apps.common.paquete_respaldo import empaquetar
         from apps.common.tenant_backup import build_encrypted, suggested_filename
 
-        blob, manifest = build_encrypted(request.tenant, passphrase, requested_by=request.user)
+        profesional = None if _es_admin_de_clinica(request) else request.user
+        blob, manifest = build_encrypted(request.tenant, passphrase, requested_by=request.user,
+                                         profesional=profesional)
+        nombre = suggested_filename(request.tenant, profesional)
+        paquete = empaquetar(blob, nombre, manifest)
 
         # Se audita el hecho, nunca la frase: dejarla en el registro
         # anularía el cifrado para cualquiera que lea la auditoría.
         _audit_backup(request, "create_backup", {
+            "alcance": manifest["alcance"]["tipo"],
             "total_records": manifest["total_records"],
             "bytes": len(blob),
         })
 
-        response = HttpResponse(blob, content_type="application/octet-stream")
-        response["Content-Disposition"] = f'attachment; filename="{suggested_filename(request.tenant)}"'
+        response = HttpResponse(paquete, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{nombre[:-len(".clinicabk")]}.zip"'
         response["X-Backup-Records"] = str(manifest["total_records"])
+        return response
+
+
+class TenantBackupToolsView(APIView):
+    """
+    GET /api/v1/config/backup/herramientas/ — solo las instrucciones y
+    las herramientas de descifrado, sin datos. Para quien tiene una copia
+    antigua o perdió el .zip y conserva el .clinicabk.
+    """
+
+    permission_classes = [PuedeRespaldar]
+
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from apps.common.paquete_respaldo import solo_herramientas
+
+        response = HttpResponse(solo_herramientas(), content_type="application/zip")
+        response["Content-Disposition"] = 'attachment; filename="como-descifrar-la-copia.zip"'
         return response
 
 
@@ -388,17 +441,22 @@ class TenantBackupDecryptView(APIView):
     POST /api/v1/config/backup/decrypt/ — descifra una copia y devuelve
     su contenido legible.
 
-    Envío multipart: `file` (el .clinicabk) y `passphrase`.
+    Envío multipart: `file` (el .clinicabk o el .zip de la descarga) y
+    `passphrase`.
 
     Descifrar NO restaura nada: devuelve la información para consultarla
     o guardarla en claro. Reemplazar la base de datos con una copia es
     una operación destructiva que se hace desde el servidor, con
     `scripts/restore.sh`, y no debe estar a un clic en un panel web.
+
+    La administración abre cualquier copia de su clínica; un profesional,
+    solo las suyas.
     """
 
-    permission_classes = [IsClinicAdmin]
+    permission_classes = [PuedeRespaldar]
 
     def post(self, request):
+        from apps.common.paquete_respaldo import sacar_copia
         from apps.common.tenant_backup import BackupError, read_encrypted
 
         upload = request.FILES.get("file")
@@ -417,7 +475,7 @@ class TenantBackupDecryptView(APIView):
             )
 
         try:
-            payload = read_encrypted(upload.read(), passphrase)
+            payload = read_encrypted(sacar_copia(upload.read()), passphrase)
         except BackupError as exc:
             _audit_backup(request, "decrypt_backup_failed", {"reason": str(exc)})
             return Response({"error": {"message": str(exc)}},
@@ -425,16 +483,29 @@ class TenantBackupDecryptView(APIView):
 
         # Una copia de otra clínica no se abre aquí aunque se conozca su
         # frase: cada administración descifra lo suyo.
-        origin = payload.get("manifest", {}).get("tenant", {}).get("id")
+        manifest = payload.get("manifest", {})
+        origin = manifest.get("tenant", {}).get("id")
         if origin and str(origin) != str(request.tenant.id):
             _audit_backup(request, "decrypt_backup_denied", {"origin_tenant": str(origin)})
             return Response(
                 {"error": {"message": "Esta copia pertenece a otra clínica y no se puede abrir aquí."}},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # Y un profesional, solo las suyas: la de la clínica o la de un
+        # colega llevan pacientes que no son suyos.
+        alcance = manifest.get("alcance") or {"tipo": "clinica"}
+        if not _es_admin_de_clinica(request) and (
+                alcance.get("tipo") != "profesional" or alcance.get("user_id") != str(request.user.id)):
+            _audit_backup(request, "decrypt_backup_denied", {"alcance": alcance.get("tipo")})
+            return Response(
+                {"error": {"message": "Esta copia no es tuya: solo puedes abrir las que generaste tú. "
+                                      "Pide a la administración de la clínica que la abra."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         _audit_backup(request, "decrypt_backup", {
-            "total_records": payload["manifest"].get("total_records", 0),
-            "generated_at": payload["manifest"].get("generated_at", ""),
+            "alcance": alcance.get("tipo"),
+            "total_records": manifest.get("total_records", 0),
+            "generated_at": manifest.get("generated_at", ""),
         })
         return Response(payload)

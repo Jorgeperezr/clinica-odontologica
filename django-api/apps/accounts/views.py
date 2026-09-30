@@ -368,6 +368,7 @@ class CatalogoFuncionesView(APIView):
                 "descripcion": d["descripcion"],
                 "disponible": d["funcionalidad"] is None or activa(request.tenant, d["funcionalidad"]),
                 "al_crear": {rol: clave in AL_CREAR.get(rol, set()) for rol in ROLES_CON_FUNCIONES},
+                "roles": list(d.get("roles", ROLES_CON_FUNCIONES)),
             }
             for clave, d in CATALOGO.items()
         ])

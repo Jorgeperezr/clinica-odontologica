@@ -241,7 +241,7 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:
 # desarrollo el panel corre en otro puerto y el navegador oculta las
 # cabeceras de respuesta que no se declaren aquí. Sin esto, una descarga
 # generada por la API llega sin su nombre de archivo.
-CORS_EXPOSE_HEADERS = ["Content-Disposition"]
+CORS_EXPOSE_HEADERS = ["Content-Disposition", "X-Backup-Records"]
 
 # --------------------------------------------------------------------------
 # Celery / Redis (recordatorios, tareas programadas — ver Arquitectura v1.2)

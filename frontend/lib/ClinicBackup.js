@@ -15,6 +15,14 @@
  * Abrir una copia NO restaura nada: muestra lo que contiene y permite
  * descargarlo en claro. Reemplazar la base de datos es una operación
  * destructiva que se hace desde el servidor y no debe estar a un clic.
+ *
+ * Lo que se descarga es un .zip con la copia y lo necesario para abrirla
+ * SIN la plataforma: instrucciones, una herramienta para el navegador
+ * que funciona sin internet y otra para la terminal (ver
+ * django-api/apps/common/paquete_respaldo.py).
+ *
+ * `alcance="profesional"`: la misma pantalla para un doctor o auxiliar,
+ * con la copia de SUS pacientes (página «Mi respaldo»).
  */
 
 import { useState } from "react";
@@ -72,6 +80,11 @@ const MODEL_LABELS = {
   "whatsapp.WhatsAppMessageLog": "Mensajes de WhatsApp",
   "whatsapp.WhatsAppOptIn": "Consentimientos de WhatsApp",
   "whatsapp.WhatsAppTemplate": "Plantillas de WhatsApp",
+  "whatsapp.ConfiguracionWhatsApp": "Configuración de WhatsApp",
+  "app_paciente.SolicitudCita": "Solicitudes de cita (app)",
+  "app_paciente.MensajeConsultorio": "Mensajes de la app",
+  "logros.Logro": "Logros",
+  "logros.LogroDePaciente": "Logros concedidos",
 };
 
 function download(blob, filename) {
@@ -91,22 +104,87 @@ function stamp() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-export default function ClinicBackup() {
+export default function ClinicBackup({ alcance = "clinica" }) {
+  const propia = alcance === "profesional";
   return (
     <div style={{ display: "grid", gap: 18, maxWidth: 860 }}>
       <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0 }}>
-        Descarga una copia cifrada con los datos de esta clínica —pacientes, historias,
-        citas, pagos e inventario— y ábrela cuando la necesites escribiendo la frase con
-        la que la cifraste. Solo la administración de la clínica puede hacerlo.
+        {propia ? (
+          <>Descarga una copia cifrada con la información de <strong>los pacientes que atiendes</strong>
+          —sus datos, su historia clínica completa, odontogramas, evoluciones y recetas— y tu
+          agenda. No lleva cobros, inventario ni pacientes de otros profesionales. Solo tú puedes
+          abrirla en el panel, además de la administración de la clínica.</>
+        ) : (
+          <>Descarga una copia cifrada con los datos de esta clínica —pacientes, historias,
+          citas, pagos e inventario— y ábrela cuando la necesites escribiendo la frase con
+          la que la cifraste. Cada doctor o auxiliar puede sacar, desde «Mi respaldo», la de
+          sus propios pacientes; se le quita desmarcando su función en Usuarios.</>
+        )}
       </p>
-      <CreateCard />
-      <OpenCard />
+      <CreateCard propia={propia} />
+      <ComoAbrir />
+      <OpenCard propia={propia} />
+    </div>
+  );
+}
+
+/* ── Cómo abrirla fuera de la plataforma ─────────────────────────────── */
+function ComoAbrir() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function herramientas() {
+    setBusy(true); setError("");
+    try {
+      const resp = await api("/config/backup/herramientas/");
+      if (!resp.ok) throw new Error(`No se pudieron descargar (error ${resp.status}).`);
+      download(await resp.blob(), "como-descifrar-la-copia.zip");
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  const paso = { margin: "0 0 6px", fontSize: 13.5 };
+  return (
+    <div className="card">
+      <h3 style={{ marginBottom: 6 }}>Cómo abrir la copia</h3>
+      <p style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 0 }}>
+        La descarga es un <strong>.zip</strong> que trae la copia cifrada (<code>.clinicabk</code>) y
+        todo lo necesario para abrirla, también <strong>sin la plataforma</strong>. Las mismas
+        instrucciones van dentro, en <code>COMO-DESCIFRAR.txt</code>.
+      </p>
+      {error && <div className="error-box">{error}</div>}
+      <ol style={{ paddingLeft: 20, margin: "0 0 12px" }}>
+        <li style={paso}>
+          <strong>Aquí mismo</strong>, en «Abrir una copia»: elige el .zip o el .clinicabk y escribe
+          la frase.
+        </li>
+        <li style={paso}>
+          <strong>Sin la plataforma y sin internet:</strong> descomprime el .zip y abre{" "}
+          <code>descifrar.html</code> con Chrome, Edge, Firefox o Safari. Todo ocurre en tu equipo:
+          el archivo y la frase no se envían a ningún sitio. Enseña cada tabla y la descarga en
+          CSV (Excel, Numbers, LibreOffice) o en JSON.
+        </li>
+        <li style={paso}>
+          <strong>Desde la terminal</strong> (personal técnico): <code>descifrar.py</code>, con Python
+          3.8+ y la biblioteca <code>cryptography</code>.
+        </li>
+        <li style={paso}>
+          <strong>Con cualquier otra herramienta:</strong> el formato es abierto (AES-256-GCM con
+          clave PBKDF2-SHA256) y está descrito paso a paso en <code>COMO-DESCIFRAR.txt</code>.
+        </li>
+      </ol>
+      <button className="btn btn-ghost" disabled={busy} onClick={herramientas}>
+        {busy ? "Descargando…" : "Descargar solo las herramientas e instrucciones"}
+      </button>
+      <span style={{ fontSize: 12, color: "var(--ink-faint)", marginLeft: 10 }}>
+        Para copias antiguas o si perdiste el .zip y conservas el .clinicabk.
+      </span>
     </div>
   );
 }
 
 /* ── Generar ─────────────────────────────────────────────────────────── */
-function CreateCard() {
+function CreateCard({ propia }) {
   const [phrase, setPhrase] = useState("");
   const [confirm, setConfirm] = useState("");
   const [understood, setUnderstood] = useState(false);
@@ -132,10 +210,10 @@ function CreateCard() {
       const disposition = resp.headers.get("Content-Disposition") || "";
       const named = /filename="([^"]+)"/.exec(disposition);
       const records = resp.headers.get("X-Backup-Records");
-      download(await resp.blob(), named ? named[1] : `respaldo-${stamp()}.clinicabk`);
-      setOkMsg(records
-        ? `Copia generada con ${nf.format(Number(records))} registros. Guárdala fuera de este equipo.`
-        : "Copia generada. Guárdala fuera de este equipo.");
+      download(await resp.blob(), named ? named[1] : `respaldo-${stamp()}.zip`);
+      setOkMsg(`Copia generada${records ? ` con ${nf.format(Number(records))} registros` : ""}. `
+        + "El .zip trae también las instrucciones y las herramientas para abrirla. "
+        + "Guárdalo fuera de este equipo y la frase en otro sitio.");
       setPhrase(""); setConfirm(""); setUnderstood(false);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -143,7 +221,7 @@ function CreateCard() {
 
   return (
     <div className="card">
-      <h3 style={{ marginBottom: 6 }}>Generar una copia cifrada</h3>
+      <h3 style={{ marginBottom: 6 }}>{propia ? "Generar la copia de mis pacientes" : "Generar una copia cifrada"}</h3>
       <p style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 0, marginBottom: 12 }}>
         El archivo se cifra con AES-256 a partir de la frase que escribas. Los archivos
         adjuntos (radiografías, documentos escaneados) no van dentro: la copia guarda su
@@ -196,7 +274,7 @@ function CreateCard() {
 }
 
 /* ── Abrir ───────────────────────────────────────────────────────────── */
-function OpenCard() {
+function OpenCard({ propia }) {
   const [file, setFile] = useState(null);
   const [phrase, setPhrase] = useState("");
   const [busy, setBusy] = useState(false);
@@ -227,14 +305,15 @@ function OpenCard() {
       <p style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 0, marginBottom: 12 }}>
         Descifra un archivo para consultar su contenido o guardarlo en claro. No modifica
         los datos actuales de la clínica.
+        {propia && " Aquí solo se abren las copias que generaste tú."}
       </p>
 
       {error && <div className="error-box">{error}</div>}
 
       <div style={{ display: "flex", gap: 14, alignItems: "end", flexWrap: "wrap" }}>
         <div className="field" style={{ marginBottom: 0, flex: "1 1 240px" }}>
-          <label>Archivo de la copia</label>
-          <input type="file" accept=".clinicabk,application/octet-stream"
+          <label>Archivo de la copia (.zip o .clinicabk)</label>
+          <input type="file" accept=".clinicabk,.zip,application/octet-stream,application/zip"
                  onChange={(e) => { setFile(e.target.files?.[0] || null); setPayload(null); }} />
         </div>
         <div className="field" style={{ marginBottom: 0, flex: "1 1 220px" }}>
@@ -253,6 +332,10 @@ function OpenCard() {
             ✓ Copia de <strong>{manifest.tenant?.name}</strong> del{" "}
             {new Date(manifest.generated_at).toLocaleString("es-EC")}
             {manifest.generated_by?.email ? `, generada por ${manifest.generated_by.email}` : ""}.
+            {manifest.alcance?.tipo === "profesional" && (
+              <> Contiene los {nf.format(manifest.alcance.pacientes || 0)} pacientes de{" "}
+                {manifest.alcance.full_name || manifest.alcance.email}.</>
+            )}
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",

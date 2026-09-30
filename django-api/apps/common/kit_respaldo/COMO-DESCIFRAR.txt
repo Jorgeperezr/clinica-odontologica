@@ -1,0 +1,127 @@
+============================================================
+ COPIA DE SEGURIDAD CIFRADA — CÓMO ABRIRLA
+============================================================
+
+$resumen
+------------------------------------------------------------
+ QUÉ HAY EN ESTA CARPETA
+------------------------------------------------------------
+
+  $archivo
+      La copia, cifrada con AES-256. Sin la frase de cifrado no
+      se puede leer: ni la clínica, ni la plataforma, ni nadie.
+
+  descifrar.html
+      Herramienta para abrirla en el navegador, SIN INTERNET.
+
+  descifrar.py
+      La misma herramienta para la terminal (para técnicos).
+
+  COMO-DESCIFRAR.txt
+      Este documento.
+
+------------------------------------------------------------
+ ANTES DE NADA: LA FRASE DE CIFRADO
+------------------------------------------------------------
+
+La frase es la que se escribió al generar la copia. No se guarda en
+ningún sitio —ni en la plataforma, ni en este archivo, ni en la
+auditoría—, así que si se pierde la copia es irrecuperable. Esa es
+justamente la protección.
+
+Guárdela en un gestor de contraseñas o en papel, en un lugar distinto
+de donde guarde esta carpeta. No la envíe por el mismo correo o chat
+que la copia.
+
+------------------------------------------------------------
+ OPCIÓN 1 — Desde la plataforma
+------------------------------------------------------------
+
+Si todavía tiene acceso al panel de la clínica:
+
+  1. Entre al panel.
+  2. Administración: Configuración > Copia de seguridad.
+     Profesionales: menú lateral > Mi respaldo.
+  3. En «Abrir una copia», elija el archivo .clinicabk (o este .zip
+     tal cual) y escriba la frase.
+  4. Verá su contenido y podrá descargarlo en claro.
+
+Abrir una copia NO modifica los datos del panel.
+
+------------------------------------------------------------
+ OPCIÓN 2 — Sin la plataforma y sin internet (recomendada)
+------------------------------------------------------------
+
+Sirve aunque la plataforma ya no exista o no tenga cuenta.
+
+  1. Descomprima este .zip (doble clic en Windows o macOS).
+  2. Abra descifrar.html con Chrome, Edge, Firefox o Safari
+     (doble clic, o arrástrelo a una ventana del navegador).
+  3. Elija el archivo .clinicabk y escriba la frase.
+  4. Pulse «Descifrar». Verá el resumen y cada tabla, y podrá
+     descargarlas en CSV (se abren con Excel, Numbers o
+     LibreOffice) o todo junto en JSON.
+
+Todo ocurre dentro del navegador: el archivo y la frase no salen del
+equipo. Puede desconectar internet antes de abrirlo para comprobarlo.
+
+------------------------------------------------------------
+ OPCIÓN 3 — Terminal (para personal técnico)
+------------------------------------------------------------
+
+Necesita Python 3.8 o posterior y la biblioteca «cryptography».
+
+En macOS o Linux, cada línea es una orden:
+
+    python3 -m pip install cryptography
+    python3 descifrar.py $archivo
+
+En Windows (PowerShell o símbolo del sistema):
+
+    py -m pip install cryptography
+    py descifrar.py $archivo
+
+Pide la frase sin mostrarla y deja al lado un .json con todo el
+contenido. Para tener además un CSV por tabla:
+
+    python3 descifrar.py $archivo --csv datos
+
+------------------------------------------------------------
+ OPCIÓN 4 — Con cualquier otro lenguaje (especificación)
+------------------------------------------------------------
+
+El formato es abierto y se puede leer con cualquier biblioteca de
+criptografía estándar:
+
+    Bytes  0-8   «CLINICABK» (ASCII)
+    Byte   9     versión del formato (1)
+    Bytes 10-13  iteraciones de PBKDF2 (entero sin signo, big-endian)
+    Bytes 14-29  sal (16 bytes)
+    Bytes 30-41  nonce de AES-GCM (12 bytes)
+    Resto        texto cifrado seguido de la etiqueta GCM (16 bytes)
+
+    Clave = PBKDF2-HMAC-SHA256(frase en UTF-8, sal, iteraciones,
+            32 bytes)
+    Datos = AES-256-GCM-descifrar(clave, nonce, resto,
+            datos asociados = bytes 0-13)
+    Contenido = gunzip(Datos) → JSON en UTF-8
+
+El JSON tiene dos claves: «manifest» (clínica, fecha, quién la generó,
+alcance y cuántos registros hay de cada tabla) y «records», en el
+formato de fixture de Django: {"model", "pk", "fields"}.
+
+Si la frase no es la correcta o el archivo se alteró, el descifrado
+falla: AES-GCM está autenticado y no devuelve datos a medias.
+
+------------------------------------------------------------
+ LO QUE CONVIENE SABER
+------------------------------------------------------------
+
+  - Lo que descargue descifrado (CSV, JSON) está EN CLARO y contiene
+    datos de salud. Bórrelo cuando termine y no lo envíe por correo.
+  - Las radiografías y documentos escaneados no van dentro: la copia
+    guarda su referencia, no el archivo.
+  - Las contraseñas del personal no van en la copia.
+  - Esta copia sirve para consultar y conservar la información. Para
+    restaurar la base de datos de la plataforma se usa otro
+    procedimiento, desde el servidor.

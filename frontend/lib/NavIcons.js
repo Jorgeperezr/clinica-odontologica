@@ -130,6 +130,17 @@ function Bandeja(p) {
   );
 }
 
+function Respaldo(p) {
+  // caja fuerte con candado
+  return (
+    <svg {...base} {...p}>
+      <rect x="4" y="10" width="16" height="10" rx="1.5" />
+      <path d="M8 10V7.5a4 4 0 0 1 8 0V10" />
+      <path d="M12 14v2.5" />
+    </svg>
+  );
+}
+
 const ICONS = {
   plataforma: Plataforma,
   inicio: Inicio,
@@ -142,6 +153,7 @@ const ICONS = {
   configuracion: Configuracion,
   preferencias: Preferencias,
   bandeja: Bandeja,
+  respaldo: Respaldo,
 };
 
 /** Devuelve el componente de icono por clave; fallback a un punto neutro. */

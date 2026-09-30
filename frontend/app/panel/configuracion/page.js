@@ -286,10 +286,13 @@ const ROLE_OPTIONS = {
  * y lo sugerido por rol— lo da la API (`/users/funciones/`): el panel no
  * guarda su propia copia, así que no puede quedarse desfasado.
  */
-function ChecklistFunciones({ catalogo, valor, onChange }) {
+function ChecklistFunciones({ catalogo, valor, onChange, rol }) {
+  // Algunas funciones solo tienen sentido para ciertos roles (el respaldo
+  // de pacientes no, en recepción): esas ni se enseñan.
+  const visibles = catalogo.filter((f) => !rol || !f.roles || f.roles.includes(rol));
   return (
     <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-      {catalogo.map((f) => (
+      {visibles.map((f) => (
         <label key={f.clave} title={f.disponible ? "" : "Tu clínica no tiene contratado este módulo."}
                style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5,
                         opacity: f.disponible ? 1 : 0.5, cursor: f.disponible ? "pointer" : "not-allowed" }}>
@@ -427,7 +430,7 @@ function UsersTab() {
                 Volver a las recomendadas
               </button>
             </div>
-            <ChecklistFunciones catalogo={catalogo} valor={form.funciones}
+            <ChecklistFunciones catalogo={catalogo} valor={form.funciones} rol={form.role}
                                 onChange={(funciones) => setForm({ ...form, funciones })} />
           </div>
         )}
@@ -446,7 +449,7 @@ function UsersTab() {
                   {u.role === "admin" ? <span style={{ color: "var(--ink-soft)" }}>Todas</span> : (
                     editando?.id === u.id ? (
                       <div style={{ minWidth: 300, padding: "6px 0" }}>
-                        <ChecklistFunciones catalogo={catalogo} valor={editando.funciones}
+                        <ChecklistFunciones catalogo={catalogo} valor={editando.funciones} rol={u.role}
                                             onChange={(funciones) => setEditando({ ...editando, funciones })} />
                         <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                           <button type="button" className="btn btn-primary" style={{ fontSize: 12.5 }}

@@ -89,9 +89,9 @@ cosas diferentes y las hace gente diferente:
 
 | | Copia de la plataforma | Copia de la clínica |
 |---|---|---|
-| Qué contiene | La base entera: **todas** las clínicas | Los datos de **una** clínica |
-| Quién la hace | Quien administra el servidor | La administradora de la clínica |
-| Desde dónde | `scripts/backup.sh` en el servidor | Panel → Configuración → Copia de seguridad |
+| Qué contiene | La base entera: **todas** las clínicas | Los datos de **una** clínica (o los pacientes de un profesional) |
+| Quién la hace | Quien administra el servidor | La administradora de la clínica; cada doctor o auxiliar, la suya |
+| Desde dónde | `scripts/backup.sh` en el servidor | Panel → Configuración → Copia de seguridad, o «Mi respaldo» |
 | Clave | `BACKUP_PASSPHRASE` del `.env` | La frase que escribe en pantalla |
 | Sirve para | Recuperar el servicio ante un desastre | Que la clínica conserve y consulte sus datos |
 | Restaura | Sí, con `scripts/restore.sh` | No: solo descifra y muestra el contenido |
@@ -196,14 +196,39 @@ En **Configuración → Copia de seguridad**, la administradora de la
 clínica genera un archivo `.clinicabk` con los datos de su clínica y lo
 vuelve a abrir desde la misma pantalla escribiendo su frase de cifrado.
 
+**Cada doctor o auxiliar** puede sacar la suya desde **«Mi respaldo»**:
+los pacientes que ha atendido (con cita suya o con algo que escribió en
+su historia), la historia clínica completa de esos pacientes y su
+agenda. Sin cobros, inventario, auditoría ni pacientes de otros. Es la
+función «Respaldo cifrado de sus pacientes» de cada profesional: viene
+marcada y la administración la quita en Configuración → Usuarios.
+Recepción no la tiene (no ve datos clínicos). Un profesional solo abre
+en el panel sus propias copias; la administración, cualquiera de su
+clínica.
+
+**Lo que se descarga es un `.zip`** con la copia y lo necesario para
+abrirla sin la plataforma:
+
+| Archivo | Para qué |
+|---|---|
+| `respaldo-….clinicabk` | La copia cifrada |
+| `COMO-DESCIFRAR.txt` | Instrucciones con los datos de esa copia y la especificación del formato |
+| `descifrar.html` | Abre la copia en cualquier navegador, **sin internet**: tablas, CSV y JSON |
+| `descifrar.py` | Lo mismo en la terminal (Python 3.8+ y `cryptography`) |
+
+Las herramientas están en `django-api/apps/common/kit_respaldo/` y no
+dependen del proyecto; `tests_paquete_respaldo.py` comprueba que
+`descifrar.py` abre las copias que genera el servidor. Desde el panel
+se pueden bajar también sueltas, para copias antiguas.
+
 - Cifrado AES-256-GCM con clave derivada por PBKDF2-HMAC-SHA256
   (400 000 iteraciones). El archivo va autenticado: si se altera un solo
   byte, no se abre.
 - **La frase no se guarda en ninguna parte**, tampoco en la auditoría.
   Perderla equivale a perder el archivo.
-- Solo el rol `admin` **de la clínica**. El Super Administrador de la
-  plataforma no puede emitir ni abrir estas copias: administra el
-  servicio, no es titular de los datos de ninguna clínica.
+- El Super Administrador de la plataforma no puede emitir ni abrir
+  estas copias: administra el servicio, no es titular de los datos de
+  ninguna clínica.
 - Descifrar no restaura nada. Reponer datos sobre la base sigue siendo
   una operación de servidor (`scripts/restore.sh`), no de panel.
 - El JSON descifrado que se descarga va **sin cifrar** y contiene datos

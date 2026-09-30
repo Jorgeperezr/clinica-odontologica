@@ -14,6 +14,8 @@ urlpatterns = [
     path("config/document-appearance/", views.DocumentAppearanceView.as_view(),
          name="document-appearance"),
     path("config/backup/", views.TenantBackupView.as_view(), name="tenant-backup"),
+    path("config/backup/herramientas/", views.TenantBackupToolsView.as_view(),
+         name="tenant-backup-tools"),
     path("config/backup/decrypt/", views.TenantBackupDecryptView.as_view(),
          name="tenant-backup-decrypt"),
     path("config/parameters/", views.SystemParameterListView.as_view(), name="parameter-list"),

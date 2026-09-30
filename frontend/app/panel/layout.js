@@ -21,6 +21,9 @@ const NAV = [
   { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "inventario", funcion: "inventario" },
   { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "reportes", funcion: "reportes" },
   { href: "/panel/configuracion/", label: "Configuración", iconName: "configuracion", roles: ["admin"] },
+  // La copia de los pacientes de cada profesional. La administración
+  // tiene la de toda la clínica en Configuración → Copia de seguridad.
+  { href: "/panel/respaldo/", label: "Mi respaldo", iconName: "respaldo", roles: ["doctor", "auxiliary"], funcion: "respaldo" },
   // De cada persona para sí misma: por eso la ven todos los roles de clínica.
   { href: "/panel/preferencias/", label: "Mis preferencias", iconName: "preferencias", roles: ["admin", "reception", "doctor", "auxiliary"] },
 ];

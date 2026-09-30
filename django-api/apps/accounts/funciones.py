@@ -60,16 +60,31 @@ CATALOGO = {
         "descripcion": "Conectar la cuenta de WhatsApp de la clínica y encender los recordatorios.",
         "funcionalidad": "whatsapp",
     },
+    # Solo para quien atiende pacientes: la copia lleva SUS pacientes y
+    # su historia clínica, así que no tiene sentido para recepción, que
+    # no ve datos clínicos.
+    "respaldo": {
+        "etiqueta": "Respaldo cifrado de sus pacientes",
+        "descripcion": "Descargar una copia cifrada de la información de los pacientes que atiende: "
+                       "historias, evoluciones, odontogramas y su agenda.",
+        "funcionalidad": None,
+        "roles": ("doctor", "auxiliary"),
+    },
 }
 
 ROLES_CON_FUNCIONES = ("reception", "doctor", "auxiliary")
 
 # Lo que cada rol podía hacer antes. NO cambiar sin una migración: es lo
 # que tiene hoy cada persona creada antes de que existieran las funciones.
+#
+# La única excepción deliberada es «respaldo»: la clínica pidió que cada
+# profesional pueda llevarse la copia de sus pacientes, así que llega
+# encendida también a quien ya existía. El administrador la apaga por
+# persona si su clínica no lo quiere.
 HEREDADAS = {
     "reception": {"agenda", "cobros", "mensajes_app"},
-    "doctor": {"mensajes_app"},
-    "auxiliary": {"inventario"},
+    "doctor": {"mensajes_app", "respaldo"},
+    "auxiliary": {"inventario", "respaldo"},
 }
 
 # Lo que se propone al dar de alta. En la doctora se marca la agenda
@@ -77,8 +92,8 @@ HEREDADAS = {
 # programa existe para que el profesional premie la constancia).
 AL_CREAR = {
     "reception": {"agenda", "cobros", "mensajes_app"},
-    "doctor": {"agenda", "mensajes_app", "logros"},
-    "auxiliary": {"inventario"},
+    "doctor": {"agenda", "mensajes_app", "logros", "respaldo"},
+    "auxiliary": {"inventario", "respaldo"},
 }
 
 
@@ -86,9 +101,14 @@ def _es_admin(usuario):
     return getattr(usuario, "role", None) == "admin" or getattr(usuario, "is_superuser", False)
 
 
+def aplica(clave, rol):
+    """Si la función tiene sentido para ese rol (p. ej. «respaldo» no, en recepción)."""
+    return rol in CATALOGO[clave].get("roles", ROLES_CON_FUNCIONES)
+
+
 def al_crear(rol):
     """Funciones marcadas por defecto en el alta de un profesional con este rol."""
-    return {clave: clave in AL_CREAR.get(rol, set()) for clave in CATALOGO}
+    return {clave: clave in AL_CREAR.get(rol, set()) and aplica(clave, rol) for clave in CATALOGO}
 
 
 def funciones_de(usuario):
@@ -102,7 +122,8 @@ def funciones_de(usuario):
     heredadas = HEREDADAS.get(rol, set())
     # Una clave que falta toma el valor heredado del rol: así, añadir al
     # catálogo una función nueva no le cambia el acceso a nadie.
-    return {clave: bool(guardadas.get(clave, clave in heredadas)) for clave in CATALOGO}
+    return {clave: aplica(clave, rol) and bool(guardadas.get(clave, clave in heredadas))
+            for clave in CATALOGO}
 
 
 def tiene(usuario, clave):

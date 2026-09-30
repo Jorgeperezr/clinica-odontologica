@@ -50,8 +50,8 @@ export function currentUser() {
    caché de una sesión anterior, que aún no trae `funciones`. */
 const FUNCIONES_HEREDADAS = {
   reception: ["agenda", "cobros", "mensajes_app"],
-  doctor: ["mensajes_app"],
-  auxiliary: ["inventario"],
+  doctor: ["mensajes_app", "respaldo"],
+  auxiliary: ["inventario", "respaldo"],
 };
 
 /**

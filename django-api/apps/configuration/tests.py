@@ -421,7 +421,11 @@ class TenantBackupTests(APITestCase):
         resp = self.client.post(self.url, {"passphrase": self.phrase,
                                            "passphrase_confirm": self.phrase})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        return b"".join(resp.streaming_content) if resp.streaming else resp.content
+        # La descarga es un .zip con la copia y las herramientas para
+        # abrirla (ver tests_paquete_respaldo.py); aquí interesa la copia.
+        from apps.common.paquete_respaldo import sacar_copia
+
+        return sacar_copia(b"".join(resp.streaming_content) if resp.streaming else resp.content)
 
     # ── Quién puede ──
     def test_clinic_admin_can_create_backup(self):
@@ -440,11 +444,11 @@ class TenantBackupTests(APITestCase):
                                                    "passphrase": self.phrase})
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_reception_and_doctor_cannot_create_backup(self):
-        for user in (self.reception, self.doctor):
-            self.client.force_authenticate(user=user)
-            resp = self.client.post(self.url, {"passphrase": self.phrase})
-            self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+    def test_reception_cannot_create_backup(self):
+        """El doctor sí, la de sus pacientes: ver tests_paquete_respaldo.py."""
+        self.client.force_authenticate(user=self.reception)
+        resp = self.client.post(self.url, {"passphrase": self.phrase})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     # ── Frase de cifrado ──
     def test_short_passphrase_rejected(self):
