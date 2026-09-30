@@ -2,6 +2,10 @@
 
 ## Decisión de hosting (pendiente del usuario)
 
+> **Actualización (septiembre de 2026):** la opción que cuesta solo el
+> dominio es la **Opción C — Oracle Cloud Always Free**, más abajo. Las A
+> y B se mantienen como alternativa.
+
 | Criterio | Opción A: VM en GCP | Opción B: PC en la clínica + Cloudflare Tunnel |
 |---|---|---|
 | Costo mensual | ~US$35-45 (e2-medium + disco + IP) | ~US$0 (electricidad + internet ya pagados) |
@@ -94,7 +98,64 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
 5. `sudo cloudflared service install && sudo systemctl start cloudflared`
 6. En `.env`: `SECURE_SSL_REDIRECT=False` (Cloudflare ya fuerza HTTPS).
 
-## Backups CIFRADOS (obligatorio en la Opción B, recomendado en la A)
+## Opción C — Oracle Cloud «Always Free» (recomendada: solo se paga el dominio)
+
+Comparativa hecha en septiembre de 2026:
+
+| Proveedor | Qué da gratis | ¿Sirve para este sistema? |
+|---|---|---|
+| **Oracle Cloud Always Free** | VM Arm Ampere A1 de **2 OCPU y 12 GB** (recortada en junio de 2026 desde 4/24), 200 GB de disco, 10 TB/mes de salida, 20 GB de Object Storage. Sin fecha de fin. | **Sí.** Sobra para Django, PostgreSQL, Redis, Celery, Nginx y la pasarela de WhatsApp juntos. |
+| AWS | Desde julio de 2025, las cuentas nuevas reciben 100–200 US$ en créditos que caducan a los 6 meses. | No para siempre: a los 6 meses hay que pagar. |
+| Google Cloud | Una e2-micro (2 vCPU compartidas, **1 GB**) en regiones de EE. UU., sin fecha de fin. | No: 1 GB no alcanza para la base de datos y el resto. |
+| Azure | 12 meses de una B1s (1 GB) y créditos de 30 días. | No: temporal y escasa. |
+
+**Lo que hay que saber de Oracle antes de empezar:**
+
+- Pide **tarjeta** al registrarse (verificación; no cobra si no se sale
+  de lo gratuito).
+- **Recupera las VM «ociosas»** de las cuentas gratuitas: si durante 7
+  días la CPU (percentil 95), la red y la memoria quedan por debajo del
+  20 %, puede apagarla. Una clínica pequeña puede quedar por debajo.
+  Remedio recomendado: **pasar la cuenta a «Pay As You Go»** (sigue
+  costando 0 US$ mientras no se salga de lo gratuito, la regla de VM
+  ociosas no se aplica y, según el soporte de Oracle, conserva además
+  el límite anterior de 4 OCPU / 24 GB) y **crear una alerta de
+  presupuesto de 1 US$** para enterarse si algo empieza a cobrar.
+- La VM Arm a veces da «Out of capacity» al crearla: se reintenta más
+  tarde o en otro dominio de disponibilidad.
+- Todo lo del proyecto funciona en Arm: las imágenes de Python,
+  PostgreSQL, Redis y Nginx son multiarquitectura.
+
+**Pasos:**
+
+1. Cuenta en <https://www.oracle.com/cloud/free/>. Región de inicio: la
+   más cercana con capacidad (p. ej. *Brazil East (São Paulo)* o *Chile
+   Central (Santiago)*). La región de inicio no se puede cambiar después.
+2. Crear instancia: *Ubuntu 24.04*, forma **VM.Standard.A1.Flex** con
+   2 OCPU y 12 GB, disco de arranque de 100 GB. Guardar la clave SSH.
+3. En la VM: instalar Docker y seguir los **Pasos comunes** de arriba.
+4. Publicarla con **Cloudflare Tunnel** (igual que la Opción B, pasos
+   2 a 6): no hace falta abrir puertos ni IP pública, y el certificado
+   HTTPS lo pone Cloudflare gratis. El binario para esta VM es el de Arm:
+   `cloudflared-linux-arm64.deb`.
+5. Copias: `scripts/backup.sh` a diario con cron, y la copia fuera de la
+   VM en el Object Storage gratuito de Oracle (20 GB) o en Cloudflare R2
+   (10 GB gratis), con `rclone`.
+
+**Lo único que se compra: el dominio.** Recomendado registrarlo en
+**Cloudflare Registrar**, que lo vende a precio de coste (un `.com`
+ronda los 10–11 US$ al año) y deja el DNS y el túnel en el mismo sitio.
+Un `.ec` se compra en NIC.ec y cuesta bastante más; si se quiere, se
+apunta igualmente a Cloudflare.
+
+**Lo que NO es gratis aunque el servidor lo sea:**
+- Los mensajes de WhatsApp (Meta cobra por mensaje de plantilla, también
+  los códigos de ingreso de la app).
+- Las cuentas de las tiendas: Apple 99 US$/año, Google Play 25 US$ una vez.
+- El correo, si se superan los envíos de un plan gratuito (p. ej. Brevo
+  da 300 al día, de sobra para recuperar contraseñas).
+
+## Backups CIFRADOS (obligatorio en las opciones B y C, recomendado en la A)
 
 Hay **dos copias distintas** y conviene no confundirlas, porque protegen
 cosas diferentes y las hace gente diferente:
