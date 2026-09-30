@@ -268,6 +268,23 @@ CELERY_TIMEZONE = TIME_ZONE
 WHATSAPP_GATEWAY_URL = config("WHATSAPP_GATEWAY_URL", default="http://whatsapp-gateway:8001")
 INTERNAL_SERVICE_TOKEN = config("INTERNAL_SERVICE_TOKEN", default="dev-only-shared-secret-change-me")
 
+# ── Correo (recuperación de contraseña del personal) ─────────────────
+# No había ninguna configuración: Django intentaba un SMTP en localhost,
+# que en el contenedor no existe, y como el envío era silencioso el
+# correo de recuperación no llegaba nunca sin que nadie se enterase.
+# Sin EMAIL_HOST, el correo se escribe en el registro (útil en
+# desarrollo; en producción, configurar un SMTP: Gmail/Workspace,
+# Microsoft 365, Brevo, Amazon SES…).
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_BACKEND = ("django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
+                 else "django.core.mail.backends.console.EmailBackend")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_TIMEOUT = 15
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Clínica <no-responder@localhost>")
+
 # Producción: negarse a arrancar con valores de ejemplo (ver config/produccion.py).
 ENTORNO = config("DJANGO_ENTORNO", default="desarrollo")
 if ENTORNO == "produccion":

@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import secrets
 from datetime import timedelta
 
@@ -190,13 +191,22 @@ class StaffRecoveryRequestView(APIView):
         )
         # En producción, el enlace apunta al panel Next.js; por ahora se
         # envía el token para que el frontend arme la URL de reseteo.
-        send_mail(
-            subject="Recuperación de acceso — Clínica",
-            message=f"Usa este código para restablecer tu contraseña: {raw_token}",
-            from_email=None,
-            recipient_list=[email],
-            fail_silently=True,
-        )
+        # La respuesta es la misma pase lo que pase (no se revela si el
+        # correo existe), pero un fallo de envío deja rastro: antes era
+        # `fail_silently=True` y sin SMTP configurado nadie recibía nada
+        # y nadie lo sabía.
+        try:
+            send_mail(
+                subject="Recuperación de acceso — Clínica",
+                message=f"Usa este código para restablecer tu contraseña: {raw_token}",
+                from_email=None,
+                recipient_list=[email],
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "No se pudo enviar el correo de recuperación (revisar EMAIL_HOST y compañía)",
+                extra={"user_id": str(user.id)},
+            )
         return Response({"detail": "Si el correo existe, recibirás instrucciones."})
 
 
