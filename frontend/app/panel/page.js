@@ -82,7 +82,9 @@ export default function Dashboard() {
   return (
     <div>
       <h1 style={{ fontSize: 24, marginBottom: 2 }}>Hola, {user.full_name || user.email}</h1>
-      <p style={{ color: "var(--ink-soft)", marginBottom: 22, textTransform: "capitalize" }}>{today}</p>
+      {/* Solo la primera letra en mayúscula: «capitalize» escribía
+          «30 De Septiembre De 2026», que en castellano es un error. */}
+      <p style={{ color: "var(--ink-soft)", marginBottom: 22 }}>{today.charAt(0).toUpperCase() + today.slice(1)}</p>
 
       {/* Acciones rápidas */}
       <div style={{ display: "flex", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
@@ -208,16 +210,18 @@ export default function Dashboard() {
 
 function StatCard({ label, value, sub, href, accent, danger }) {
   return (
-    <a href={href} className="card"
+    <a href={href} className="card tarjeta-cifra"
        style={{
-         flex: 1, minWidth: 150, textDecoration: "none", color: "inherit",
+         flex: 1, minWidth: 150, textDecoration: "none", color: "inherit", padding: "14px 16px",
+         display: "flex", flexDirection: "column", gap: 2,
          ...(danger ? { borderColor: "var(--red)", background: "var(--red-soft)" } : {}),
        }}>
-      <div style={{ fontSize: 12, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: ".04em" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-soft)", textTransform: "uppercase",
+                    letterSpacing: ".05em", lineHeight: 1.3, minHeight: 28 }}>
         {label}
       </div>
       <div className="tabular"
-           style={{ fontSize: 24, fontWeight: 700,
+           style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.15,
                     color: danger ? "var(--red)" : accent ? "var(--petrol)" : "var(--ink)" }}>
         {value}
       </div>

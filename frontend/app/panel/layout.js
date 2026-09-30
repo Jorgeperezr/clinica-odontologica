@@ -223,10 +223,11 @@ export default function PanelLayout({ children }) {
             const active = path === item.href;
             return (
               <a key={item.href} href={item.href} title={collapsed ? item.label : undefined}
+                 className="nav-item" aria-current={active ? "page" : undefined}
                  onClick={() => isMobile && setDrawerOpen(false)}
                  style={{ ...styles.navItem,
                           justifyContent: (collapsed && !isMobile) ? "center" : "flex-start",
-                          padding: (collapsed && !isMobile) ? "12px 0" : "11px 12px",
+                          padding: (collapsed && !isMobile) ? "11px 0" : "9px 12px",
                           ...(active ? styles.navActive : {}) }}>
                 <span style={{ display: "inline-flex", width: (collapsed && !isMobile) ? "auto" : 20,
                              justifyContent: "center", flexShrink: 0 }} aria-hidden="true">
@@ -253,10 +254,15 @@ export default function PanelLayout({ children }) {
 
         <div style={styles.userBox}>
           {(!collapsed || isMobile) && (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{user.full_name || user.email}</div>
-              <div style={{ fontSize: 12, color: "var(--mint)" }}>{ROLE_LABELS[user.role] || user.role}</div>
-            </>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Iniciales: se reconoce de un vistazo quién tiene la sesión abierta. */}
+              <span aria-hidden="true" style={styles.avatar}>{iniciales(user.full_name || user.email)}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis",
+                              whiteSpace: "nowrap" }}>{user.full_name || user.email}</div>
+                <div style={{ fontSize: 12, color: "var(--nav-ink-soft)" }}>{ROLE_LABELS[user.role] || user.role}</div>
+              </div>
+            </div>
           )}
           <button onClick={logout} style={styles.logoutBtn}
                   title="Cerrar sesión">
@@ -270,6 +276,12 @@ export default function PanelLayout({ children }) {
       </main>
     </div>
   );
+}
+
+/** «Valeria Núñez» → «VN»; sin nombre, la primera letra del correo. */
+function iniciales(texto) {
+  const partes = String(texto || "?").replace(/^(dra?\.|dr\.)\s*/i, "").split(/[\s@]+/).filter(Boolean);
+  return ((partes[0]?.[0] || "?") + (partes[1]?.[0] || "")).toUpperCase();
 }
 
 /* Iconos de navegación del armazón: mismo trazo que NavIcons. */
@@ -331,9 +343,15 @@ const styles = {
   backdrop: {
     position: "fixed", inset: 0, zIndex: 55, background: "var(--overlay)",
   },
+  avatar: {
+    width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    background: "var(--nav-hover)", border: "1px solid var(--nav-line)",
+    fontSize: 12.5, fontWeight: 700, letterSpacing: ".02em",
+  },
   navItem: {
     display: "flex", alignItems: "center", gap: 11, borderRadius: 8,
-    color: "var(--nav-ink-soft)", fontSize: 14, fontWeight: 500, marginBottom: 2,
+    color: "var(--nav-ink-soft)", fontSize: 13.5, fontWeight: 500, marginBottom: 2,
     whiteSpace: "nowrap", overflow: "hidden",
   },
   navActive: { background: "var(--petrol)", color: "var(--nav-active-ink)" },
@@ -345,5 +363,5 @@ const styles = {
   },
   // Main ahora ocupa TODO el ancho restante y centra su contenido.
   main: { flex: 1, minWidth: 0, width: "100%", padding: "clamp(16px, 3vw, 28px) clamp(14px, 3vw, 40px)", display: "flex", justifyContent: "center" },
-  contentWrap: { width: "100%", maxWidth: 1200 },
+  contentWrap: { width: "100%", maxWidth: 1240 },
 };

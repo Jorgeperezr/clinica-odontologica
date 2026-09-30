@@ -112,7 +112,10 @@ function PatientDetail() {
         {[...(clinico ? [["odontograma", "Odontograma"], ["evoluciones", "Evoluciones"],
           ["plan", "Plan de tratamiento"]] : []), ["documentos", "Documentos"],
           ["consentimientos", "Consentimientos"],
-          ...(clinico ? [["odontograma3d", "Odontograma 3D"]] : []),
+          // Solo si la clínica lo usa y la persona no lo apagó: antes la
+          // pestaña salía siempre, aunque el 3D estuviera desactivado.
+          ...(clinico && vistasDisponibles().some((v) => v.key === "tridimensional")
+            ? [["odontograma3d", "Odontograma 3D"]] : []),
           ...(puedeCobrar ? [["cobros", "Cobros"]] : [])].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{

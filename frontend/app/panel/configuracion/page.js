@@ -23,6 +23,14 @@ const PARAM_LABELS = {
 
 export default function ConfiguracionPage() {
   const [tab, setTab] = useState("tratamientos");
+  // Al encender o apagar un módulo en «Módulos», sus pestañas aparecen
+  // o desaparecen en el momento, sin recargar.
+  const [, refrescar] = useState(0);
+  useEffect(() => {
+    const alCambiar = () => refrescar((n) => n + 1);
+    window.addEventListener("perfil-actualizado", alCambiar);
+    return () => window.removeEventListener("perfil-actualizado", alCambiar);
+  }, []);
   // Igual que en la navegación: `!== false` para que un perfil viejo no
   // deje al administrador sin pestañas.
   const contratadas = (currentUser() || {}).funcionalidades || {};
