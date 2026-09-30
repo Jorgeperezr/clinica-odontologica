@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { login, RUTA_CAMBIO } from "../../lib/api";
-import { LEMA, MARCA, SimboloClinube } from "../../lib/marca";
+import { LEMA, LogoClinube } from "../../lib/marca";
+import { initColorMode } from "../../lib/theme";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Todavía no hay clínica: paleta de Clinube, con el modo y el «Sin
+  // color» que la persona tenga elegidos en este navegador.
+  useEffect(() => initColorMode(), []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -32,8 +37,7 @@ export default function LoginPage() {
     <div style={styles.wrap}>
       <div style={styles.brandSide}>
         <div style={styles.brandInner}>
-          <div style={styles.simbolo}><SimboloClinube size={72} color="#fff" cruz="var(--petrol-deep)" /></div>
-          <h1 style={styles.brandTitle}>{MARCA}</h1>
+          <h1 style={styles.brandTitle}><LogoClinube alto={58} tinta="#ffffff" acento="var(--mint)" /></h1>
           <p style={styles.brandSub}>{LEMA}</p>
         </div>
       </div>
@@ -74,12 +78,11 @@ export default function LoginPage() {
 const styles = {
   wrap: { display: "flex", minHeight: "100vh" },
   brandSide: {
-    flex: "0 0 42%", background: "var(--petrol-deep)", color: "#fff",
+    flex: "0 0 42%", background: "var(--nav-bg)", color: "#fff",
     display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
   },
   brandInner: { maxWidth: 320 },
-  simbolo: { marginBottom: 18 },
-  brandTitle: { color: "#fff", fontSize: 40, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.02em" },
+  brandTitle: { margin: 0 },
   brandSub: { marginTop: 12, color: "var(--mint)", fontSize: 15 },
   formSide: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
   form: { width: "100%", maxWidth: 380 },

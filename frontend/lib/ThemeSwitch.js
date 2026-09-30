@@ -10,11 +10,18 @@
  *
  * El indicador se desliza entre opciones; en el modo de movimiento
  * reducido simplemente aparece (lo resuelve globals.css).
+ *
+ * Debajo, «Sin color»: el panel en grises, como el logotipo impreso en
+ * blanco y negro. Es de cada persona y de este navegador —no cambia lo
+ * que ven los demás—; la clínica entera puede elegirlo como tema en
+ * Configuración → Identidad visual.
  */
 
 import { useEffect, useState } from "react";
 
-import { onColorModeChanged, readColorMode, setColorMode } from "./theme";
+import {
+  onColorModeChanged, onSinColorChanged, readColorMode, readSinColor, setColorMode, setSinColor,
+} from "./theme";
 
 const OPTIONS = [
   { key: "light", label: "Claro", icon: SunIcon },
@@ -52,12 +59,26 @@ function SystemIcon() {
   );
 }
 
+function GrisesIcon() {
+  return (
+    <svg {...svg}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5v17" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export default function ThemeSwitch({ compact = false }) {
   const [mode, setMode] = useState("system");
+  const [sinColor, setSinColorEstado] = useState(false);
 
   useEffect(() => {
     setMode(readColorMode());
-    return onColorModeChanged((d) => setMode(d.mode));
+    setSinColorEstado(readSinColor());
+    const a = onColorModeChanged((d) => setMode(d.mode));
+    const b = onSinColorChanged(setSinColorEstado);
+    return () => { a(); b(); };
   }, []);
 
   const index = Math.max(0, OPTIONS.findIndex((o) => o.key === mode));
@@ -112,6 +133,38 @@ export default function ThemeSwitch({ compact = false }) {
           );
         })}
       </div>
+      <button type="button" role="switch" aria-checked={sinColor}
+              onClick={() => setSinColor(!sinColor)}
+              title="Sin color: el panel en grises, solo para ti y en este navegador"
+              aria-label="Sin color"
+              style={{
+                marginTop: 8, width: "100%", display: "flex", alignItems: "center",
+                justifyContent: compact ? "center" : "flex-start", gap: 8,
+                padding: compact ? "7px 0" : "6px 10px", borderRadius: 999, cursor: "pointer",
+                background: sinColor ? "var(--nav-hover)" : "transparent",
+                border: "1px solid var(--nav-line)", color: "var(--nav-ink-soft)",
+                fontSize: 12.5, fontWeight: 600,
+              }}>
+        <GrisesIcon />
+        {!compact && (
+          <>
+            <span style={{ flex: 1, textAlign: "left", color: sinColor ? "var(--nav-ink)" : undefined }}>
+              Sin color
+            </span>
+            <span aria-hidden="true" style={{
+              width: 28, height: 16, borderRadius: 999, flex: "none", position: "relative",
+              background: sinColor ? "var(--nav-ink)" : "var(--nav-line)",
+              transition: "background var(--dur) var(--ease)",
+            }}>
+              <span style={{
+                position: "absolute", top: 2, left: sinColor ? 14 : 2, width: 12, height: 12,
+                borderRadius: "50%", background: sinColor ? "var(--nav-bg)" : "var(--nav-ink-soft)",
+                transition: "left var(--dur) var(--ease)",
+              }} />
+            </span>
+          </>
+        )}
+      </button>
     </div>
   );
 }

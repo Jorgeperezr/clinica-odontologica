@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import '../api/cliente.dart';
 import '../api/modelos.dart';
+import '../logo.dart';
 import '../tema.dart';
 import 'logros.dart';
 
@@ -19,11 +20,15 @@ class PantallaPerfil extends StatefulWidget {
     required this.api,
     required this.alSalir,
     this.marca = Marca.neutra,
+    this.sinColor = false,
+    this.alCambiarSinColor,
   });
 
   final ClienteApi api;
   final VoidCallback alSalir;
   final Marca marca;
+  final bool sinColor;
+  final ValueChanged<bool>? alCambiarSinColor;
 
   @override
   State<PantallaPerfil> createState() => _PantallaPerfilState();
@@ -92,6 +97,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
             perfil: p,
             logros: logros,
             marca: widget.marca,
+            sinColor: widget.sinColor,
+            alCambiarSinColor: widget.alCambiarSinColor,
             alSalir: () async {
               await widget.api.salir();
               widget.alSalir();
@@ -109,12 +116,16 @@ class _Contenido extends StatelessWidget {
     required this.logros,
     required this.marca,
     required this.alSalir,
+    this.sinColor = false,
+    this.alCambiarSinColor,
   });
 
   final Perfil perfil;
   final List<Logro> logros;
   final Marca marca;
   final Future<void> Function() alSalir;
+  final bool sinColor;
+  final ValueChanged<bool>? alCambiarSinColor;
 
   @override
   Widget build(BuildContext context) {
@@ -134,9 +145,9 @@ class _Contenido extends StatelessWidget {
             Container(
               width: 84,
               height: 84,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: anilloLogro,
+                gradient: anillos(context).logro,
               ),
               child: Center(
                 child: Text(iniciales,
@@ -225,10 +236,36 @@ class _Contenido extends StatelessWidget {
             Text(marca.direccion, style: tema.textTheme.bodySmall),
           const SizedBox(height: 20),
         ],
+        const Divider(),
+        const SizedBox(height: 10),
+        Text('Ajustes', style: tema.textTheme.titleMedium),
+        // «Sin color»: solo cambia los colores. Si la clínica ya lo eligió
+        // para todos, se enseña encendido y sin poder tocarlo, en vez de
+        // un interruptor que no hace nada.
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.contrast),
+          title: const Text('Sin color'),
+          subtitle: Text(marca.esEnGrises
+              ? 'Tu clínica ya usa la versión sin color.'
+              : 'La app en blanco, negro y grises. El logotipo y todo lo '
+                  'demás no cambian.'),
+          value: sinColor || marca.esEnGrises,
+          onChanged: marca.esEnGrises ? null : alCambiarSinColor,
+        ),
+        const SizedBox(height: 14),
         OutlinedButton.icon(
           onPressed: alSalir,
           icon: const Icon(Icons.logout),
           label: const Text('Cerrar sesión'),
+        ),
+        const SizedBox(height: 28),
+        Center(
+          child: LogoClinube(
+            alto: 14,
+            tinta: tema.colorScheme.onSurfaceVariant,
+            acento: tema.colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -275,7 +312,8 @@ class _Celda extends StatelessWidget {
           children: [
             ShaderMask(
               shaderCallback: (r) =>
-                  (logro.esRacha ? anilloRacha : anilloLogro).createShader(r),
+                  (logro.esRacha ? anillos(context).racha : anillos(context).logro)
+                      .createShader(r),
               child: Icon(iconoDeLogro(logro.icono), size: 32, color: Colors.white),
             ),
             const SizedBox(height: 8),

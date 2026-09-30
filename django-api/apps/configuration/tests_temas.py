@@ -79,3 +79,17 @@ class ResolverTests(SimpleTestCase):
             resolver({"preset": "custom", "primary": "rojo", "secondary": "#zzz"}),
             PRESETS["default"],
         )
+
+
+class PaletaDeClinubeTests(SimpleTestCase):
+    def test_toda_clinica_empieza_con_la_paleta_de_clinube(self):
+        # Cian sobre tinta: la del logotipo. Una clínica sin tema guardado,
+        # o con uno roto, se ve así en el panel, en la app y en los PDF.
+        self.assertEqual(resolver(None), ("#0e7490", "#67e8f9"))
+
+    def test_sin_color_son_grises_de_verdad(self):
+        # «Sin color» con un gris azulado dejaría de serlo en cuanto se
+        # imprime: los tres canales tienen que ir casi juntos.
+        for color in resolver({"preset": "sin_color"}):
+            canales = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+            self.assertLessEqual(max(canales) - min(canales), 24, color)

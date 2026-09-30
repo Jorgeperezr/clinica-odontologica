@@ -261,7 +261,8 @@ class LaMarcaDeLaClinicaTests(APITestCase):
         r = self.client.get("/api/v1/app/clinica/")
         self.assertEqual(r.status_code, 200, r.data)
         self.assertEqual(r.data["nombre"], "Clínica Marca")
-        self.assertEqual(r.data["color_principal"], "#14639e")
+        # Toda clínica nace con la paleta de Clinube.
+        self.assertEqual(r.data["color_principal"], "#0e7490")
         self.assertIsNone(r.data["logo"])
 
     def test_el_nombre_comercial_manda_sobre_el_del_tenant(self):
@@ -280,7 +281,13 @@ class LaMarcaDeLaClinicaTests(APITestCase):
     def test_un_color_invalido_no_llega_a_pintar_la_app(self):
         self._marca(theme={"preset": "custom", "primary": "azulito", "secondary": ""})
         r = self.client.get("/api/v1/app/clinica/")
-        self.assertEqual(r.data["color_principal"], "#14639e")
+        self.assertEqual(r.data["color_principal"], "#0e7490")
+
+    def test_sin_color_llega_a_la_app_en_grises(self):
+        self._marca(theme={"preset": "sin_color", "primary": "", "secondary": ""})
+        r = self.client.get("/api/v1/app/clinica/")
+        self.assertEqual((r.data["color_principal"], r.data["color_secundario"]),
+                         ("#404040", "#9ca3af"))
 
     def test_se_devuelve_el_telefono_para_poder_llamar(self):
         self._marca(phone="02 244 8890")

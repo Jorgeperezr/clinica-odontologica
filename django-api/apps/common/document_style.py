@@ -945,13 +945,21 @@ def clinic_snapshot(tenant):
 
 
 def _brand_of(tenant):
-    """Color de marca de la clínica, para heredarlo cuando la paleta lo deja vacío."""
+    """
+    Color de marca de la clínica, para heredarlo cuando la paleta lo deja vacío.
+
+    Resuelto con la MISMA tabla de temas que el panel y la app: antes se
+    leía `theme["primary"]`, que solo tiene valor con colores a mano, y
+    una clínica con un tema predefinido —la mayoría, empezando por la
+    paleta de Clinube que trae toda clínica nueva— imprimía con el color
+    de reserva en vez del suyo.
+    """
     try:
         from apps.configuration.models import ClinicBranding
+        from apps.configuration.temas import resolver
 
         row = ClinicBranding.objects.filter(tenant=tenant).first()
-        if row and isinstance(row.theme, dict):
-            return {"primary": row.theme.get("primary") or ""}
+        return {"primary": resolver(row.theme if row else None)[0]}
     except Exception:
         logger.warning("No se pudo leer la marca de la clínica", exc_info=True)
     return {}

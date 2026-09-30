@@ -5,11 +5,18 @@ respaldos y la app del paciente. La odontología es la primera
 especialidad (odontograma, formulario MSP 033, indicadores de salud
 bucal); el nombre no dice «dental» porque no será la única.
 
-Cada clínica conserva su propia marca —nombre, logotipo y colores— en
-todo lo que ve el paciente. Clinube solo aparece donde todavía no hay
-clínica: la pantalla de acceso, los correos del sistema y la ficha de
-la app en las tiendas. Panel: `frontend/lib/marca.js`; servidor:
-`MARCA` en `django-api/config/settings.py`.
+Toda clínica nueva tiene el formato de Clinube —su logotipo y su
+paleta, cian sobre tinta— hasta que sube su propio logotipo o elige
+otros colores en Configuración → Personalización. Entre los temas está
+«Sin color», el logotipo en grises llevado a todo el sistema; cada
+persona puede elegirlo además solo para sí: en el panel, en Apariencia
+(barra lateral), y en la app, en Perfil → Ajustes. Cambia los colores y
+nada más: las alertas y el odontograma conservan los suyos.
+
+Con logotipo propio, la marca de la clínica manda en todo lo que ve el
+paciente y Clinube queda discreto al pie. Panel: `frontend/lib/marca.js`;
+servidor: `MARCA` en `django-api/config/settings.py`; cómo está hecho el
+logotipo y cómo regenerar los iconos: `scripts/marca/README.md`.
 
 ## Primeros pasos en una máquina nueva
 

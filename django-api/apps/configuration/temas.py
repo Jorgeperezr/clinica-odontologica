@@ -15,8 +15,15 @@ pantallas una al lado de la otra.
 """
 
 # Mismo orden y mismas claves que PRESETS en frontend/lib/theme.js.
+#
+# «default» es la paleta original de Clinube (cian sobre tinta): la que
+# tiene toda clínica mientras no elija otra o suba su logotipo y saque
+# los colores de él. «sin_color» es la versión en grises del logotipo
+# —la de imprimir en blanco y negro, sellar o mandar por fax— llevada a
+# todo el sistema: cambia los colores, no el logotipo ni nada más.
 PRESETS = {
-    "default": ("#14639e", "#bcdcf2"),
+    "default": ("#0e7490", "#67e8f9"),
+    "sin_color": ("#404040", "#9ca3af"),
     "oceano": ("#0f4c81", "#a7d3f0"),
     "petroleo": ("#0e5c63", "#9fe1cb"),
     "bosque": ("#1d6b3c", "#b6e2c5"),

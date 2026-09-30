@@ -45,11 +45,12 @@
 :root {
   color-scheme: light;
 
-  /* ── Marca (por defecto; theme.js las sobrescribe por clínica) ── */
-  --petrol: #14639e;
-  --petrol-deep: #0e4a78;
-  --petrol-soft: #e8f1f9;
-  --mint: #bcdcf2;
+  /* ── Marca (por defecto la paleta de Clinube: cian sobre tinta;
+        theme.js las sobrescribe por clínica) ── */
+  --petrol: #0e7490;
+  --petrol-deep: #094758;
+  --petrol-soft: #def6fc;
+  --mint: #76eafa;
   /* Texto legible SOBRE la marca (botones, pastillas activas). */
   --on-brand: #ffffff;
 
@@ -74,7 +75,11 @@
   --nav-hover: rgba(255, 255, 255, .10);
   --nav-active-ink: var(--on-brand);
   /* Texto legible SOBRE fondos de menta/acento claro */
-  --mint-ink: #0e4a78;
+  --mint-ink: #0b1220;
+
+  /* El logotipo de Clinube: «cli» en tinta, «nube» y el punto en el
+     acento. En «Sin color» el acento pasa a gris (ver más abajo). */
+  --logo-acento: var(--petrol);
 
   /* Ilustración dental: esmalte cálido sobre superficies frías, que es
      como se percibe un diente natural bajo la luz de un consultorio. */
@@ -144,6 +149,39 @@
    No es el claro invertido: los fondos son petróleo muy oscuro (no
    negro puro, que produce halo en pantallas OLED) y la jerarquía se
    construye elevando superficies, no bajando la opacidad del texto. */
+/* Antes de que theme.js decida el tema, la barra ya con la tinta de
+   Clinube: sin esto se vería un instante del tono hondo del cian. */
+:root:not([data-paleta]) { --nav-bg: #0b1220; }
+
+/* «Sin color»: el logotipo en grises llevado a todo el panel. Cambia
+   superficies, textos y marca; NO los colores con significado —alertas,
+   estados, el odontograma—, que siguen diciendo lo mismo en rojo y en
+   verde. Lo activa la clínica (tema) o cada persona (Apariencia). */
+:root[data-paleta="sin_color"] {
+  --paper: #f5f5f5;
+  --ink: #171717;
+  --ink-soft: #525252;
+  --ink-faint: #7a7a7a;
+  --line: #e2e2e2;
+  --line-strong: #c9c9c9;
+  --mint-ink: #171717;
+  --logo-acento: #6b7280;
+}
+:root[data-paleta="sin_color"][data-theme="dark"] {
+  --paper: #111111;
+  --card: #1a1a1a;
+  --elev: #212121;
+  --ink: #ededed;
+  --ink-soft: #b3b3b3;
+  --ink-faint: #8a8a8a;
+  --line: #2b2b2b;
+  --line-strong: #3b3b3b;
+  --nav-bg: #0b0b0b;
+  --on-brand: #111111;
+  --mint-ink: #111111;
+  --logo-acento: #9ca3af;
+}
+
 [data-theme="dark"] {
   color-scheme: dark;
 

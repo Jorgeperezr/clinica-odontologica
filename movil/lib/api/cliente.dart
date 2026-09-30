@@ -50,6 +50,7 @@ class Sesion {
   static const _claveAcceso = 'acceso';
   static const _claveRefresco = 'refresco';
   static const _claveMarca = 'marca';
+  static const _claveSinColor = 'sin_color';
 
   Future<String?> get acceso => _almacen.read(key: _claveAcceso);
   Future<String?> get refresco => _almacen.read(key: _claveRefresco);
@@ -67,7 +68,8 @@ class Sesion {
     // La marca NO se borra al salir: es la identidad de la clínica, no
     // un dato del paciente, y conservarla hace que la pantalla de
     // ingreso siga siendo la de su clínica cuando vuelva a entrar. Se
-    // reemplaza sola si ingresa con una cuenta de otra clínica.
+    // reemplaza sola si ingresa con una cuenta de otra clínica. Tampoco
+    // «Sin color»: es un ajuste de quien usa el teléfono, no de la cuenta.
   }
 
   Future<bool> get hayTokens async => (await acceso) != null;
@@ -92,6 +94,14 @@ class Sesion {
 
   Future<void> guardarMarca(Marca marca) =>
       _almacen.write(key: _claveMarca, value: jsonEncode(marca.aJson()));
+
+  /// «Sin color»: la app en grises, elegido en el perfil.
+  Future<bool> get sinColor async =>
+      (await _almacen.read(key: _claveSinColor)) == '1';
+
+  Future<void> guardarSinColor(bool activo) => activo
+      ? _almacen.write(key: _claveSinColor, value: '1')
+      : _almacen.delete(key: _claveSinColor);
 }
 
 /// Mensaje legible de una respuesta de error.

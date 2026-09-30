@@ -86,13 +86,20 @@ class SystemParameterSerializer(serializers.ModelSerializer):
 
 class ClinicBrandingSerializer(serializers.ModelSerializer):
     logo_url = serializers.SerializerMethodField()
+    # El nombre que enseñar SIEMPRE: el comercial si lo hay y, si no, el
+    # del alta. Sin él, una clínica que no ha rellenado «nombre comercial»
+    # aparecía en el panel como «Clínica», a secas.
+    nombre_clinica = serializers.SerializerMethodField()
 
     class Meta:
         from .models import ClinicBranding
         model = ClinicBranding
         fields = ["id", "logo", "logo_url", "theme", "display_name", "short_name",
-                  "address", "phone", "email", "updated_at"]
+                  "nombre_clinica", "address", "phone", "email", "updated_at"]
         extra_kwargs = {"logo": {"write_only": True, "required": False}}
+
+    def get_nombre_clinica(self, obj):
+        return (obj.display_name or "").strip() or obj.tenant.name
 
     def get_logo_url(self, obj):
         # Ruta relativa (p. ej. "/media/branding/logos/x.png"): el frontend

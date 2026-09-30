@@ -289,9 +289,16 @@ class Marca {
   /// que no son los de la clínica.
   static const neutra = Marca(
     nombre: 'Tu clínica',
-    colorPrincipal: 0xFF14639E,
-    colorSecundario: 0xFFBCDCF2,
+    colorPrincipal: 0xFF0E7490,
+    colorSecundario: 0xFF67E8F9,
   );
+
+  /// La clínica eligió «Sin color» (o unos colores grises a mano).
+  ///
+  /// Hace falta saberlo porque Material saca de cualquier semilla una
+  /// paleta con color: un gris daría botones rojizos o azulados. Con
+  /// esto la app usa la variante en grises de verdad.
+  bool get esEnGrises => esGris(colorPrincipal);
 
   factory Marca.desdeJson(Map<String, dynamic> j) => Marca(
         nombre: (j['nombre'] as String? ?? '').trim().isEmpty
@@ -318,6 +325,14 @@ class Marca {
         'direccion': direccion,
         'email': email,
       };
+}
+
+/// Un color cuyos tres canales van casi juntos, es decir, un gris.
+bool esGris(int argb) {
+  final r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+  final mayor = [r, g, b].reduce((a, c) => a > c ? a : c);
+  final menor = [r, g, b].reduce((a, c) => a < c ? a : c);
+  return mayor - menor <= 24;
 }
 
 /// `#rrggbb` a entero ARGB. Lo que no encaje cae en `porDefecto`: un

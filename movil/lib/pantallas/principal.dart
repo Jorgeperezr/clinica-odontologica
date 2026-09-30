@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import '../api/cliente.dart';
 import '../api/formato.dart';
 import '../api/modelos.dart';
+import '../logo.dart';
 import 'consultorio.dart';
 import 'logros.dart';
 import 'perfil.dart';
@@ -22,11 +23,15 @@ class PantallaPrincipal extends StatefulWidget {
     required this.api,
     required this.alSalir,
     this.marca = Marca.neutra,
+    this.sinColor = false,
+    this.alCambiarSinColor,
   });
 
   final ClienteApi api;
   final VoidCallback alSalir;
   final Marca marca;
+  final bool sinColor;
+  final ValueChanged<bool>? alCambiarSinColor;
 
   @override
   State<PantallaPrincipal> createState() => _PantallaPrincipalState();
@@ -43,7 +48,12 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       _Cuenta(api: widget.api),
       _Indicaciones(api: widget.api),
       PantallaPerfil(
-          api: widget.api, marca: widget.marca, alSalir: widget.alSalir),
+        api: widget.api,
+        marca: widget.marca,
+        alSalir: widget.alSalir,
+        sinColor: widget.sinColor,
+        alCambiarSinColor: widget.alCambiarSinColor,
+      ),
     ];
     return Scaffold(
       // Sin botón de salir en la barra: vive en el perfil, que es donde
@@ -60,6 +70,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 // nombre en vez de con un aspa rota.
                 errorBuilder: (context, _, __) => const SizedBox.shrink(),
               ),
+              const SizedBox(width: 10),
+            ] else ...[
+              // Sin logotipo propio, la clínica lleva el de Clinube.
+              const IconoClinube(alto: 22),
               const SizedBox(width: 10),
             ],
             Flexible(

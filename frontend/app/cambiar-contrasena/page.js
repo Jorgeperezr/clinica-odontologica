@@ -22,7 +22,8 @@
 
 import { useEffect, useState } from "react";
 import { api, cambiarContrasena, currentUser, logout } from "../../lib/api";
-import { LEMA, MARCA, SimboloClinube } from "../../lib/marca";
+import { LEMA, LogoClinube } from "../../lib/marca";
+import { initColorMode } from "../../lib/theme";
 
 export default function CambiarContrasenaPage() {
   const [obligatorio, setObligatorio] = useState(null);   // null = averiguándolo
@@ -32,6 +33,8 @@ export default function CambiarContrasenaPage() {
   const [repetida, setRepetida] = useState("");
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
+  // Paleta de Clinube con el modo y el «Sin color» de esta persona.
+  useEffect(() => initColorMode(), []);
 
   // Se pregunta al servidor en vez de fiarse del perfil guardado: si la
   // contraseña la acaban de restablecer, lo que hay en localStorage es
@@ -70,8 +73,7 @@ export default function CambiarContrasenaPage() {
     <div style={estilos.wrap}>
       <div style={estilos.marca}>
         <div style={estilos.marcaInterior}>
-          <div style={estilos.simbolo}><SimboloClinube size={72} color="#fff" cruz="var(--petrol-deep)" /></div>
-          <h1 style={estilos.marcaTitulo}>{MARCA}</h1>
+          <h1 style={estilos.marcaTitulo}><LogoClinube alto={58} tinta="#ffffff" acento="var(--mint)" /></h1>
           <p style={estilos.marcaSub}>{LEMA}</p>
         </div>
       </div>
@@ -137,12 +139,11 @@ export default function CambiarContrasenaPage() {
 const estilos = {
   wrap: { display: "flex", minHeight: "100vh" },
   marca: {
-    flex: "0 0 42%", background: "var(--petrol-deep)", color: "#fff",
+    flex: "0 0 42%", background: "var(--nav-bg)", color: "#fff",
     display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
   },
   marcaInterior: { maxWidth: 320 },
-  simbolo: { marginBottom: 18 },
-  marcaTitulo: { color: "#fff", fontSize: 40, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.02em" },
+  marcaTitulo: { margin: 0 },
   marcaSub: { marginTop: 12, color: "var(--mint)", fontSize: 15 },
   ladoForm: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
   form: { width: "100%", maxWidth: 380 },

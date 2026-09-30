@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../api/cliente.dart';
 import '../api/modelos.dart';
+import '../logo.dart';
 
 class PantallaIngreso extends StatefulWidget {
   const PantallaIngreso({
@@ -87,7 +88,7 @@ class _PantallaIngresoState extends State<PantallaIngreso> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _Emblema(marca: widget.marca, color: tema.colorScheme.primary),
+                  _Emblema(marca: widget.marca),
                   const SizedBox(height: 20),
                   Text(widget.marca.nombre, style: tema.textTheme.headlineMedium),
                   const SizedBox(height: 6),
@@ -184,29 +185,30 @@ class _Aviso extends StatelessWidget {
 }
 
 
-/// El logotipo de la clínica, o el icono genérico si no tiene.
+/// El logotipo de la clínica, o el de Clinube si no tiene.
 ///
 /// `errorBuilder` no es opcional: el logotipo se carga desde la red y un
 /// servidor caído, una URL vieja o un archivo borrado dejarían un aspa
-/// rota presidiendo la pantalla de ingreso. Se cae al icono, que nunca
-/// falla.
+/// rota presidiendo la pantalla de ingreso. Se cae al logotipo de
+/// Clinube, que está dibujado y nunca falla.
 class _Emblema extends StatelessWidget {
-  const _Emblema({required this.marca, required this.color});
+  const _Emblema({required this.marca});
 
   final Marca marca;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    if (!marca.tieneLogo) {
-      return Icon(Icons.medical_services_outlined, size: 64, color: color);
-    }
+    // Sin logotipo propio, la clínica lleva el de Clinube.
+    const deClinube = Align(
+      alignment: Alignment.centerLeft,
+      child: LogoClinube(alto: 40),
+    );
+    if (!marca.tieneLogo) return deClinube;
     return Image.network(
       marca.logo!,
       height: 72,
       fit: BoxFit.contain,
-      errorBuilder: (context, _, __) =>
-          Icon(Icons.medical_services_outlined, size: 64, color: color),
+      errorBuilder: (context, _, __) => deClinube,
     );
   }
 }

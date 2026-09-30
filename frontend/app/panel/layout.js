@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, currentUser, logout, tieneFuncion } from "../../lib/api";
-import { MARCA, SimboloClinube } from "../../lib/marca";
+import { IconoClinube, LogoClinube, MARCA } from "../../lib/marca";
 import { applyBrandingChrome, applyTheme, initColorMode, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 import NavIcon from "../../lib/NavIcons";
 import ThemeSwitch from "../../lib/ThemeSwitch";
@@ -154,6 +154,8 @@ export default function PanelLayout({ children }) {
   const path = typeof window !== "undefined" ? window.location.pathname : "";
   const W = isMobile ? 264 : (collapsed ? 64 : 220);
 
+  const nombreClinica = branding?.short_name || branding?.display_name || branding?.nombre_clinica || "";
+
   return (
     <div style={{ ...styles.shell, flexDirection: isMobile ? "column" : "row" }}>
       {/* Barra superior: solo en pantallas estrechas */}
@@ -163,13 +165,15 @@ export default function PanelLayout({ children }) {
                   aria-label="Abrir menú" title="Menú">
             <MenuIcon />
           </button>
-          {branding?.logo_url && (
+          {branding?.logo_url ? (
             <img src={logoSrc(branding.logo_url, branding.updated_at)} alt=""
                  style={{ height: 26, maxWidth: 40, objectFit: "contain" }} />
+          ) : (
+            <IconoClinube alto={22} tinta="#ffffff" acento="var(--mint)" />
           )}
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-.01em",
                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {branding?.short_name || branding?.display_name || MARCA}
+            {nombreClinica || MARCA}
           </span>
         </header>
       )}
@@ -189,22 +193,36 @@ export default function PanelLayout({ children }) {
                  boxShadow: drawerOpen ? "var(--shadow-lg)" : "none",
                } : {}),
              }}>
-        <div style={{ ...styles.logo, justifyContent: (collapsed && !isMobile) ? "center" : "flex-start" }}>
-          {branding?.logo_url ? (
+        {branding?.logo_url ? (
+          <div style={{ ...styles.logo, justifyContent: (collapsed && !isMobile) ? "center" : "flex-start" }}>
             <img src={logoSrc(branding.logo_url, branding.updated_at)} alt="Logotipo de la clínica"
                  style={{ height: (collapsed && !isMobile) ? 32 : 40, maxWidth: (collapsed && !isMobile) ? 46 : 70,
                           objectFit: "contain" }} />
-          ) : (
-            <SimboloClinube size={30} color="var(--mint)" cruz="var(--nav-bg)" />
-          )}
-          {(!collapsed || isMobile) && (
-            <span style={{ ...styles.logoText, fontSize: 15, lineHeight: 1.15,
-                           overflow: "hidden", display: "-webkit-box",
-                           WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-              {branding?.short_name || branding?.display_name || MARCA}
-            </span>
-          )}
-        </div>
+            {(!collapsed || isMobile) && (
+              <span style={{ ...styles.logoText, fontSize: 15, lineHeight: 1.15,
+                             overflow: "hidden", display: "-webkit-box",
+                             WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                {nombreClinica || MARCA}
+              </span>
+            )}
+          </div>
+        ) : (
+          // Sin logotipo propio la clínica lleva el de Clinube, y su nombre
+          // debajo: quien trabaja ahí sigue viendo en qué clínica está.
+          <div style={{ ...styles.logo, flexDirection: "column", gap: 6,
+                        alignItems: (collapsed && !isMobile) ? "center" : "flex-start" }}>
+            {(collapsed && !isMobile)
+              ? <IconoClinube alto={26} tinta="#ffffff" acento="var(--mint)" titulo={MARCA} />
+              : <LogoClinube alto={25} tinta="#ffffff" acento="var(--mint)" />}
+            {(!collapsed || isMobile) && nombreClinica && (
+              <span style={{ fontSize: 12.5, lineHeight: 1.25, color: "var(--nav-ink-soft)",
+                             overflow: "hidden", display: "-webkit-box",
+                             WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                {nombreClinica}
+              </span>
+            )}
+          </div>
+        )}
 
         {isMobile ? (
           <button onClick={() => setDrawerOpen(false)} style={styles.collapseBtn}
@@ -269,11 +287,11 @@ export default function PanelLayout({ children }) {
                   title="Cerrar sesión">
             {(collapsed && !isMobile) ? "⎋" : "Cerrar sesión"}
           </button>
-          {/* La marca de la clínica va arriba; la de la plataforma, aquí y discreta. */}
-          {(!collapsed || isMobile) && (
+          {/* Con logotipo propio, la marca de la clínica va arriba y la de la
+              plataforma aquí, discreta. Sin él, Clinube ya está arriba. */}
+          {(!collapsed || isMobile) && branding?.logo_url && (
             <div style={styles.plataforma}>
-              <SimboloClinube size={14} color="var(--nav-ink-soft)" cruz="var(--nav-bg)" />
-              {MARCA}
+              <LogoClinube alto={12} tinta="var(--nav-ink-soft)" acento="var(--nav-ink-soft)" />
             </div>
           )}
         </div>

@@ -55,6 +55,9 @@ class _AppPacienteState extends State<AppPaciente> {
   /// neutra y se sustituye en cuanto se sabe de qué clínica se trata.
   Marca _marca = Marca.neutra;
 
+  /// «Sin color», elegido por el paciente en su perfil.
+  bool _sinColor = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +72,7 @@ class _AppPacienteState extends State<AppPaciente> {
   Future<_Arranque> _preparar() async {
     final guardada = await _api.sesion.marca;
     if (guardada != null) _marca = guardada;
+    _sinColor = await _api.sesion.sinColor;
     final hay = await _api.sesion.hayTokens;
     if (hay) unawaited(_refrescarMarca());
     return _Arranque(haySesion: hay, marca: _marca);
@@ -86,6 +90,11 @@ class _AppPacienteState extends State<AppPaciente> {
     }
   }
 
+  Future<void> _cambiarSinColor(bool activo) async {
+    setState(() => _sinColor = activo);
+    await _api.sesion.guardarSinColor(activo);
+  }
+
   void _refrescarSesion() {
     setState(() => _arranque = _preparar());
   }
@@ -95,8 +104,10 @@ class _AppPacienteState extends State<AppPaciente> {
     return MaterialApp(
       title: 'Clinube',
       debugShowCheckedModeBanner: false,
-      theme: temaClaro(_marca.colorPrincipal),
-      darkTheme: temaOscuro(_marca.colorPrincipal),
+      // En grises si lo pidió el paciente o si su clínica eligió «Sin color».
+      theme: temaClaro(_marca.colorPrincipal, _sinColor || _marca.esEnGrises),
+      darkTheme:
+          temaOscuro(_marca.colorPrincipal, _sinColor || _marca.esEnGrises),
       home: FutureBuilder<_Arranque>(
         future: _arranque,
         builder: (context, snap) {
@@ -107,7 +118,12 @@ class _AppPacienteState extends State<AppPaciente> {
           }
           if (snap.data?.haySesion ?? false) {
             return PantallaPrincipal(
-              api: _api, marca: _marca, alSalir: _refrescarSesion);
+              api: _api,
+              marca: _marca,
+              alSalir: _refrescarSesion,
+              sinColor: _sinColor,
+              alCambiarSinColor: _cambiarSinColor,
+            );
           }
           return PantallaIngreso(
             api: _api, marca: _marca, alEntrar: _refrescarSesion);

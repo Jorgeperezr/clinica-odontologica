@@ -24,6 +24,15 @@ Los identificadores **no se pueden cambiar** una vez publicada la app:
 cambiarlos después equivale a publicar otra app y perder las reseñas y
 las instalaciones de la anterior.
 
+Si la clínica no tiene logotipo, la app lleva el de Clinube
+(`lib/logo.dart`, dibujado sin tipografía ni paquetes). Los iconos de
+Android, iOS y web se regeneran con `scripts/marca/iconos.py`.
+
+**«Sin color»** (Perfil → Ajustes) pasa la app a grises en ese teléfono;
+si la clínica eligió ese tema para todos, el interruptor aparece
+encendido y bloqueado. Los avisos con significado —saldo vencido,
+errores— conservan su color.
+
 ## Cómo se entra
 
 Por teléfono y código de WhatsApp (`/auth/otp/request/` y

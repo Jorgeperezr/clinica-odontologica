@@ -31,6 +31,14 @@ class SesionFalsa implements Sesion {
   @override
   Future<bool> get hayTokens async => _acceso != null;
 
+  bool _sinColor = false;
+
+  @override
+  Future<bool> get sinColor async => _sinColor;
+
+  @override
+  Future<void> guardarSinColor(bool activo) async => _sinColor = activo;
+
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

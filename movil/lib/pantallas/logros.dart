@@ -55,7 +55,9 @@ class _Burbuja extends StatelessWidget {
               alignment: Alignment.bottomRight,
               children: [
                 _Anillo(
-                  degradado: logro.esRacha ? anilloRacha : anilloLogro,
+                  degradado: logro.esRacha
+                      ? anillos(context).racha
+                      : anillos(context).logro,
                   child: Icon(iconoDeLogro(logro.icono),
                       size: 28, color: tema.colorScheme.onSurface),
                 ),
@@ -63,7 +65,7 @@ class _Burbuja extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      gradient: anilloRacha,
+                      gradient: anillos(context).racha,
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(color: tema.colorScheme.surface, width: 2),
                     ),
@@ -139,10 +141,10 @@ class _SinLogrosTodavia extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Row(
         children: [
-          const _Anillo(
-            degradado: anilloLogro,
+          _Anillo(
+            degradado: anillos(context).logro,
             apagado: true,
-            child: Icon(Icons.star_outline, size: 26),
+            child: const Icon(Icons.star_outline, size: 26),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -185,7 +187,9 @@ void mostrarLogro(BuildContext context, Logro logro) {
             Row(
               children: [
                 _Anillo(
-                  degradado: logro.esRacha ? anilloRacha : anilloLogro,
+                  degradado: logro.esRacha
+                      ? anillos(context).racha
+                      : anillos(context).logro,
                   child: Icon(iconoDeLogro(logro.icono), size: 28),
                 ),
                 const SizedBox(width: 16),

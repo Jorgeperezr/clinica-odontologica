@@ -139,6 +139,21 @@ class ClinicBrandingTests(APITestCase):
         }, format="json")
         self.assertEqual(resp.status_code, 403)
 
+    def test_el_nombre_de_la_clinica_llega_aunque_no_haya_nombre_comercial(self):
+        # El panel lo pone bajo el logotipo de Clinube: sin nombre
+        # comercial se usa el del alta, no «Clínica» a secas.
+        self.client.force_authenticate(user=self.reception)
+        resp = self.client.get("/api/v1/config/branding/")
+        self.assertEqual(resp.data["nombre_clinica"], self.admin.tenant.name)
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch("/api/v1/config/branding/", {"display_name": "Sonrisa Feliz"}, format="json")
+        self.assertEqual(resp.data["nombre_clinica"], "Sonrisa Feliz")
+
+    def test_toda_clinica_empieza_con_la_paleta_de_clinube(self):
+        self.client.force_authenticate(user=self.reception)
+        resp = self.client.get("/api/v1/config/branding/")
+        self.assertEqual(resp.data["theme"]["preset"], "default")
+
     def test_logo_upload_extracts_palette_and_clear_removes(self):
         self.client.force_authenticate(user=self.admin)
         resp = self.client.patch(

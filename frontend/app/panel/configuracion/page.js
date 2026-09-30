@@ -796,7 +796,7 @@ function BrandingTab() {
       <div className="card">
         <h3 style={{ marginBottom: 6 }}>Nombre de la clínica</h3>
         <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
-          Reemplaza el texto "Clínica" en la barra lateral, el título de la ventana y los encabezados.
+          El que se ve en la barra lateral, el título de la ventana y los encabezados. Si lo dejas vacío se usa el nombre con el que se dio de alta la clínica.
         </p>
         <div style={{ display: "flex", gap: 14, alignItems: "end", flexWrap: "wrap" }}>
           <div className="field" style={{ marginBottom: 0, flex: "1 1 240px" }}>
@@ -839,7 +839,10 @@ function BrandingTab() {
       <div className="card">
         <h3 style={{ marginBottom: 6 }}>Tema de colores</h3>
         <p style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>
-          El color elegido se ajusta automáticamente para garantizar buen contraste y legibilidad.
+          Toda clínica empieza con la paleta de Clinube. «Sin color» pasa a grises el panel, la app
+          de los pacientes y el color principal de los documentos —como un logotipo impreso en blanco
+          y negro— sin tocar nada más; las alertas y el odontograma conservan sus colores. El color
+          elegido se ajusta automáticamente para garantizar buen contraste y legibilidad.
         </p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
           {PRESETS.map((p) => (
@@ -875,7 +878,7 @@ function BrandingTab() {
           </button>
           <button className="btn btn-ghost" disabled={saving}
                   onClick={() => { resetTheme(); saveTheme({ preset: "default", primary: "", secondary: "" }); }}>
-            Restablecer tema del sistema
+            Volver a la paleta de Clinube
           </button>
         </div>
       </div>
