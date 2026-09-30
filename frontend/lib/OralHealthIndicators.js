@@ -17,16 +17,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, readList } from "./api";
 import { hoyISO } from "./fechas.mjs";
-
-// Las 6 piezas índice del formulario (filas de la tabla de higiene)
-const INDEX_TEETH = [
-  ["16", "17", "55"],
-  ["11", "21", "51"],
-  ["26", "27", "65"],
-  ["36", "37", "75"],
-  ["31", "41", "71"],
-  ["46", "47", "85"],
-];
+import { SEXTANTES, calcularIndicadores, decimal } from "./indicadoresBucales.mjs";
 
 const EMPTY = {
   higiene: {},                 // { "16": {placa,calculo,gingivitis}, ... }
@@ -89,19 +80,18 @@ export default function OralHealthIndicators({ patientId }) {
     finally { setSaving(false); }
   }
 
-  // Totales de la columna de higiene (suma de placa/cálculo/gingivitis)
-  const totals = INDEX_TEETH.flat().reduce((acc, t) => {
-    const h = data.higiene[t] || {};
-    acc.placa += Number(h.placa || 0);
-    acc.calculo += Number(h.calculo || 0);
-    acc.gingivitis += Number(h.gingivitis || 0);
-    return acc;
-  }, { placa: 0, calculo: 0, gingivitis: 0 });
+  const r = calcularIndicadores(data.higiene);
 
   return (
     <div className="card" style={{ marginBottom: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>Indicadores de salud bucal</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                    marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Indicadores de salud bucal</h3>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink-soft)" }}>
+            Literal I del formulario 033 · {r.completos} de 6 sextantes completos
+          </p>
+        </div>
         <button className="btn btn-primary" style={{ fontSize: 13 }}
                 onClick={save} disabled={saving || !dirty}>
           {saving ? "Guardando…" : dirty ? "Guardar indicadores" : "Guardado"}
@@ -109,96 +99,177 @@ export default function OralHealthIndicators({ patientId }) {
       </div>
 
       {error && <div className="error-box">{error}</div>}
-      {okMsg && <div className="error-box" style={{ background: "var(--mint)", color: "var(--petrol-deep)" }}>✓ {okMsg}</div>}
+      {okMsg && <div className="success-box">✓ {okMsg}</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 1.4fr) 1fr", gap: 18 }}>
+      {/* Resultado: lo que el profesional necesita leer de un vistazo. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: 10, marginBottom: 16 }}>
+        <Resultado titulo="IHO-S" valor={decimal(r.ihos.indice)} escala="de 6" nivel={r.ihos.nivel}
+                   ayuda="Índice de higiene oral simplificado: placa + cálculo." destacado />
+        <Resultado titulo="Placa (IDB-S)" valor={decimal(r.placa.indice)} escala="de 3" nivel={r.placa.nivel}
+                   ayuda={`Suma ${r.placa.suma} en ${r.placa.sextantes} sextantes.`} />
+        <Resultado titulo="Cálculo (ICS)" valor={decimal(r.calculo.indice)} escala="de 3" nivel={r.calculo.nivel}
+                   ayuda={`Suma ${r.calculo.suma} en ${r.calculo.sextantes} sextantes.`} />
+        {/* Sin escala de bueno/malo: el formulario solo pide sí o no por
+            sextante, así que se dice cuántos, no un juicio inventado. */}
+        <Resultado titulo="Gingivitis"
+                   valor={r.gingivitis.sextantes ? String(r.gingivitis.positivos) : "—"}
+                   escala={r.gingivitis.sextantes ? `de ${r.gingivitis.sextantes} sextantes` : "sextantes"}
+                   nivel={r.gingivitis.sextantes ? (r.gingivitis.positivos ? "regular" : "bueno") : null}
+                   texto={r.gingivitis.sextantes ? (r.gingivitis.positivos ? "Presente" : "Sin gingivitis") : null}
+                   ayuda="Sextantes con gingivitis sobre los registrados." />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: 20 }}>
         {/* Higiene oral simplificada */}
         <div>
-          <div style={secTitle}>Higiene oral simplificada</div>
+          <div style={secTitle}>Higiene oral simplificada · por sextante</div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ fontSize: 13 }}>
+            <table className="tabla-ihos" style={{ fontSize: 13, width: "100%" }}>
               <thead>
                 <tr>
-                  <th colSpan={3} style={{ textAlign: "center" }}>Piezas examinadas</th>
-                  <th title="0-1-2-3">Placa</th>
-                  <th title="0-1-2-3">Cálculo</th>
-                  <th title="0-1">Gingivitis</th>
+                  <th style={{ textAlign: "left" }}>Sextante</th>
+                  <th title="0 a 3">Placa</th>
+                  <th title="0 a 3">Cálculo</th>
+                  <th title="0 o 1">Gingivitis</th>
                 </tr>
               </thead>
               <tbody>
-                {INDEX_TEETH.map((triple, i) => (
-                  <IndexRow key={i} triple={triple} higiene={data.higiene} onChange={setHigiene} />
+                {SEXTANTES.map((sx) => (
+                  <IndexRow key={sx.clave} sextante={sx} higiene={data.higiene} onChange={setHigiene} />
                 ))}
                 <tr style={{ background: "var(--petrol-soft)", fontWeight: 700 }}>
-                  <td colSpan={3} style={{ textAlign: "center" }}>TOTALES</td>
-                  <td className="tabular">{totals.placa}</td>
-                  <td className="tabular">{totals.calculo}</td>
-                  <td className="tabular">{totals.gingivitis}</td>
+                  <td>Totales</td>
+                  <td data-etiqueta="Placa" className="tabular" style={{ textAlign: "center" }}>{r.placa.suma}</td>
+                  <td data-etiqueta="Cálculo" className="tabular" style={{ textAlign: "center" }}>{r.calculo.suma}</td>
+                  <td data-etiqueta="Gingivitis" className="tabular" style={{ textAlign: "center" }}>{r.gingivitis.positivos}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 6 }}>
-            Placa y cálculo: 0 a 3 · Gingivitis: 0 o 1. Cada fila corresponde a un sextante.
+          <p style={{ fontSize: 11.5, color: "var(--ink-soft)", marginTop: 6 }}>
+            Placa y cálculo: 0 ausente · 1 hasta un tercio · 2 hasta dos tercios · 3 más de dos tercios
+            de la superficie. Gingivitis: 0 no · 1 sí. Si la pieza índice falta, se usa la siguiente.
           </p>
         </div>
 
         {/* Enfermedad periodontal, oclusión y fluorosis */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <RadioGroup label="Enfermedad periodontal" value={data.enfermedad_periodontal}
                       onChange={(v) => setField("enfermedad_periodontal", v)}
-                      options={[["leve", "Leve"], ["moderada", "Moderada"], ["severa", "Severa"]]} />
+                      options={[["leve", "Leve", "bueno"], ["moderada", "Moderada", "regular"], ["severa", "Severa", "malo"]]} />
           <RadioGroup label="Tipo de oclusión" value={data.oclusion}
                       onChange={(v) => setField("oclusion", v)}
-                      options={[["I", "Angle I"], ["II", "Angle II"], ["III", "Angle III"]]} />
+                      options={[["I", "Angle I"], ["II", "Angle II"], ["III", "Angle III"]]}
+                      ayuda={{ I: "Relación molar normal.", II: "Molar inferior distal (distoclusión).",
+                               III: "Molar inferior mesial (mesioclusión)." }} />
           <RadioGroup label="Nivel de fluorosis" value={data.fluorosis}
                       onChange={(v) => setField("fluorosis", v)}
-                      options={[["leve", "Leve"], ["moderada", "Moderada"], ["severa", "Severa"]]} />
+                      options={[["leve", "Leve", "bueno"], ["moderada", "Moderada", "regular"], ["severa", "Severa", "malo"]]} />
         </div>
       </div>
     </div>
   );
 }
 
-function IndexRow({ triple, higiene, onChange }) {
+const NIVELES = {
+  bueno: { texto: "Bueno", color: "var(--green)", fondo: "var(--green-soft)" },
+  regular: { texto: "Regular", color: "var(--amber)", fondo: "var(--amber-soft)" },
+  malo: { texto: "Malo", color: "var(--red)", fondo: "var(--red-soft)" },
+};
+
+function Resultado({ titulo, valor, escala, nivel, ayuda, destacado, texto }) {
+  const n = NIVELES[nivel];
+  return (
+    <div title={ayuda} style={{ padding: "10px 12px", borderRadius: 10,
+                                border: `1px solid ${n ? n.color : "var(--line)"}`,
+                                background: n ? n.fondo : "var(--paper)" }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".03em", color: "var(--ink-soft)",
+                    textTransform: "uppercase" }}>{titulo}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 2 }}>
+        <span className="tabular" style={{ fontSize: destacado ? 26 : 22, fontWeight: 700,
+                                           color: n ? n.color : "var(--ink-faint)" }}>{valor}</span>
+        <span style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>{escala}</span>
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: n ? n.color : "var(--ink-faint)" }}>
+        {texto || (n ? n.texto : "Sin datos")}
+      </div>
+    </div>
+  );
+}
+
+function IndexRow({ sextante, higiene, onChange }) {
   // Cada sextante usa la primera pieza del triple como clave de registro
-  const key = triple[0];
+  const key = sextante.clave;
   const h = higiene[key] || {};
+  const [indice, ...alternas] = sextante.piezas;
   return (
     <tr>
-      {triple.map((t) => <td key={t} className="tabular" style={{ fontWeight: 600 }}>{t}</td>)}
-      <td><NumCell value={h.placa} max={3} onChange={(v) => onChange(key, "placa", v)} /></td>
-      <td><NumCell value={h.calculo} max={3} onChange={(v) => onChange(key, "calculo", v)} /></td>
-      <td><NumCell value={h.gingivitis} max={1} onChange={(v) => onChange(key, "gingivitis", v)} /></td>
+      <td>
+        <div style={{ fontWeight: 600 }}>{sextante.nombre}</div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>
+          Pieza <strong className="tabular">{indice}</strong>
+          <span title="Piezas alternativas si la índice falta"> · alt. {alternas.join(", ")}</span>
+        </div>
+      </td>
+      <td data-etiqueta="Placa"><Puntos value={h.placa} max={3} onChange={(v) => onChange(key, "placa", v)} etiqueta="Placa" /></td>
+      <td data-etiqueta="Cálculo"><Puntos value={h.calculo} max={3} onChange={(v) => onChange(key, "calculo", v)} etiqueta="Cálculo" /></td>
+      <td data-etiqueta="Gingivitis"><Puntos value={h.gingivitis} max={1} onChange={(v) => onChange(key, "gingivitis", v)} etiqueta="Gingivitis" /></td>
     </tr>
   );
 }
 
-function NumCell({ value, max, onChange }) {
+// Colores de la puntuación: de nada (verde) a mucho (rojo).
+const TONOS = ["var(--green)", "#65a30d", "var(--amber)", "var(--red)"];
+
+/** Puntuación con botones: un toque en vez de abrir un desplegable. Tocar la marcada la borra. */
+function Puntos({ value, max, onChange, etiqueta }) {
   return (
-    <select value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
-            style={{ width: 52, padding: "4px 6px", border: "1px solid var(--line)", borderRadius: 6 }}>
-      <option value="">—</option>
-      {Array.from({ length: max + 1 }, (_, n) => <option key={n} value={n}>{n}</option>)}
-    </select>
+    <div role="radiogroup" aria-label={etiqueta}
+         style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+      {Array.from({ length: max + 1 }, (_, n) => {
+        const activo = value === n;
+        const tono = max === 1 ? (n === 0 ? TONOS[0] : TONOS[3]) : TONOS[n];
+        return (
+          <button key={n} type="button" role="radio" aria-checked={activo}
+                  onClick={() => onChange(activo ? null : n)}
+                  style={{ width: 28, height: 28, borderRadius: 7, fontSize: 13, fontWeight: 700,
+                           cursor: "pointer", padding: 0,
+                           border: activo ? `2px solid ${tono}` : "1px solid var(--line)",
+                           background: activo ? tono : "var(--elev)",
+                           color: activo ? "#fff" : "var(--ink-soft)" }}>
+            {n}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function RadioGroup({ label, value, onChange, options }) {
+function RadioGroup({ label, value, onChange, options, ayuda }) {
   return (
     <div>
       <div style={secTitle}>{label}</div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {options.map(([k, lbl]) => (
-          <button key={k} type="button" onClick={() => onChange(value === k ? "" : k)}
-                  style={{ padding: "7px 12px", borderRadius: 8, fontSize: 13, cursor: "pointer",
-                           border: value === k ? "2px solid var(--petrol)" : "1px solid var(--line)",
-                           background: value === k ? "var(--petrol-soft)" : "var(--elev)",
-                           fontWeight: value === k ? 600 : 400 }}>
-            {lbl}
-          </button>
-        ))}
+        {options.map(([k, lbl, nivel]) => {
+          const activo = value === k;
+          const n = NIVELES[nivel];
+          return (
+            <button key={k} type="button" onClick={() => onChange(activo ? "" : k)} aria-pressed={activo}
+                    style={{ padding: "7px 14px", borderRadius: 8, fontSize: 13, cursor: "pointer",
+                             border: activo ? `2px solid ${n ? n.color : "var(--petrol)"}` : "1px solid var(--line)",
+                             background: activo ? (n ? n.fondo : "var(--petrol-soft)") : "var(--elev)",
+                             color: activo && n ? n.color : "var(--ink)",
+                             fontWeight: activo ? 700 : 400 }}>
+              {lbl}
+            </button>
+          );
+        })}
       </div>
+      {ayuda && value && ayuda[value] && (
+        <p style={{ fontSize: 12, color: "var(--ink-soft)", margin: "6px 0 0" }}>{ayuda[value]}</p>
+      )}
+      {!value && <p style={{ fontSize: 12, color: "var(--ink-faint)", margin: "6px 0 0" }}>Sin registrar.</p>}
     </div>
   );
 }
