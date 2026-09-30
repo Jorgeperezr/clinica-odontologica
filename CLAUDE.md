@@ -37,6 +37,10 @@ una misma ventana de un minuto y el cupo se agota; en 265 segundos la
 ventana se renueva varias veces y el problema no se ve. Una suite puede
 estar verde en local y roja en el CI por esto solo.
 
+El CI ejecuta además con **`DJANGO_DEBUG=True`** (ver `env:` en
+`.github/workflows/ci.yml`): una prueba que dependa de DEBUG pasa en
+local y falla allí. Para reproducirlo, anteponer `DJANGO_DEBUG=True`.
+
 El CI hace además una segunda pasada con `DJANGO_TIME_ZONE=Pacific/Kiritimati`
 (UTC+14), para que la fecha del servidor y la de la clínica no coincidan
 nunca. Varios fallos de frontera de fecha han salido de ahí.

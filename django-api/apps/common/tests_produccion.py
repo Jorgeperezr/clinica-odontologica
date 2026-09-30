@@ -94,14 +94,27 @@ class ArranqueReal(SimpleTestCase):
 
 
 class EsquemaDeLaApi(SimpleTestCase):
-    """Sin DEBUG, el mapa de la API no se enseña a quien no ha entrado."""
+    """
+    Sin DEBUG, el mapa de la API no se enseña a quien no ha entrado.
 
-    def test_sin_sesion_no_hay_esquema(self):
-        from django.test import Client
+    En un proceso aparte con DEBUG fijado a mano: el CI ejecuta la suite
+    con DJANGO_DEBUG=True, así que comprobarlo sobre la configuración ya
+    cargada daba un resultado distinto en el CI y en local.
+    """
 
-        from config import settings as ajustes
+    def estado(self, debug):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("DJANGO_")}
+        env.update(DJANGO_DEBUG=debug, DJANGO_ALLOWED_HOSTS="testserver",
+                   DJANGO_SETTINGS_MODULE="config.settings_test")
+        codigo = ("import django; django.setup(); from django.test import Client; "
+                  "print(Client().get('/api/v1/schema/').status_code)")
+        r = subprocess.run([sys.executable, "-c", codigo], cwd=Path(__file__).resolve().parents[2],
+                           env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout.strip().splitlines()[-1]
 
-        self.assertFalse(ajustes.DEBUG)
-        self.assertEqual(ajustes.SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"],
-                         ["rest_framework.permissions.IsAuthenticated"])
-        self.assertEqual(Client().get("/api/v1/schema/").status_code, 401)
+    def test_sin_debug_y_sin_sesion_no_hay_esquema(self):
+        self.assertEqual(self.estado("False"), "401")
+
+    def test_en_desarrollo_sigue_abierto(self):
+        self.assertEqual(self.estado("True"), "200")
