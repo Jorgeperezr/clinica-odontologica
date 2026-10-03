@@ -51,10 +51,13 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
    ```bash
    docker compose -f docker-compose.prod.yml up -d --build
    ```
-5. **Crear el superusuario:**
+5. **Crear la cuenta del dueño de la plataforma** (Super Administrador,
+   sin clínica; desde su panel se dan de alta las clínicas):
    ```bash
-   docker compose -f docker-compose.prod.yml exec django-api python manage.py createsuperuser
+   docker compose -f docker-compose.prod.yml exec django-api python manage.py createsuperadmin --email tu@correo.com --password 'una-clave-larga'
    ```
+   No `createsuperuser`: ese crea un usuario de Django sin el rol de
+   la plataforma, que no ve el panel de Plataforma.
 6. **Verificar:** `curl -I http://localhost` debe devolver 200 (panel) y
    `curl http://localhost/api/v1/ready/` también. La documentación de la
    API (`/api/v1/schema/swagger-ui/`) en producción pide sesión: publicarla
