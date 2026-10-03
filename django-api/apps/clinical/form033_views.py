@@ -415,7 +415,11 @@ class ExamRequestPDFView(APIView):
                 "history_number": patient.national_id,
             },
             exam={
-                "datetime": exam.requested_at.strftime("%Y-%m-%d %H:%M"),
+                # La fecha con su zona: el generador la pasa a la hora de
+                # la clínica. Antes se formateaba aquí en UTC y la orden
+                # hecha a las 20:22 en Ecuador decía 01:22 del día siguiente.
+                "datetime": exam.requested_at,
+                "reference": str(exam.id),
                 "category": exam.get_category_display(),
                 "detail": exam.detail,
                 "justification": exam.justification,
@@ -485,7 +489,7 @@ class ConsentPDFView(APIView):
             patient={
                 "full_name": f"{patient.first_name} {patient.last_name}",
                 "national_id": patient.national_id,
-                "birth_date": patient.birth_date.isoformat() if patient.birth_date else "",
+                "birth_date": patient.birth_date,
                 "age": _age_from_birth(patient.birth_date),
                 "sex": sex_map.get(getattr(patient, "sex", ""), getattr(patient, "sex", "") or "—"),
                 "history_number": patient.national_id,
@@ -497,7 +501,12 @@ class ConsentPDFView(APIView):
                 "observations": consent.observations,
                 "patient_signature_b64": patient_sig_b64,
                 "signed_place": "",
-                "signed_date": consent.signed_at.strftime("%Y-%m-%d") if consent.signed_at else "",
+                # Con su zona: el generador la escribe en la hora de la
+                # clínica (antes salía la fecha UTC, un día después por la
+                # tarde).
+                "signed_date": consent.signed_at,
+                "reference": str(consent.id),
+                "issued": consent.created_at,
             },
         )
         response = HttpResponse(pdf_bytes, content_type="application/pdf")

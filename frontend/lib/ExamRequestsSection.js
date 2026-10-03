@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./api";
+import { api, readList } from "./api";
 
 const CATEGORIES = {
   biometria: "Biometría", quimica_sanguinea: "Química sanguínea",
@@ -24,9 +24,8 @@ export default function ExamRequestsSection({ patientId }) {
   const load = useCallback(async () => {
     try {
       const resp = await api(`/patients/${patientId}/exam-requests/`);
-      const data = await resp.json();
-      setExams(data.results || data);
-    } catch { setError("No se pudieron cargar los exámenes."); }
+      setExams(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudieron cargar los exámenes. ${err.message}` : "No se pudieron cargar los exámenes."); }
   }, [patientId]);
 
   useEffect(() => { load(); }, [load]);

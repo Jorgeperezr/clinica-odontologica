@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * Celdas de la matriz periodontal (Sprint 52).
  *
@@ -14,7 +16,25 @@
  * se lee mejor a distancia que un simple cambio de color.
  */
 
-const CELL_W = 26;
+/* Ancho de la columna de cada pieza. Eran 26 px, pero tres campos de
+   sitio de 15 px no caben en 26 y se montaban unos sobre otros; y el
+   periodontograma necesita espacio para dibujar la pieza con sus raíces
+   y las líneas de margen y de bolsa encima. */
+const CELL_W = 44;
+
+/* Nombre de cada sitio de una cara, por su índice local (0, 1, 2). */
+const SITIO = ["mesial", "central", "distal"];
+
+/**
+ * Orden en pantalla de los tres sitios de una cara. En los cuadrantes 1 y
+ * 4 (mitad izquierda) mesial mira a la línea media, o sea a la DERECHA:
+ * se ven distal, central, mesial. En el 2 y el 3, al revés. Antes se
+ * mostraban siempre mesial-central-distal y en la mitad izquierda cada
+ * valor quedaba en el lado contrario de la pieza.
+ */
+export function ordenSitios(code) {
+  return ["1", "4"].includes(String(code)[0]) ? [2, 1, 0] : [0, 1, 2];
+}
 
 /** Interruptor de presencia de la pieza (su fila "Available"). */
 export function PresenceSwitch({ on, onToggle, label }) {
@@ -92,19 +112,19 @@ export function FurcationMark({ grade, onCycle, label, disabled }) {
 }
 
 /** Celda booleana de sitio (placa o sangrado). Tres sitios por lado. */
-export function SiteFlagRow({ values, base, color, onToggle, label, disabled }) {
+export function SiteFlagRow({ values, base, color, onToggle, label, disabled, orden = [0, 1, 2] }) {
   return (
-    <span style={{ display: "inline-flex", gap: 1, justifyContent: "center", width: "100%" }}>
-      {[0, 1, 2].map((i) => {
+    <span style={{ display: "inline-flex", gap: 2, justifyContent: "center", width: "100%" }}>
+      {orden.map((i) => {
         const idx = base + i;
         const on = Boolean(values?.[idx]);
         return (
           <button key={i} type="button" onClick={() => onToggle(idx)} disabled={disabled}
-                  aria-pressed={on} aria-label={`${label} sitio ${idx + 1}`}
+                  aria-pressed={on} aria-label={`${label}, ${SITIO[i]}`} title={SITIO[i]}
                   style={{
-                    width: 8, height: 14, padding: 0,
+                    width: 11, height: 11, padding: 0,
                     background: on ? color : "var(--elev)",
-                    border: "1px solid var(--line)", borderRadius: 2,
+                    border: "1px solid var(--line)", borderRadius: "50%",
                     cursor: disabled ? "not-allowed" : "pointer",
                     transition: "background var(--dur-fast) var(--ease)",
                   }} />
@@ -114,30 +134,62 @@ export function SiteFlagRow({ values, base, color, onToggle, label, disabled }) 
   );
 }
 
-/** Tres campos numéricos de sitio (sondaje o margen gingival). */
-export function SiteNumberRow({ values, base, onChange, label, disabled, activeSite, onFocusSite }) {
+/**
+ * Campo de un sitio. Es de TEXTO y no `type="number"` por dos motivos
+ * comprobados en el navegador:
+ *
+ *  · En Chromium el `number` mete sus flechas de incremento dentro de la
+ *    caja; con 14 px de ancho tapaban la cifra y la ficha se veía vacía.
+ *  · Un margen gingival negativo (hiperplasia) no se podía escribir: al
+ *    teclear el «-» el valor aún no es un número, se convertía en 0 y
+ *    el signo desaparecía. Aquí se guarda lo tecleado mientras se
+ *    escribe y solo se envía cuando ya es un número válido.
+ */
+function CampoSitio({ valor, alerta, activo, negativos, disabled, etiqueta, titulo, onFocus, onValor }) {
+  const [borrador, setBorrador] = useState(null);
+  const patron = negativos ? /^-?\d{0,2}$/ : /^\d{0,2}$/;
+  const alto = valor > alerta;
+  return (
+    <input type="text" inputMode={negativos ? "text" : "numeric"} disabled={disabled}
+           value={borrador ?? String(valor)}
+           onFocus={(e) => { onFocus?.(); e.target.select(); }}
+           onBlur={() => setBorrador(null)}
+           onChange={(e) => {
+             const t = e.target.value.trim();
+             if (!patron.test(t)) return;
+             setBorrador(t);
+             if (t !== "" && t !== "-") onValor(Number(t));
+           }}
+           aria-label={etiqueta} title={titulo}
+           style={{
+             width: 14, height: 16, padding: 0, textAlign: "center",
+             fontSize: 10, borderRadius: 2,
+             border: activo ? "1.5px solid var(--petrol)" : "1px solid var(--line)",
+             background: alto ? "var(--red-soft)" : "var(--elev)",
+             color: alto ? "var(--red)" : "var(--ink)",
+             fontWeight: alto ? 700 : 400,
+             transform: activo ? "scale(1.35)" : "scale(1)",
+             zIndex: activo ? 2 : 1, position: "relative",
+             transition: "transform var(--dur) var(--ease), background var(--dur-fast) var(--ease)",
+           }} />
+  );
+}
+
+/** Tres campos de sitio (sondaje o margen gingival) en el orden de la pantalla. */
+export function SiteNumberRow({
+  values, base, onChange, label, disabled, activeSite, onFocusSite,
+  orden = [0, 1, 2], alerta = 4, negativos = false,
+}) {
   return (
     <span style={{ display: "inline-flex", gap: 1, justifyContent: "center", width: "100%" }}>
-      {[0, 1, 2].map((i) => {
+      {orden.map((i) => {
         const idx = base + i;
-        const v = values?.[idx] ?? 0;
-        const active = activeSite === idx;
         return (
-          <input key={i} type="number" value={v} disabled={disabled}
-                 onFocus={() => onFocusSite?.(idx)}
-                 onChange={(e) => onChange(idx, e.target.value)}
-                 aria-label={`${label} sitio ${idx + 1}`}
-                 style={{
-                   width: 15, height: 15, padding: 0, textAlign: "center",
-                   fontSize: 9.5, borderRadius: 2, appearance: "textfield",
-                   border: active ? "1.5px solid var(--petrol)" : "1px solid var(--line)",
-                   background: v > 4 ? "var(--red-soft)" : "var(--elev)",
-                   color: v > 4 ? "var(--red)" : "var(--ink)",
-                   fontWeight: v > 4 ? 700 : 400,
-                   transform: active ? "scale(1.35)" : "scale(1)",
-                   zIndex: active ? 2 : 1, position: "relative",
-                   transition: "transform var(--dur) var(--ease), background var(--dur-fast) var(--ease)",
-                 }} />
+          <CampoSitio key={i} valor={values?.[idx] ?? 0} alerta={alerta} negativos={negativos}
+                      activo={activeSite === idx} disabled={disabled}
+                      etiqueta={`${label}, ${SITIO[i]}`} titulo={SITIO[i]}
+                      onFocus={() => onFocusSite?.(idx)}
+                      onValor={(v) => onChange(idx, v)} />
         );
       })}
     </span>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, readList } from "../../../lib/api";
+import { fechaISO, hoyISO } from "../../../lib/fechas.mjs";
 
 const STATUS_STYLE = {
   pending:     { label: "Pendiente",   cls: "badge-warn" },
@@ -12,7 +13,7 @@ const STATUS_STYLE = {
   no_show:     { label: "No asistió",  cls: "badge-danger" },
 };
 
-function todayISO() { return new Date().toISOString().slice(0, 10); }
+function todayISO() { return hoyISO(); }
 
 function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
@@ -47,8 +48,7 @@ export default function AgendaPage() {
       const params = new URLSearchParams({ mode, date });
       if (doctorId) params.set("doctor_id", doctorId);
       const resp = await api(`/agenda/view/?${params}`);
-      const data = await resp.json();
-      setAppointments(data.results || data);
+      setAppointments(await readList(resp));
     } catch {
       setError("No se pudo cargar la agenda.");
     } finally {
@@ -60,15 +60,14 @@ export default function AgendaPage() {
 
   useEffect(() => {
     api("/doctors/").then(async (r) => {
-      const data = await r.json();
-      setDoctors(data.results || data);
+      setDoctors(await readList(r));
     }).catch(() => {});
   }, []);
 
   function shiftDate(days) {
     const d = new Date(date + "T12:00:00");
     d.setDate(d.getDate() + days);
-    setDate(d.toISOString().slice(0, 10));
+    setDate(fechaISO(d));
   }
 
   async function doAction(appt, action) {
@@ -254,7 +253,7 @@ function MonthGrid({ date, appointments, onDayClick }) {
     cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = hoyISO();
   const monthName = base.toLocaleDateString("es-EC", { month: "long", year: "numeric" });
 
   return (
@@ -355,8 +354,7 @@ function AppointmentForm({ doctors, defaultDate, onSaved }) {
     if (q.length < 2) { setPatientResults([]); return; }
     try {
       const resp = await api(`/patients/?search=${encodeURIComponent(q)}`);
-      const data = await resp.json();
-      setPatientResults((data.results || data).slice(0, 6));
+      setPatientResults((await readList(resp)).slice(0, 6));
     } catch { /* silencioso */ }
   }
 

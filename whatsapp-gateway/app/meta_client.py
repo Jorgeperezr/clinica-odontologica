@@ -13,15 +13,31 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-async def send_template_message(to_phone: str, template_name: str, language: str, variables: dict) -> dict:
-    if not settings.meta_access_token or not settings.meta_phone_number_id:
+async def send_template_message(
+    to_phone: str,
+    template_name: str,
+    language: str,
+    variables: dict,
+    credenciales=None,
+) -> dict:
+    """
+    Envía la plantilla, desde la cuenta de la clínica si la trae.
+
+    `credenciales` llega cuando Django sabe de qué clínica es el
+    mensaje. Sin ellas se usan las del gateway, que es el caso del
+    código OTP: llega antes de que nadie haya dicho quién es.
+    """
+    token = credenciales.access_token if credenciales else settings.meta_access_token
+    numero = credenciales.phone_number_id if credenciales else settings.meta_phone_number_id
+
+    if not token or not numero:
         # Modo desarrollo sin credenciales reales de Meta todavía configuradas.
         logger.warning("META_ACCESS_TOKEN no configurado — envío simulado (modo dev).")
         return {"status": "queued", "provider_message_id": "dev-simulated"}
 
     url = (
         f"https://graph.facebook.com/{settings.meta_api_version}/"
-        f"{settings.meta_phone_number_id}/messages"
+        f"{numero}/messages"
     )
     payload = {
         "messaging_product": "whatsapp",
@@ -40,7 +56,7 @@ async def send_template_message(to_phone: str, template_name: str, language: str
             ],
         },
     }
-    headers = {"Authorization": f"Bearer {settings.meta_access_token}"}
+    headers = {"Authorization": f"Bearer {token}"}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(url, json=payload, headers=headers)

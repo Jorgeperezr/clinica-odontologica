@@ -620,10 +620,18 @@ function shadeAxial(t) {
   if (t >= 0) {
     const cervical = Math.pow(1 - t, 1.5);          // cuello: más dentina
     const incisal = Math.pow(t, 2.8);               // borde: más translúcido
+    /* Tercio incisal: el esmalte llega ahí sin dentina debajo, así que
+       transmite la luz en vez de devolverla y el borde se lee más
+       oscuro y AZULADO. Era un matiz apenas insinuado (+0.025 en azul);
+       en un diente real es de las señas más reconocibles, y sin él la
+       corona parece una pieza de resina uniforme.
+
+       Tercio cervical: el esmalte adelgaza y transparenta la dentina,
+       que es amarilla. También se acentúa un poco. */
     return [
-      1.00 - 0.11 * cervical - 0.035 * incisal,
-      0.985 - 0.16 * cervical - 0.020 * incisal,
-      0.945 - 0.26 * cervical + 0.025 * incisal,
+      1.00 - 0.13 * cervical - 0.075 * incisal,
+      0.985 - 0.19 * cervical - 0.050 * incisal,
+      0.945 - 0.30 * cervical + 0.045 * incisal,
     ];
   }
   /* Bajo el cuello se entra en cemento con una transición suave: la

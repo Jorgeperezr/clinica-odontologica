@@ -33,6 +33,19 @@ class Patient(TenantAwareModel, SoftDeleteModel):
     email = models.EmailField(blank=True)
     address = models.CharField(max_length=255, blank=True)
     photo = models.ImageField(upload_to="patients/photos/", null=True, blank=True)
+    agreement = models.ForeignKey(
+        "configuration.Agreement",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patients",
+        help_text="Convenio o aseguradora que cubre al paciente (RF-CFG-04). "
+                  "Vacío = paciente particular.",
+    )
+    # SET_NULL y no PROTECT: si la clínica termina el convenio con una
+    # aseguradora querrá borrarlo, y el paciente no debe desaparecer con él;
+    # simplemente pasa a particular. PROTECT dejaría el convenio imborrable
+    # para siempre por haber atendido una vez a alguien con esa cobertura.
 
     class Meta:
         verbose_name = "Paciente"

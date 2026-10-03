@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abrir copia de seguridad — Clinube</title>
+<!--
+  Herramienta para abrir una copia cifrada de la clínica (.clinicabk)
+  sin la plataforma y sin internet. No carga nada de fuera: todo el
+  código está en este archivo y el descifrado lo hace el propio
+  navegador (Web Crypto). El archivo y la frase no salen del equipo.
+-->
+<style>
+  :root { --tinta:#1d2a33; --suave:#5b6b76; --tenue:#8a98a2; --linea:#dde3e7; --papel:#f6f8f9;
+          --tarjeta:#fff; --marca:#0f5c6e; --marca-suave:#e3f0f2; --rojo:#b42318; --rojo-suave:#fdecea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --tinta:#e6edf1; --suave:#a9b8c1; --tenue:#7d8d97; --linea:#2c3a43; --papel:#12191e;
+            --tarjeta:#19232a; --marca:#5cb8cc; --marca-suave:#173039; --rojo:#ff8a80; --rojo-suave:#3a1d1b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--papel); color: var(--tinta); }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 10px; }
+  p { margin: 0 0 10px; }
+  .suave { color: var(--suave); font-size: 13.5px; }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--linea); border-radius: 12px;
+             padding: 18px; margin-top: 16px; }
+  label { display:block; font-weight:600; font-size:13.5px; margin-bottom:4px; }
+  input[type=password], input[type=file], select { width:100%; padding:9px 10px; border-radius:8px;
+         border:1px solid var(--linea); background: var(--papel); color: var(--tinta); font: inherit; }
+  .fila { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+           border: 1px solid var(--marca); background: var(--marca); color: #fff; }
+  button.secundario { background: transparent; color: var(--marca); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .aviso { padding: 10px 14px; border-radius: 10px; background: var(--marca-suave); font-size: 13.5px; }
+  .error { padding: 10px 14px; border-radius: 10px; background: var(--rojo-suave); color: var(--rojo);
+           font-size: 14px; margin-top: 12px; }
+  table { width:100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align:left; padding: 6px 8px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  #visor td { max-width: 320px; overflow-wrap: anywhere; }
+  th { position: sticky; top: 0; background: var(--tarjeta); }
+  .desplazable { max-height: 420px; overflow: auto; border: 1px solid var(--linea); border-radius: 8px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .acciones { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin: 12px 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Abrir una copia de seguridad</h1>
+  <p class="suave">Para archivos <strong>.clinicabk</strong> generados desde el panel de la clínica.
+    Funciona sin internet: el archivo y la frase no salen de este equipo.</p>
+
+  <div class="tarjeta">
+    <div class="fila">
+      <div>
+        <label for="archivo">Archivo de la copia (.clinicabk o el .zip que la trae)</label>
+        <input id="archivo" type="file" accept=".clinicabk,.zip,application/octet-stream,application/zip">
+      </div>
+      <div>
+        <label for="frase">Frase de cifrado</label>
+        <input id="frase" type="password" autocomplete="off">
+      </div>
+    </div>
+    <div class="acciones">
+      <button id="descifrar" disabled>Descifrar</button>
+      <span id="estado" class="suave"></span>
+    </div>
+    <div id="error" class="error" hidden></div>
+    <p class="suave" style="margin-top:8px">La frase es la que se escribió al generar la copia. No se
+      guarda en ninguna parte: si se ha perdido, la copia no se puede abrir.</p>
+  </div>
+
+  <div id="resultado" hidden>
+    <div class="tarjeta">
+      <h2 id="titulo"></h2>
+      <p id="detalle" class="suave"></p>
+      <div class="acciones">
+        <button id="json" class="secundario">Descargar todo (JSON)</button>
+        <button id="csvs" class="secundario">Descargar cada tabla (CSV)</button>
+      </div>
+      <div class="desplazable" style="max-height:260px">
+        <table><thead><tr><th>Contenido</th><th class="num">Registros</th><th></th></tr></thead>
+          <tbody id="tablas"></tbody></table>
+      </div>
+      <div class="aviso" style="margin-top:12px">Lo que descargues desde aquí queda <strong>sin
+        cifrar</strong> y contiene datos de salud. Bórralo cuando termines de usarlo.</div>
+    </div>
+
+    <div class="tarjeta" id="visor" hidden>
+      <h2 id="visor-titulo"></h2>
+      <p id="visor-nota" class="suave"></p>
+      <div class="desplazable"><table><thead id="visor-cabeza"></thead><tbody id="visor-cuerpo"></tbody></table></div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* Formato (ver COMO-DESCIFRAR.txt):
+   «CLINICABK» | versión 1B | iteraciones 4B big-endian | sal 16B | nonce 12B |
+   AES-256-GCM(gzip(JSON)), con la cabecera de 14 bytes como datos asociados. */
+const MAGIA = "CLINICABK", TAM_CABECERA = 14, SAL = 16, NONCE = 12, ETIQUETA = 16;
+
+const NOMBRES = {
+  "accounts.auditlog": "Registros de auditoría", "accounts.user": "Personal de la clínica",
+  "agenda.appointment": "Citas", "agenda.doctor": "Doctores",
+  "app_paciente.solicitudcita": "Solicitudes de cita (app)", "app_paciente.mensajeconsultorio": "Mensajes de la app",
+  "billing.budget": "Presupuestos", "billing.budgetitem": "Ítems de presupuesto",
+  "billing.doctorfee": "Honorarios", "billing.installment": "Cuotas", "billing.payment": "Pagos",
+  "billing.paymentplan": "Planes de pago", "clinical.clinicalrecord": "Fichas clínicas",
+  "clinical.consentauditlog": "Auditoría de consentimientos", "clinical.consenttemplate": "Plantillas de consentimiento",
+  "clinical.diagnosis": "Diagnósticos", "clinical.evolution": "Evoluciones y recetas",
+  "clinical.examrequest": "Solicitudes de examen", "clinical.form033record": "Formularios MSP 033",
+  "clinical.informedconsent": "Consentimientos informados", "clinical.odontogramstate": "Estados del odontograma",
+  "clinical.periodontalexam": "Exámenes periodontales", "clinical.periodontaltooth": "Piezas del periodontograma",
+  "clinical.radiographphoto": "Radiografías y fotos", "clinical.toothrecord": "Registros por pieza (odontograma)",
+  "clinical.treatmentplan": "Planes de tratamiento", "clinical.treatmentplanitem": "Ítems de plan",
+  "clinical.treatmentplantemplate": "Plantillas de plan", "clinical.treatmentplantemplateitem": "Ítems de plantilla",
+  "configuration.agreement": "Convenios", "configuration.clinicbranding": "Personalización",
+  "configuration.documentappearance": "Apariencia de documentos", "configuration.systemparameter": "Parámetros",
+  "configuration.tariff": "Tarifarios", "configuration.treatment": "Tratamientos",
+  "configuration.treatmentinventoryitem": "Insumos por tratamiento", "inventory.batch": "Lotes",
+  "inventory.inventorymovement": "Movimientos de inventario", "inventory.product": "Productos",
+  "logros.logro": "Logros", "logros.logrodepaciente": "Logros concedidos",
+  "patients.medicalbackground": "Antecedentes médicos", "patients.patient": "Pacientes",
+  "patients.patientdocument": "Documentos de pacientes", "specialties.specialty": "Especialidades",
+  "specialties.specialtyform": "Formularios por especialidad", "whatsapp.whatsappmessagelog": "Mensajes de WhatsApp",
+  "whatsapp.whatsappoptin": "Consentimientos de WhatsApp", "whatsapp.whatsapptemplate": "Plantillas de WhatsApp",
+  "whatsapp.configuracionwhatsapp": "Configuración de WhatsApp",
+};
+const nombre = (m) => NOMBRES[m.toLowerCase()] || m;
+const $ = (id) => document.getElementById(id);
+const nf = new Intl.NumberFormat("es");
+let contenido = null, porTabla = {};
+
+function error(texto) { $("error").textContent = texto; $("error").hidden = !texto; }
+function actualizarBoton() { $("descifrar").disabled = !($("archivo").files[0] && $("frase").value); }
+$("archivo").addEventListener("change", actualizarBoton);
+$("frase").addEventListener("input", actualizarBoton);
+$("frase").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("descifrar").disabled) $("descifrar").click(); });
+
+async function descomprimir(datos, formato) {
+  if (typeof DecompressionStream === "undefined")
+    throw new Error("Este navegador es demasiado antiguo para abrir la copia. Actualízalo o usa otro (Chrome, Edge, Firefox o Safari recientes).");
+  const flujo = new Blob([datos]).stream().pipeThrough(new DecompressionStream(formato));
+  return new Uint8Array(await new Response(flujo).arrayBuffer());
+}
+
+/* El .zip que descarga el panel trae la copia dentro. Se lee el
+   directorio central para no depender de ninguna biblioteca. */
+async function sacarDeZip(bytes) {
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let fin = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+  }
+  if (fin < 0) throw new Error("El .zip está dañado.");
+  const total = v.getUint16(fin + 10, true);
+  let p = v.getUint32(fin + 16, true);
+  const dec = new TextDecoder();
+  for (let n = 0; n < total; n++) {
+    if (v.getUint32(p, true) !== 0x02014b50) throw new Error("El .zip está dañado.");
+    const metodo = v.getUint16(p + 10, true), tam = v.getUint32(p + 20, true);
+    const largoNombre = v.getUint16(p + 28, true), extra = v.getUint16(p + 30, true), coment = v.getUint16(p + 32, true);
+    const local = v.getUint32(p + 42, true);
+    const nombreArchivo = dec.decode(bytes.subarray(p + 46, p + 46 + largoNombre));
+    if (nombreArchivo.endsWith(".clinicabk")) {
+      const ini = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+      const datos = bytes.subarray(ini, ini + tam);
+      if (metodo === 0) return datos;
+      if (metodo === 8) return descomprimir(datos, "deflate-raw");
+      throw new Error("El .zip usa una compresión que esta herramienta no lee. Descomprímelo y elige el .clinicabk.");
+    }
+    p += 46 + largoNombre + extra + coment;
+  }
+  throw new Error("El .zip no contiene ninguna copia .clinicabk.");
+}
+
+async function descifrar(bytes, frase) {
+  if (!window.crypto || !crypto.subtle)
+    throw new Error("Este navegador no permite descifrar en esta página. Prueba con Chrome, Edge, Firefox o Safari actualizados.");
+  if (bytes.length < TAM_CABECERA + SAL + NONCE + ETIQUETA) throw new Error("El archivo no es una copia de seguridad válida.");
+  const cabecera = bytes.subarray(0, TAM_CABECERA);
+  if (new TextDecoder().decode(cabecera.subarray(0, 9)) !== MAGIA) throw new Error("El archivo no es una copia de seguridad de la clínica.");
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const version = v.getUint8(9), iteraciones = v.getUint32(10, false);
+  if (version !== 1) throw new Error(`La copia usa el formato v${version} y esta herramienta lee el v1.`);
+  if (iteraciones < 1000 || iteraciones > 5000000) throw new Error("El archivo tiene una cabecera inconsistente.");
+  const sal = bytes.slice(TAM_CABECERA, TAM_CABECERA + SAL);
+  const nonce = bytes.slice(TAM_CABECERA + SAL, TAM_CABECERA + SAL + NONCE);
+  const cifrado = bytes.slice(TAM_CABECERA + SAL + NONCE);
+
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(frase), "PBKDF2", false, ["deriveKey"]);
+  const clave = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: sal, iterations: iteraciones, hash: "SHA-256" },
+                                              base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  let claro;
+  try {
+    claro = await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce, additionalData: cabecera.slice(), tagLength: 128 },
+                                        clave, cifrado);
+  } catch {
+    throw new Error("No se pudo descifrar: la frase no es la correcta o el archivo está dañado.");
+  }
+  const json = new TextDecoder().decode(await descomprimir(claro, "gzip"));
+  const datos = JSON.parse(json);
+  if (!datos || !datos.manifest || datos.manifest.format !== "clinica-backup") throw new Error("El archivo no es una copia de seguridad de la clínica.");
+  return datos;
+}
+
+$("descifrar").addEventListener("click", async () => {
+  error(""); $("resultado").hidden = true; $("descifrar").disabled = true;
+  $("estado").textContent = "Descifrando… (unos segundos)";
+  try {
+    let bytes = new Uint8Array(await $("archivo").files[0].arrayBuffer());
+    if (bytes[0] === 0x50 && bytes[1] === 0x4b) bytes = await sacarDeZip(bytes);
+    contenido = await descifrar(bytes, $("frase").value.trim());
+    $("frase").value = "";
+    mostrar();
+    $("estado").textContent = "";
+  } catch (e) {
+    $("estado").textContent = ""; error(e.message || String(e));
+  } finally { actualizarBoton(); }
+});
+
+function mostrar() {
+  const m = contenido.manifest;
+  porTabla = {};
+  for (const r of contenido.records || []) (porTabla[r.model] ||= []).push(r);
+  const alcance = m.alcance || { tipo: "clinica" };
+  const fecha = new Date(m.generated_at);
+  $("titulo").textContent = alcance.tipo === "profesional"
+    ? `Pacientes de ${alcance.full_name || alcance.email} — ${m.tenant?.name || ""}`
+    : `Copia de ${m.tenant?.name || "la clínica"}`;
+  $("detalle").textContent = `Generada el ${isNaN(fecha) ? m.generated_at : fecha.toLocaleString("es")}`
+    + (m.generated_by?.email ? ` por ${m.generated_by.email}` : "")
+    + `. ${nf.format(m.total_records || 0)} registros`
+    + (alcance.tipo === "profesional" ? ` de ${nf.format(alcance.pacientes || 0)} pacientes.` : ".");
+  const cuerpo = $("tablas"); cuerpo.textContent = "";
+  Object.keys(porTabla).sort((a, b) => porTabla[b].length - porTabla[a].length).forEach((modelo) => {
+    const tr = document.createElement("tr");
+    const b = document.createElement("button"); b.className = "secundario"; b.textContent = "Ver";
+    b.style.padding = "2px 10px"; b.onclick = () => ver(modelo);
+    tr.append(celda(nombre(modelo)), celda(nf.format(porTabla[modelo].length), "num"), celda(b));
+    cuerpo.append(tr);
+  });
+  $("visor").hidden = true;
+  $("resultado").hidden = false;
+}
+
+function celda(x, clase) {
+  const td = document.createElement("td");
+  if (clase) td.className = clase;
+  if (x instanceof Node) td.append(x); else td.textContent = x;
+  return td;
+}
+const texto = (v) => v === null || v === undefined ? "" : (typeof v === "object" ? JSON.stringify(v) : String(v));
+/* Primero lo que una persona busca (nombre, cédula, fecha, notas…); los
+   identificadores y marcas de tiempo, al final. */
+const PRIMERO = ["first_name", "last_name", "full_name", "name", "national_id", "patient", "date",
+                 "scheduled_start", "type", "notes", "allergies", "medications", "conditions"];
+const AL_FINAL = ["tenant", "created_at", "updated_at", "deleted_at"];
+const peso = (c) => PRIMERO.includes(c) ? PRIMERO.indexOf(c) - 100 : AL_FINAL.includes(c) ? 100 : 0;
+const campos = (filas) => [...new Set(filas.flatMap((f) => Object.keys(f.fields)))]
+  .sort((a, b) => peso(a) - peso(b) || a.localeCompare(b));
+
+function ver(modelo) {
+  const filas = porTabla[modelo], cols = campos(filas), max = 300;
+  $("visor-titulo").textContent = nombre(modelo);
+  $("visor-nota").textContent = filas.length > max
+    ? `Se muestran los primeros ${max} de ${nf.format(filas.length)}. Descarga el CSV para verlos todos.` : "";
+  const cabeza = document.createElement("tr");
+  ["id", ...cols].forEach((c) => { const th = document.createElement("th"); th.textContent = c; cabeza.append(th); });
+  $("visor-cabeza").replaceChildren(cabeza);
+  $("visor-cuerpo").replaceChildren(...filas.slice(0, max).map((f) => {
+    const tr = document.createElement("tr");
+    tr.append(celda(String(f.pk)), ...cols.map((c) => celda(texto(f.fields[c]).slice(0, 200))));
+    return tr;
+  }));
+  $("visor").hidden = false;
+  $("visor").scrollIntoView({ behavior: "smooth" });
+}
+
+function descargar(contenidoArchivo, nombreArchivo, tipo) {
+  const url = URL.createObjectURL(new Blob([contenidoArchivo], { type: tipo }));
+  const a = document.createElement("a"); a.href = url; a.download = nombreArchivo;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/* CSV con punto y coma y BOM: así lo abre Excel en español sin asistente. */
+function csv(modelo) {
+  const filas = porTabla[modelo], cols = campos(filas);
+  const esc = (v) => { const t = texto(v); return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  return "﻿" + [["id", ...cols].join(";"),
+    ...filas.map((f) => [esc(f.pk), ...cols.map((c) => esc(f.fields[c]))].join(";"))].join("\r\n");
+}
+
+$("json").addEventListener("click", () => descargar(JSON.stringify(contenido, null, 1), "respaldo-descifrado.json", "application/json"));
+$("csvs").addEventListener("click", async () => {
+  for (const modelo of Object.keys(porTabla)) {
+    descargar(csv(modelo), `${modelo}.csv`, "text/csv;charset=utf-8");
+    await new Promise((r) => setTimeout(r, 250));   // el navegador bloquea ráfagas de descargas
+  }
+});
+</script>
+</body>
+</html>

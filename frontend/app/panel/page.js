@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, currentUser } from "../../lib/api";
+import { api, currentUser, readList, tieneFuncion } from "../../lib/api";
 import DayAlerts from "../../lib/DayAlerts";
+import { hoyISO } from "../../lib/fechas.mjs";
 
 const money = (v) => `$${Number(v || 0).toFixed(2)}`;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => hoyISO();
 const fmtTime = (iso) =>
   new Date(iso).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
 
@@ -40,19 +41,19 @@ export default function Dashboard() {
     // Cada widget carga según lo que el rol puede ver; los que el
     // backend rechace (403) simplemente no se muestran.
     api(`/agenda/view/?mode=daily&date=${todayISO()}`)
-      .then(async (r) => { if (r.ok) { const d = await r.json(); setAppointments(d.results || d); } })
+      .then(async (r) => { if (r.ok) { setAppointments(await readList(r)); } })
       .catch(() => {});
 
     api("/patients/?search=")
       .then(async (r) => { if (r.ok) { const d = await r.json(); setPatientCount(d.count ?? (d.results || d).length); } })
       .catch(() => {});
 
-    if (u.role === "admin") {
+    if (tieneFuncion(u, "reportes")) {
       api(`/reports/financial/?date_from=${firstOfMonth()}&date_to=${todayISO()}`)
         .then(async (r) => { if (r.ok) setIncome(await r.json()); })
         .catch(() => {});
     }
-    if (["admin", "reception"].includes(u.role)) {
+    if (tieneFuncion(u, "cobros")) {
       api("/reports/delinquency/")
         .then(async (r) => { if (r.ok) { const d = await r.json(); setDelinquents(d.patients || []); } })
         .catch(() => {});
@@ -62,7 +63,7 @@ export default function Dashboard() {
         .then(async (r) => { if (r.ok) { const d = await r.json(); setFollowUps(d.results || []); } })
         .catch(() => {});
     }
-    if (["admin", "auxiliary"].includes(u.role)) {
+    if (tieneFuncion(u, "inventario")) {
       api("/inventory/alerts/low-stock/")
         .then(async (r) => { if (r.ok) { const d = await r.json(); setLowStock(d.low_stock_products || []); } })
         .catch(() => {});
@@ -81,15 +82,19 @@ export default function Dashboard() {
   return (
     <div>
       <h1 style={{ fontSize: 24, marginBottom: 2 }}>Hola, {user.full_name || user.email}</h1>
-      <p style={{ color: "var(--ink-soft)", marginBottom: 22, textTransform: "capitalize" }}>{today}</p>
+      {/* Solo la primera letra en mayúscula: «capitalize» escribía
+          «30 De Septiembre De 2026», que en castellano es un error. */}
+      <p style={{ color: "var(--ink-soft)", marginBottom: 22 }}>{today.charAt(0).toUpperCase() + today.slice(1)}</p>
 
       {/* Acciones rápidas */}
       <div style={{ display: "flex", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
-        {["admin", "reception", "doctor"].includes(user.role) && (
+        {/* Solo a quien de verdad puede crearla: antes lo veían todos
+            los doctores y la API les respondía 403 al guardar. */}
+        {tieneFuncion(user, "agenda") && (
           <a className="btn btn-primary" href="/panel/agenda/">+ Nueva cita</a>
         )}
         <a className="btn btn-ghost" href="/panel/pacientes/">+ Nuevo paciente</a>
-        {["admin", "reception"].includes(user.role) && (
+        {tieneFuncion(user, "cobros") && (
           <a className="btn btn-ghost" href="/panel/pagos/">Registrar cobro</a>
         )}
       </div>
@@ -205,16 +210,18 @@ export default function Dashboard() {
 
 function StatCard({ label, value, sub, href, accent, danger }) {
   return (
-    <a href={href} className="card"
+    <a href={href} className="card tarjeta-cifra"
        style={{
-         flex: 1, minWidth: 150, textDecoration: "none", color: "inherit",
+         flex: 1, minWidth: 150, textDecoration: "none", color: "inherit", padding: "14px 16px",
+         display: "flex", flexDirection: "column", gap: 2,
          ...(danger ? { borderColor: "var(--red)", background: "var(--red-soft)" } : {}),
        }}>
-      <div style={{ fontSize: 12, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: ".04em" }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-soft)", textTransform: "uppercase",
+                    letterSpacing: ".05em", lineHeight: 1.3, minHeight: 28 }}>
         {label}
       </div>
       <div className="tabular"
-           style={{ fontSize: 24, fontWeight: 700,
+           style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.15,
                     color: danger ? "var(--red)" : accent ? "var(--petrol)" : "var(--ink)" }}>
         {value}
       </div>

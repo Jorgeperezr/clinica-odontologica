@@ -5,6 +5,8 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.funciones import TieneFuncion
+from apps.common.permisos_funcionalidad import RequiereFuncionalidad
 from apps.common.permissions import HasRole
 from apps.inventory.models import Batch, InventoryMovement, Product
 from apps.inventory.serializers import (
@@ -13,7 +15,9 @@ from apps.inventory.serializers import (
     ProductSerializer,
 )
 
-CAN_MANAGE = HasRole.for_roles("admin", "auxiliary")
+# Gestionar el inventario es una función de cada profesional
+# (apps/accounts/funciones.py); por defecto la tiene el auxiliar, como antes.
+CAN_MANAGE = TieneFuncion.para("inventario")
 CAN_VIEW = HasRole.for_roles("admin", "auxiliary", "doctor", "reception")
 
 
@@ -37,7 +41,7 @@ class ProductListCreateView(generics.ListCreateAPIView):
 
 class ProductDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = ProductSerializer
-    permission_classes = [CAN_MANAGE]
+    permission_classes = [CAN_MANAGE, RequiereFuncionalidad.para("inventario")]
 
     def get_queryset(self):
         return Product.objects.filter(tenant=self.request.tenant).prefetch_related("batches")
@@ -47,7 +51,7 @@ class BatchListCreateView(generics.ListCreateAPIView):
     """GET/POST /api/v1/products/{id}/batches/ — RF-INV-02."""
 
     serializer_class = BatchSerializer
-    permission_classes = [CAN_MANAGE]
+    permission_classes = [CAN_MANAGE, RequiereFuncionalidad.para("inventario")]
 
     def get_queryset(self):
         return Batch.objects.filter(
@@ -70,7 +74,7 @@ class BatchListCreateView(generics.ListCreateAPIView):
 class LowStockAlertView(APIView):
     """GET /api/v1/inventory/alerts/low-stock/ — RF-INV-03."""
 
-    permission_classes = [CAN_VIEW]
+    permission_classes = [CAN_VIEW, RequiereFuncionalidad.para("inventario")]
 
     def get(self, request):
         products = Product.objects.filter(
@@ -91,14 +95,14 @@ class LowStockAlertView(APIView):
 class ExpiringBatchAlertView(APIView):
     """GET /api/v1/inventory/alerts/expiring/?days=30 — RF-INV-04."""
 
-    permission_classes = [CAN_VIEW]
+    permission_classes = [CAN_VIEW, RequiereFuncionalidad.para("inventario")]
 
     def get(self, request):
         try:
             days = int(request.query_params.get("days", 30))
         except ValueError:
             days = 30
-        limit_date = timezone.now().date() + timedelta(days=days)
+        limit_date = timezone.localdate() + timedelta(days=days)
 
         batches = Batch.objects.filter(
             tenant=request.tenant,
@@ -114,7 +118,7 @@ class ExpiringBatchAlertView(APIView):
                 "batch_number": b.batch_number,
                 "quantity": str(b.quantity),
                 "expiration_date": str(b.expiration_date),
-                "days_to_expiry": (b.expiration_date - timezone.now().date()).days,
+                "days_to_expiry": (b.expiration_date - timezone.localdate()).days,
             }
             for b in batches
         ]
@@ -125,7 +129,7 @@ class InventoryMovementListView(generics.ListAPIView):
     """GET /api/v1/inventory/movements/ — historial completo."""
 
     serializer_class = InventoryMovementSerializer
-    permission_classes = [CAN_VIEW]
+    permission_classes = [CAN_VIEW, RequiereFuncionalidad.para("inventario")]
     filterset_fields = ["product", "movement_type", "reason"]
 
     def get_queryset(self):

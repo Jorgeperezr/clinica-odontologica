@@ -28,7 +28,7 @@ def is_patient_delinquent(patient, tenant):
     """
     from apps.billing.models import Installment
 
-    threshold_date = timezone.now().date() - timedelta(days=get_delinquency_days(tenant))
+    threshold_date = timezone.localdate() - timedelta(days=get_delinquency_days(tenant))
     return Installment.objects.filter(
         patient=patient,
         tenant=tenant,
@@ -40,7 +40,7 @@ def get_overdue_installments(patient, tenant):
     """Devuelve las cuotas vencidas (no pagadas y ya pasada la fecha)."""
     from apps.billing.models import Installment
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     return Installment.objects.filter(
         patient=patient, tenant=tenant, due_date__lt=today,
     ).exclude(status=Installment.Status.PAID)

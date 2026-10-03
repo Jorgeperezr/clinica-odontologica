@@ -5,6 +5,8 @@ dashboard, gestión de clínicas, administradores, auditoría, configuración
 Super Administrador a información operativa.
 """
 
+from django.db.utils import OperationalError
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -187,3 +189,63 @@ class PlatformConfigTests(PlatformBase):
         self.assertTrue(resp.data["smtp_password_set"])
         config = PlatformConfiguration.get_solo()
         self.assertEqual(config.smtp_password, "secretisimo")
+
+
+class HealthCheckTests(APITestCase):
+    """
+    Sondas de salud (Sprint 72).
+
+    Lo que de verdad hay que fijar aquí no es que devuelvan 200 —eso es
+    trivial— sino las tres cosas por las que existen: que NO exijan
+    autenticación, que `ready` distinga «vivo» de «puede atender», y que
+    no filtren nada al primero que llame.
+    """
+
+    def test_health_no_exige_autenticacion(self):
+        """Un monitor no tiene credenciales: si pidiera token, no serviría."""
+        resp = self.client.get(reverse("health"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data, {"status": "ok"})
+
+    def test_ready_no_exige_autenticacion(self):
+        resp = self.client.get(reverse("ready"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["database"], "ok")
+
+    def test_health_no_consulta_la_base_de_datos(self):
+        """
+        Es la diferencia con `ready`: `health` responde a «¿está vivo el
+        proceso?». Si consultara la base, una base lenta provocaría
+        reinicios de procesos que están perfectamente sanos.
+        """
+        with self.assertNumQueries(0):
+            self.client.get(reverse("health"))
+
+    def test_ready_devuelve_503_si_la_base_no_responde(self):
+        """
+        503 y no 500: es lo que un balanceador entiende como «sácame del
+        reparto», en vez de como un fallo de la aplicación.
+        """
+        from unittest.mock import patch
+
+        with patch("apps.common.health.connection.cursor", side_effect=OperationalError("caída")):
+            with self.assertLogs("apps.common.health", level="ERROR"):
+                resp = self.client.get(reverse("ready"))
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(resp.data["status"], "unavailable")
+
+    def test_el_fallo_no_revela_datos_de_conexion(self):
+        """
+        El mensaje de error de la base lleva host, puerto y usuario. Estas
+        rutas son públicas, así que el detalle va al registro y no a la
+        respuesta.
+        """
+        from unittest.mock import patch
+
+        secreto = "FATAL: password authentication failed for user 'clinica' at db.interna:5432"
+        with patch("apps.common.health.connection.cursor", side_effect=OperationalError(secreto)):
+            with self.assertLogs("apps.common.health", level="ERROR"):
+                resp = self.client.get(reverse("ready"))
+        cuerpo = str(resp.data)
+        for filtracion in ("password", "clinica", "db.interna", "5432"):
+            self.assertNotIn(filtracion, cuerpo, msg=f"la respuesta revela «{filtracion}»")

@@ -13,7 +13,8 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./api";
+import { api, readList } from "./api";
+import { hoyISO } from "./fechas.mjs";
 
 // D. Antecedentes patológicos PERSONALES (claves oficiales del formulario)
 const ANTEC_PERSONALES = [
@@ -46,9 +47,8 @@ export default function Form033Panel({ patientId }) {
     setLoading(true);
     try {
       const resp = await api(`/patients/${patientId}/form033/`);
-      const data = await resp.json();
-      setRecords(data.results || data);
-    } catch { setError("No se pudo cargar la historia MSP 033."); }
+      setRecords(await readList(resp));
+    } catch (err) { setError(err?.message ? `No se pudo cargar la historia MSP 033. ${err.message}` : "No se pudo cargar la historia MSP 033."); }
     finally { setLoading(false); }
   }, [patientId]);
 
@@ -160,7 +160,7 @@ function Field({ label, value }) {
 
 function Form033Editor({ patientId, onSaved, onCancel }) {
   const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
+    date: hoyISO(),
     motivo_consulta: "", embarazada: null, enfermedad_actual: "",
     temperatura: "", pulso: "", frecuencia_respiratoria: "", presion_arterial: "",
   });

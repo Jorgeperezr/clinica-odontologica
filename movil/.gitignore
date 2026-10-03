@@ -1,0 +1,17 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# `pubspec.lock` SÍ se versiona: esto es una aplicación, no una
+# biblioteca. Sin él, el Mac de quien compila y el CI resuelven
+# versiones distintas de las dependencias y «funciona en mi máquina»
+# deja de ser una broma.
+
+# Android / iOS generados
+android/.gradle/
+ios/Pods/
+*.iml
+.idea/

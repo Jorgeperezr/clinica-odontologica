@@ -1,5 +1,5 @@
 """
-Django settings — Clínica Odontológica.
+Django settings — Clinube.
 
 Fase 8 / Sprint 0: fundamentos técnicos.
 Todo valor sensible viene de variables de entorno (.env en local;
@@ -14,7 +14,11 @@ from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-me")
+# El valor por omisión es solo para desarrollo y pruebas: en producción
+# (DJANGO_ENTORNO=produccion) `config/produccion.py` no deja arrancar con
+# él. Tiene más de 32 bytes porque firma los JWT con HMAC-SHA256 y una
+# clave más corta hace que PyJWT avise en cada token.
+SECRET_KEY = config("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-me-never-use-in-production")
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
@@ -82,12 +86,19 @@ INSTALLED_APPS = [
     "apps.billing",
     "apps.inventory",
     "apps.whatsapp",
+    "apps.app_paciente",
     "apps.configuration",
+    "apps.logros",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
+    # El primero de la lista a propósito: su process_request abre el
+    # cronómetro antes que nadie y su process_response —que se ejecuta en
+    # orden inverso— es el último en ver la respuesta, así que mide la
+    # petición entera y no un trozo.
+    "apps.common.middleware.RequestLogMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -147,13 +158,20 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    # La lista de Django está en inglés y este sistema se usa en español:
+    # `contrasena12` la pasa entera. Ver apps/accounts/password_validation.py.
+    {"NAME": "apps.accounts.password_validation.ContrasenaComunEnEspanolValidator"},
 ]
 
 # --------------------------------------------------------------------------
 # Internacionalización
 # --------------------------------------------------------------------------
 LANGUAGE_CODE = "es-ec"
-TIME_ZONE = "America/Guayaquil"
+# Configurable por entorno: el sistema es multiclínica y una sede en otro
+# huso necesita el suyo. En pruebas sirve además para reproducir el
+# desfase entre la fecha del servidor y la fecha local de la clínica,
+# que es de donde han salido varios fallos de frontera de fecha.
+TIME_ZONE = config("DJANGO_TIME_ZONE", default="America/Guayaquil")
 USE_I18N = True
 USE_TZ = True
 
@@ -182,7 +200,24 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        "user": "60/min",
+        # 60/min era demasiado poco, y no por teoría: recorriendo el panel
+        # con un navegador de verdad, abrir UNA ficha clínica y mirar sus
+        # pestañas gasta unas treinta peticiones. En una sesión ya
+        # empezada bastaron 22 más para recibir un 429, y entonces la
+        # pestaña de planes se quedaba EN BLANCO —la pantalla entera pasó
+        # de 2053 caracteres a cero—. Es decir: el límite pensado para
+        # frenar un abuso estaba frenando a la recepcionista al segundo
+        # paciente de la mañana.
+        #
+        # 600/min son diez peticiones por segundo sostenidas: ninguna
+        # persona se acerca, y un bucle desbocado o un token robado
+        # siguen teniendo techo. Quien de verdad protege el login es el
+        # límite de anónimo, que no se toca.
+        #
+        # Si algún día el panel deja de pedir treinta cosas por ficha,
+        # este número puede bajar. Mientras las pida, bajarlo es romper
+        # la aplicación a propósito.
+        "user": "600/min",
         "anon": "20/min",
         "otp": "5/min",  # aprox. válida; ventana exacta de 10 min se afina en Sprint 10
     },
@@ -190,10 +225,21 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "apps.common.exceptions.custom_exception_handler",
 }
 
+# Nombre de la plataforma, el que ven las clínicas en correos, títulos y
+# calendarios. El de cada clínica es otro (Tenant.name / su branding) y
+# va en todo lo que recibe el paciente. En el panel está en frontend/lib/marca.js.
+MARCA = "Clinube"
+
 SPECTACULAR_SETTINGS = {
-    "TITLE": "API — Clínica Odontológica",
+    "TITLE": f"API — {MARCA}",
     "DESCRIPTION": "Ver el documento 05-APIs-Clinica-Odontologica.md para el contrato completo.",
     "VERSION": "1.0.0",
+    # En desarrollo el esquema y Swagger están abiertos para consultarlos
+    # cómodamente. En producción, no: publicarlos le da a cualquiera el
+    # mapa completo de la API —rutas, parámetros, qué devuelve cada una—
+    # de un sistema con datos clínicos.
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"] if DEBUG
+    else ["rest_framework.permissions.IsAuthenticated"],
 }
 
 SIMPLE_JWT = {
@@ -210,7 +256,7 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:
 # desarrollo el panel corre en otro puerto y el navegador oculta las
 # cabeceras de respuesta que no se declaren aquí. Sin esto, una descarga
 # generada por la API llega sin su nombre de archivo.
-CORS_EXPOSE_HEADERS = ["Content-Disposition"]
+CORS_EXPOSE_HEADERS = ["Content-Disposition", "X-Backup-Records"]
 
 # --------------------------------------------------------------------------
 # Celery / Redis (recordatorios, tareas programadas — ver Arquitectura v1.2)
@@ -226,6 +272,30 @@ CELERY_TIMEZONE = TIME_ZONE
 # --------------------------------------------------------------------------
 WHATSAPP_GATEWAY_URL = config("WHATSAPP_GATEWAY_URL", default="http://whatsapp-gateway:8001")
 INTERNAL_SERVICE_TOKEN = config("INTERNAL_SERVICE_TOKEN", default="dev-only-shared-secret-change-me")
+
+# ── Correo (recuperación de contraseña del personal) ─────────────────
+# No había ninguna configuración: Django intentaba un SMTP en localhost,
+# que en el contenedor no existe, y como el envío era silencioso el
+# correo de recuperación no llegaba nunca sin que nadie se enterase.
+# Sin EMAIL_HOST, el correo se escribe en el registro (útil en
+# desarrollo; en producción, configurar un SMTP: Gmail/Workspace,
+# Microsoft 365, Brevo, Amazon SES…).
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_BACKEND = ("django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
+                 else "django.core.mail.backends.console.EmailBackend")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_TIMEOUT = 15
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=f"{MARCA} <no-responder@localhost>")
+
+# Producción: negarse a arrancar con valores de ejemplo (ver config/produccion.py).
+ENTORNO = config("DJANGO_ENTORNO", default="desarrollo")
+if ENTORNO == "produccion":
+    from config.produccion import exigir
+
+    exigir(globals())
 
 # --------------------------------------------------------------------------
 # Almacenamiento de archivos (Cloud Storage en producción — ver Arquitectura)
@@ -246,3 +316,78 @@ if USE_CLOUD_STORAGE:
     # todavía no se ha encendido en ningún despliegue.
     STORAGES["default"] = {"BACKEND": "storages.backends.gcloud.GoogleCloudStorage"}
     GS_BUCKET_NAME = config("GS_BUCKET_NAME", default="")
+
+
+# --------------------------------------------------------------------------
+# Registro (Sprint 75)
+# --------------------------------------------------------------------------
+# No había bloque LOGGING, y eso NO significaba «el de Django por defecto»:
+# significaba silencio. Comprobado con un 500 real y DEBUG=False —el cliente
+# recibe su 500 y la traza no aparece en ningún sitio, ni en la salida
+# estándar—, porque el único logger que trae Django es `django`, con los
+# manejadores `console` (filtrado por require_debug_true, callado en
+# producción) y `mail_admins` (necesita ADMINS, que está vacío).
+#
+# Formato: JSON en producción, porque el destino es un agregador y allí
+# poder filtrar por estado o por id de petición vale más que leerse bonito;
+# texto plano en desarrollo. Se elige con DJANGO_LOG_FORMAT.
+#
+# Qué NO va al registro —nombres, cédulas, teléfonos, contraseñas— y por
+# qué: ver la cabecera de apps/common/logging.py. Es un sistema de datos de
+# salud y un registro se copia, se conserva y lo lee gente que no tiene por
+# qué ver la historia de nadie.
+
+LOG_LEVEL = config("DJANGO_LOG_LEVEL", default="INFO").upper()
+LOG_FORMAT = config("DJANGO_LOG_FORMAT", default="plain" if DEBUG else "json")
+
+LOGGING = {
+    "version": 1,
+    # Los loggers que el proyecto ya tenía (apps.common.health,
+    # apps.whatsapp...) siguen funcionando: no se desactiva nada.
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {"()": "apps.common.logging.RequestIdFilter"},
+    },
+    "formatters": {
+        "json": {"()": "apps.common.logging.JsonFormatter"},
+        "plain": {"()": "apps.common.logging.PlainFormatter"},
+    },
+    "handlers": {
+        # Descarta de verdad. Con `"handlers": []` no basta: Python cae
+        # entonces en `logging.lastResort`, que escribe en stderr sin
+        # formato — comprobado, salía la traza duplicada y en texto plano.
+        "null": {"class": "logging.NullHandler"},
+        # A la salida estándar, SIN filtro de DEBUG: es justo el filtro que
+        # dejaba mudo el registro en producción. En contenedores, stdout es
+        # el sitio correcto: lo recoge Docker y de ahí el agregador.
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": LOG_FORMAT,
+            "filters": ["request_id"],
+        },
+    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+    "loggers": {
+        "apps": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        # django.request registra el 500 por su cuenta, ADEMÁS del nuestro:
+        # dos trazas completas por cada fallo, y la suya llega con el
+        # objeto `request` en extra, cuyo repr lleva la cadena de consulta
+        # entera —o sea, apellidos de pacientes—. Se deja sin manejadores
+        # y sin propagar: la fuente única es RequestLogMiddleware, que
+        # registra lo mismo con contexto y sin datos personales.
+        # (La clave `request` se tapa igualmente en el formateador, por si
+        # otro logger vuelve a pasar un objeto de petición.)
+        "django.request": {"handlers": ["null"], "propagate": False},
+        # Una línea por consulta SQL ahoga cualquier otra cosa. Se sube a
+        # WARNING; quien quiera verlas pone DJANGO_LOG_LEVEL=DEBUG y cambia
+        # esto a mano, que es una decisión consciente y no un descuido.
+        "django.db.backends": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        # El registro de acceso de runserver duplica lo que ya escribe el
+        # middleware —con menos contexto y sin id de correlación—, y en
+        # producción esa capa la sirve gunicorn. A la basura, igual que
+        # django.request y por el mismo motivo: una línea por petición, no
+        # tres.
+        "django.server": {"handlers": ["null"], "propagate": False},
+    },
+}

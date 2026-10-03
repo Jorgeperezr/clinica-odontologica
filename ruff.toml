@@ -32,4 +32,6 @@ select = [
 ]
 
 [lint.isort]
-known-first-party = ["apps", "config", "app"]
+# `main` es el módulo raíz del gateway: sin declararlo, el ordenador
+# de imports lo tomaba por una librería de terceros.
+known-first-party = ["apps", "config", "app", "main"]

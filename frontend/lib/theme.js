@@ -81,8 +81,15 @@ export function ensureAccessiblePrimary(hex) {
 }
 
 // ── temas predefinidos ──
+// «default» es la paleta original de Clinube: cian sobre tinta. `nav` es
+// el fondo de la barra lateral en modo claro; sin él, la barra toma el
+// tono hondo del color principal. «sin_color» es el logotipo en grises
+// —el de imprimir en blanco y negro, sellar o mandar por fax— llevado a
+// todo el panel: cambia los colores y nada más.
+// La misma tabla vive en apps/configuration/temas.py (hay una prueba).
 export const PRESETS = [
-  { key: "default", label: "Azul clínico (sistema)", primary: "#14639e", secondary: "#bcdcf2" },
+  { key: "default", label: "Clinube (original)", primary: "#0e7490", secondary: "#67e8f9", nav: "#0b1220" },
+  { key: "sin_color", label: "Sin color", primary: "#404040", secondary: "#9ca3af", nav: "#111111" },
   { key: "oceano", label: "Océano", primary: "#0f4c81", secondary: "#a7d3f0" },
   { key: "petroleo", label: "Petróleo", primary: "#0e5c63", secondary: "#9fe1cb" },
   { key: "bosque", label: "Bosque", primary: "#1d6b3c", secondary: "#b6e2c5" },
@@ -92,6 +99,7 @@ export const PRESETS = [
 ];
 
 const DEFAULT = PRESETS[0];
+const SIN_COLOR = PRESETS.find((p) => p.key === "sin_color");
 
 /**
  * Resuelve el tema guardado a los dos colores base.
@@ -153,9 +161,18 @@ export function applyTheme(theme, mode) {
   if (typeof document === "undefined") return;
   if (theme) lastTheme = theme;
   const effective = theme || lastTheme;
-  const { primary, secondary } = resolveTheme(effective);
+  // «Sin color» elegido por la persona manda sobre el tema de la clínica,
+  // pero solo en su pantalla: no toca lo que ven los demás.
+  const tema = readSinColor() ? { ...SIN_COLOR } : resolveTheme(effective);
+  const { primary, secondary } = tema;
   const root = document.documentElement;
   const isDark = (mode || root.getAttribute("data-theme")) === "dark";
+  // globals.css cuelga de aquí las superficies en grises de «Sin color».
+  root.setAttribute("data-paleta", tema.key || "custom");
+  // La barra lateral propia del tema, solo en claro: en oscuro la
+  // navegación es siempre una superficie neutra (ver globals.css).
+  if (tema.nav && !isDark) root.style.setProperty("--nav-bg", tema.nav);
+  else root.style.removeProperty("--nav-bg");
 
   const base = hexToRgb(primary) ? primary : DEFAULT.primary;
   const brand = isDark
@@ -238,6 +255,34 @@ export function onColorModeChanged(handler) {
   return () => window.removeEventListener(MODE_EVENT, fn);
 }
 
+/* ═══════════ «Sin color», preferencia de cada persona ═══════════ */
+
+const SIN_COLOR_KEY = "sinColor";
+const SIN_COLOR_EVENT = "sincolor:changed";
+
+export function readSinColor() {
+  try { return localStorage.getItem(SIN_COLOR_KEY) === "1"; } catch { return false; }
+}
+
+/** Activa o quita «Sin color» en este navegador y repinta al momento. */
+export function setSinColor(activo) {
+  try {
+    if (activo) localStorage.setItem(SIN_COLOR_KEY, "1");
+    else localStorage.removeItem(SIN_COLOR_KEY);
+  } catch { /* modo privado: vale para esta visita */ }
+  applyTheme(null);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(SIN_COLOR_EVENT, { detail: { activo } }));
+  }
+}
+
+export function onSinColorChanged(handler) {
+  if (typeof window === "undefined") return () => {};
+  const fn = (e) => handler(e.detail.activo);
+  window.addEventListener(SIN_COLOR_EVENT, fn);
+  return () => window.removeEventListener(SIN_COLOR_EVENT, fn);
+}
+
 /** Restablece las variables al tema del sistema. */
 export function resetTheme() {
   applyTheme({ preset: "default" });
@@ -268,7 +313,7 @@ export function onBrandingUpdated(handler) {
 /** Aplica favicon y título del documento según la identidad de la clínica. */
 export function applyBrandingChrome(branding) {
   if (typeof document === "undefined" || !branding) return;
-  const name = branding.display_name || "Clínica";
+  const name = branding.display_name || branding.nombre_clinica || "Clinube";
   document.title = name;
   if (branding.logo_url) {
     let link = document.querySelector("link[rel='icon']");

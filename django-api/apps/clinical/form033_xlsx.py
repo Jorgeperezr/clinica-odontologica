@@ -12,6 +12,7 @@ publica una versión nueva del formulario, hay que revisar este mapeo.
 """
 
 import io
+from copy import copy
 from pathlib import Path
 
 import openpyxl
@@ -37,8 +38,13 @@ def _set(ws, coord, value):
     if existing not in (None, ""):
         cell.value = f"{existing}\n{value}"
         try:
-            cell.alignment = cell.alignment.copy(wrap_text=True)
+            ajuste = copy(cell.alignment)
+            ajuste.wrap_text = True
+            cell.alignment = ajuste
         except Exception:
+            # Callado a propósito: esto solo pide que el texto se ajuste
+            # dentro de la celda. Si openpyxl no puede, el VALOR sigue
+            # estando y el formulario dice lo mismo; solo se ve peor.
             pass
     else:
         cell.value = value

@@ -17,6 +17,24 @@ class Tenant(models.Model):
     phone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
     is_active = models.BooleanField(default=True)
+    funcionalidades = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Funcionalidades contratadas",
+        help_text=(
+            "Qué módulos tiene esta clínica. El catálogo está en "
+            "apps/common/funcionalidades.py. Apagar uno NO borra sus "
+            "datos: deja de verse y de poder tocarse."
+        ),
+    )
+    # Lo que la PROPIA clínica decide no usar de lo que tiene contratado
+    # (p. ej. el odontograma 3D o las rachas y logros). Lo contratado lo
+    # decide la plataforma en `funcionalidades`; esto lo decide la
+    # administración de la clínica y solo puede apagar, nunca dar de alta
+    # algo que no está contratado. {clave: False} = apagado por la clínica.
+    modulos_clinica = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Módulos que la clínica decide usar",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -74,7 +92,7 @@ class PlatformConfiguration(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    platform_name = models.CharField(max_length=120, default="Plataforma Odontológica")
+    platform_name = models.CharField(max_length=120, default="Clinube")
     logo_url = models.URLField(blank=True)
     smtp_host = models.CharField(max_length=255, blank=True)
     smtp_port = models.PositiveIntegerField(default=587)

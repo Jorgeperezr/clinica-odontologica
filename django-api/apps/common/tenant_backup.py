@@ -71,6 +71,9 @@ EXCLUDED_MODELS = {
 # suficiente para montar un ataque de diccionario sin límite de intentos.
 REDACTED_FIELDS = {
     "accounts.User": ("password",),
+    # Cifrado con la clave del servidor, pero sigue siendo una credencial
+    # de Meta: no tiene nada que hacer en un archivo que sale de él.
+    "whatsapp.ConfiguracionWhatsApp": ("access_token_cifrado",),
 }
 
 
@@ -138,8 +141,8 @@ def decrypt(blob: bytes, passphrase: str) -> bytes:
 
 # ── Recolección de datos ──────────────────────────────────────────────
 _DOMAIN_APPS = (
-    "accounts.", "agenda.", "billing.", "clinical.", "common.",
-    "configuration.", "inventory.", "patients.", "specialties.", "whatsapp.",
+    "accounts.", "agenda.", "app_paciente.", "billing.", "clinical.", "common.",
+    "configuration.", "inventory.", "logros.", "patients.", "specialties.", "whatsapp.",
 )
 
 
@@ -186,6 +189,37 @@ def _exportable_models():
     return sorted(out, key=lambda item: item[0])
 
 
+def _serializar(label, qs):
+    rows = json.loads(serializers.serialize("json", qs.order_by("pk").iterator(chunk_size=500)))
+    for row in rows:
+        for field in REDACTED_FIELDS.get(label, ()):
+            row["fields"].pop(field, None)
+    return rows
+
+
+def _manifiesto(tenant, requested_by, records, counts, alcance):
+    return {
+        "format": "clinica-backup",
+        "version": VERSION,
+        "generated_at": timezone.now().isoformat(),
+        "tenant": {"id": str(tenant.id), "name": tenant.name, "ruc": tenant.ruc},
+        "generated_by": {
+            "id": str(getattr(requested_by, "id", "") or ""),
+            "email": getattr(requested_by, "email", "") or "",
+            "full_name": getattr(requested_by, "full_name", "") or "",
+        },
+        "alcance": alcance,
+        "total_records": len(records),
+        "counts": counts,
+        "excluded_models": sorted(EXCLUDED_MODELS),
+        "redacted_fields": {k: list(v) for k, v in REDACTED_FIELDS.items()},
+        "notes": (
+            "Los archivos adjuntos (radiografías, documentos escaneados, "
+            "logotipo) no van dentro: la copia guarda su ruta, no su contenido."
+        ),
+    }
+
+
 def collect(tenant, requested_by=None):
     """
     Reúne los datos de la clínica en una estructura JSON-serializable.
@@ -196,41 +230,123 @@ def collect(tenant, requested_by=None):
     records = []
     counts = {}
     for label, model, path in _exportable_models():
-        qs = model._default_manager.filter(**{path: tenant}).order_by("pk")
-        rows = json.loads(serializers.serialize("json", qs.iterator(chunk_size=500)))
-        redact = REDACTED_FIELDS.get(label, ())
-        for row in rows:
-            for field in redact:
-                row["fields"].pop(field, None)
+        rows = _serializar(label, model._default_manager.filter(**{path: tenant}))
         if rows:
             counts[label] = len(rows)
             records.extend(rows)
-
-    manifest = {
-        "format": "clinica-backup",
-        "version": VERSION,
-        "generated_at": timezone.now().isoformat(),
-        "tenant": {"id": str(tenant.id), "name": tenant.name, "ruc": tenant.ruc},
-        "generated_by": {
-            "email": getattr(requested_by, "email", "") or "",
-            "full_name": getattr(requested_by, "full_name", "") or "",
-        },
-        "total_records": len(records),
-        "counts": counts,
-        "excluded_models": sorted(EXCLUDED_MODELS),
-        "redacted_fields": {k: list(v) for k, v in REDACTED_FIELDS.items()},
-        "notes": (
-            "Contiene los datos de esta clínica. Los archivos adjuntos "
-            "(radiografías, documentos escaneados, logotipo) no van dentro: "
-            "la copia guarda su ruta, no su contenido."
-        ),
-    }
+    manifest = _manifiesto(tenant, requested_by, records, counts, {"tipo": "clinica"})
     return {"manifest": manifest, "records": records}
 
 
-def build_encrypted(tenant, passphrase, requested_by=None):
-    """Copia completa de la clínica, comprimida y cifrada. Devuelve (bytes, manifiesto)."""
-    payload = collect(tenant, requested_by=requested_by)
+# ── Copia de un profesional ───────────────────────────────────────────
+# Qué es «la información que tiene» un doctor o un auxiliar: los
+# pacientes que ha atendido —con cita suya o con algo que él escribió en
+# su historia— y, de esos, la historia clínica completa, que es lo que ve
+# en el panel y lo que necesita para seguir atendiéndolos. De la clínica
+# se lleva su propia agenda y los catálogos que dan nombre a lo que hay
+# en la historia (tratamientos, especialidades, estados del odontograma).
+#
+# Lo que NO lleva: cobros, inventario, auditoría, usuarios del resto del
+# personal, citas de otros profesionales ni pacientes que no ha tocado.
+# Es una lista cerrada a propósito: un modelo nuevo no entra en la copia
+# de un profesional hasta que alguien decida aquí que debe entrar.
+
+# Dónde deja rastro un profesional en la historia de un paciente:
+# (modelo, campo que apunta al Doctor, campo que apunta al User).
+_HUELLAS = (
+    ("agenda.Appointment", "doctor", None),
+    ("clinical.Evolution", "doctor", "created_by"),
+    ("clinical.Form033Record", "doctor", "created_by"),
+    ("clinical.Diagnosis", "doctor", None),
+    ("clinical.ToothRecord", "doctor", None),
+    ("clinical.TreatmentPlan", "created_by", None),
+    ("clinical.PeriodontalExam", None, "created_by"),
+    ("clinical.ExamRequest", None, "requested_by"),
+    ("clinical.RadiographPhoto", None, "uploaded_by"),
+    ("clinical.InformedConsent", None, "created_by"),
+    ("specialties.SpecialtyForm", "doctor", None),
+)
+
+# Historia de sus pacientes: (modelo, ruta hasta el paciente).
+_DE_SUS_PACIENTES = (
+    ("patients.Patient", "pk"),
+    ("patients.MedicalBackground", "patient"),
+    ("patients.PatientDocument", "patient"),
+    ("clinical.ClinicalRecord", "patient"),
+    ("clinical.Diagnosis", "patient"),
+    ("clinical.Evolution", "patient"),
+    ("clinical.ExamRequest", "patient"),
+    ("clinical.Form033Record", "patient"),
+    ("clinical.InformedConsent", "patient"),
+    ("clinical.PeriodontalExam", "patient"),
+    ("clinical.PeriodontalTooth", "exam__patient"),
+    ("clinical.RadiographPhoto", "patient"),
+    ("clinical.ToothRecord", "patient"),
+    ("clinical.TreatmentPlan", "patient"),
+    ("clinical.TreatmentPlanItem", "treatment_plan__patient"),
+    ("specialties.SpecialtyForm", "patient"),
+)
+
+# Catálogos de la clínica que dan nombre a lo que aparece en la historia.
+_CATALOGOS = ("clinical.OdontogramState", "configuration.Treatment", "specialties.Specialty")
+
+
+def pacientes_del_profesional(tenant, usuario):
+    """Ids de los pacientes en cuya historia ha dejado rastro esta persona."""
+    from django.db.models import Q
+
+    from apps.agenda.models import Doctor
+
+    doctor = Doctor.objects.filter(tenant=tenant, user=usuario).first()
+    ids = set()
+    for label, campo_doctor, campo_usuario in _HUELLAS:
+        condicion = Q()
+        if campo_doctor and doctor:
+            condicion |= Q(**{campo_doctor: doctor})
+        if campo_usuario:
+            condicion |= Q(**{campo_usuario: usuario})
+        if not condicion:
+            continue
+        model = apps.get_model(label)
+        ids.update(model._default_manager.filter(condicion, tenant=tenant)
+                   .values_list("patient_id", flat=True))
+    ids.discard(None)
+    return ids, doctor
+
+
+def collect_profesional(tenant, usuario):
+    """Copia de UN profesional: sus pacientes, su agenda y su ficha."""
+    pacientes, doctor = pacientes_del_profesional(tenant, usuario)
+    conjuntos = [(label, {f"{ruta}__in" if ruta != "pk" else "pk__in": pacientes})
+                 for label, ruta in _DE_SUS_PACIENTES]
+    conjuntos += [(label, {}) for label in _CATALOGOS]
+    conjuntos += [("accounts.User", {"pk": usuario.pk})]
+    if doctor:
+        conjuntos += [("agenda.Doctor", {"pk": doctor.pk}), ("agenda.Appointment", {"doctor": doctor})]
+
+    records, counts = [], {}
+    for label, filtro in sorted(conjuntos, key=lambda c: c[0]):
+        model = apps.get_model(label)
+        path = _tenant_path(model)
+        rows = _serializar(label, model._default_manager.filter(**{path: tenant}, **filtro))
+        if rows:
+            counts[label] = counts.get(label, 0) + len(rows)
+            records.extend(rows)
+    alcance = {"tipo": "profesional", "user_id": str(usuario.pk),
+               "full_name": usuario.full_name or "", "email": usuario.email,
+               "pacientes": len(pacientes)}
+    manifest = _manifiesto(tenant, usuario, records, counts, alcance)
+    return {"manifest": manifest, "records": records}
+
+
+def build_encrypted(tenant, passphrase, requested_by=None, profesional=None):
+    """
+    Copia comprimida y cifrada. Devuelve (bytes, manifiesto).
+
+    Sin `profesional`, la de toda la clínica; con él, solo lo suyo.
+    """
+    payload = (collect_profesional(tenant, profesional) if profesional is not None
+               else collect(tenant, requested_by=requested_by))
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return encrypt(gzip.compress(raw, compresslevel=6), passphrase), payload["manifest"]
 
@@ -254,14 +370,22 @@ def read_encrypted(blob, passphrase):
     return payload
 
 
-def suggested_filename(tenant):
+def _slug(texto, largo=40):
+    ascii_name = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode("ascii")
+    slug = "".join(ch if ch.isalnum() else "-" for ch in ascii_name)
+    return "-".join(part for part in slug.lower().split("-") if part)[:largo]
+
+
+def suggested_filename(tenant, profesional=None):
     """
     Nombre de archivo sugerido, en ASCII. La cabecera Content-Disposition
     viaja en latin-1 y no todos los navegadores manejan bien una tilde
     ahí, así que «Clínica» se convierte en «clinica» antes de escribirlo.
+    La copia de un profesional lleva su nombre, para no confundirla con
+    la de la clínica.
     """
-    ascii_name = (unicodedata.normalize("NFKD", tenant.name or "clinica")
-                  .encode("ascii", "ignore").decode("ascii"))
-    slug = "".join(ch if ch.isalnum() else "-" for ch in ascii_name)
-    slug = "-".join(part for part in slug.lower().split("-") if part)[:40] or "clinica"
+    slug = _slug(tenant.name) or "clinica"
+    if profesional is not None:
+        quien = _slug(profesional.full_name or profesional.email.split("@")[0], 30)
+        slug = f"{slug}-{quien}" if quien else slug
     return f"respaldo-{slug}-{datetime.now():%Y-%m-%d_%H%M}{FILE_SUFFIX}"

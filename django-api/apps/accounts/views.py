@@ -1,7 +1,9 @@
 import hashlib
+import logging
 import secrets
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework import generics, permissions, status
@@ -11,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from apps.accounts.funciones import funciones_de
 from apps.accounts.models import (
     AuditLog,
     DeviceToken,
@@ -18,6 +21,8 @@ from apps.accounts.models import (
     PasswordResetToken,
     User,
 )
+from apps.accounts.preferencias import CATALOGO as CATALOGO_PREFERENCIAS
+from apps.accounts.preferencias import normalizar as normalizar_preferencias
 from apps.accounts.serializers import (
     AuditLogSerializer,
     DeviceTokenSerializer,
@@ -91,7 +96,9 @@ class OTPRequestView(APIView):
     def _default_tenant_id():
         from apps.common.models import Tenant
 
-        tenant = Tenant.objects.filter(is_active=True).first()
+        # Por fecha de alta: sin orden, `first()` ordena por el UUID y con
+        # varias clínicas devolvía una cualquiera.
+        tenant = Tenant.objects.filter(is_active=True).order_by("created_at", "id").first()
         return tenant.id if tenant else None
 
 
@@ -185,13 +192,22 @@ class StaffRecoveryRequestView(APIView):
         )
         # En producción, el enlace apunta al panel Next.js; por ahora se
         # envía el token para que el frontend arme la URL de reseteo.
-        send_mail(
-            subject="Recuperación de acceso — Clínica",
-            message=f"Usa este código para restablecer tu contraseña: {raw_token}",
-            from_email=None,
-            recipient_list=[email],
-            fail_silently=True,
-        )
+        # La respuesta es la misma pase lo que pase (no se revela si el
+        # correo existe), pero un fallo de envío deja rastro: antes era
+        # `fail_silently=True` y sin SMTP configurado nadie recibía nada
+        # y nadie lo sabía.
+        try:
+            send_mail(
+                subject=f"Recuperación de acceso — {settings.MARCA}",
+                message=f"Usa este código para restablecer tu contraseña: {raw_token}",
+                from_email=None,
+                recipient_list=[email],
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "No se pudo enviar el correo de recuperación (revisar EMAIL_HOST y compañía)",
+                extra={"user_id": str(user.id)},
+            )
         return Response({"detail": "Si el correo existe, recibirás instrucciones."})
 
 
@@ -239,12 +255,26 @@ class UserListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save(tenant=self.request.tenant)
-        # Si el nuevo usuario es doctor, crear su perfil Doctor para que
-        # aparezca en la agenda y pueda registrar actos clínicos atribuidos.
-        if user.role == User.Role.DOCTOR:
-            from apps.agenda.models import Doctor
+        _asegurar_ficha_de_doctor(self.request.tenant, user)
 
-            Doctor.objects.get_or_create(tenant=self.request.tenant, user=user)
+
+def _asegurar_ficha_de_doctor(tenant, user):
+    """
+    Un usuario con rol de doctor necesita su ficha `Doctor` para existir
+    en la agenda y para que los actos clínicos queden atribuidos a
+    alguien. Se crea si falta, tanto al dar de alta como al cambiar el
+    rol.
+
+    No se hace lo contrario —borrar la ficha al quitarle el rol— a
+    propósito: de ella cuelgan citas e historia clínica, y perderlas por
+    un cambio de puesto sería mucho peor que tener una ficha de más. Para
+    eso está desactivarla.
+    """
+    if user.role != User.Role.DOCTOR:
+        return
+    from apps.agenda.models import Doctor
+
+    Doctor.objects.get_or_create(tenant=tenant, user=user)
 
 
 class UserDetailView(generics.RetrieveUpdateAPIView):
@@ -255,6 +285,15 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         return User.objects.filter(tenant=self.request.tenant)
+
+    def perform_update(self, serializer):
+        # La ficha de doctor se creaba solo al DAR DE ALTA el usuario, no
+        # al cambiarle el rol después. Ascender a alguien a doctor lo
+        # dejaba con rol de doctor en la lista de usuarios y sin ficha: no
+        # salía en la agenda, no se le podía citar, y nada explicaba por
+        # qué. Ahora se comprueba también aquí.
+        user = serializer.save()
+        _asegurar_ficha_de_doctor(self.request.tenant, user)
 
 
 class AuditLogListView(generics.ListAPIView):
@@ -296,9 +335,107 @@ class MeView(APIView):
 
     def get(self, request):
         u = request.user
+        funciones = funciones_de(u)
         return Response({
             "id": str(u.id),
             "email": u.email,
             "full_name": u.full_name,
             "role": u.role,
+            "must_change_password": u.must_change_password,
+            # Funciones de gestión de esta persona. Las dos claves antiguas
+            # se siguen dando, derivadas, para un panel en caché de antes.
+            "funciones": funciones,
+            "puede_gestionar_logros": funciones["logros"],
+            "puede_gestionar_whatsapp": funciones["whatsapp"],
+            # El panel esconde los módulos que la clínica no tiene. Es
+            # cortesía: el candado de verdad está en la API, en
+            # `RequiereFuncionalidad`.
+            "funcionalidades": _funcionalidades_de(u),
+            "preferencias": normalizar_preferencias(u.preferencias),
         })
+
+
+class CatalogoFuncionesView(APIView):
+    """
+    GET /api/v1/users/funciones/ — el catálogo de funciones para el alta
+    de profesionales.
+
+    El panel NO guarda su propia copia: la lista, los textos y lo que va
+    marcado por defecto salen de aquí, así que no pueden desincronizarse.
+    `disponible` dice si la clínica tiene contratada la funcionalidad de
+    la que depende; si no, el panel la enseña desactivada.
+    """
+
+    permission_classes = [HasRole.for_roles("admin")]
+
+    def get(self, request):
+        from apps.accounts.funciones import AL_CREAR, CATALOGO, ROLES_CON_FUNCIONES
+        from apps.common.funcionalidades import activa
+
+        return Response([
+            {
+                "clave": clave,
+                "etiqueta": d["etiqueta"],
+                "descripcion": d["descripcion"],
+                "disponible": d["funcionalidad"] is None or activa(request.tenant, d["funcionalidad"]),
+                "al_crear": {rol: clave in AL_CREAR.get(rol, set()) for rol in ROLES_CON_FUNCIONES},
+                "roles": list(d.get("roles", ROLES_CON_FUNCIONES)),
+            }
+            for clave, d in CATALOGO.items()
+        ])
+
+
+class PreferenciasView(APIView):
+    """
+    GET/PATCH /api/v1/auth/me/preferencias/ — las preferencias PROPIAS.
+
+    No lleva identificador de usuario en la ruta a propósito: cada cual
+    solo puede tocar las suyas, y así no hay ninguna forma de pedir las
+    de otro. `disponibles` dice cuáles tienen efecto en su clínica, para
+    que el panel pueda explicar por qué un interruptor no hace nada.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _respuesta(self, u):
+        contratadas = _funcionalidades_de(u)
+        return Response({
+            "preferencias": normalizar_preferencias(u.preferencias),
+            "disponibles": {
+                clave: bool(contratadas.get(d["funcionalidad"], False))
+                for clave, d in CATALOGO_PREFERENCIAS.items()
+            },
+        })
+
+    def get(self, request):
+        if request.user.role == User.Role.PATIENT:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return self._respuesta(request.user)
+
+    def patch(self, request):
+        u = request.user
+        if u.role == User.Role.PATIENT:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        datos = request.data if isinstance(request.data, dict) else {}
+        desconocidas = sorted(set(datos) - set(CATALOGO_PREFERENCIAS))
+        if desconocidas:
+            return Response({"detail": f"Preferencias desconocidas: {', '.join(desconocidas)}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        no_booleanas = sorted(k for k, v in datos.items() if not isinstance(v, bool))
+        if no_booleanas:
+            return Response({"detail": f"Tienen que ser verdadero o falso: {', '.join(no_booleanas)}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        u.preferencias = {**normalizar_preferencias(u.preferencias), **datos}
+        u.save(update_fields=["preferencias"])
+        return self._respuesta(u)
+
+
+def _funcionalidades_de(usuario):
+    from apps.common.funcionalidades import CATALOGO, efectivas
+
+    if usuario.tenant_id is None:
+        # El Super Administrador opera sobre la plataforma, no dentro de
+        # una clínica. Se le devuelve todo apagado para que el panel no
+        # le pinte módulos de clínica que no le corresponden.
+        return {clave: False for clave in CATALOGO}
+    return efectivas(usuario.tenant)

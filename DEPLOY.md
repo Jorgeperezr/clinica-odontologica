@@ -2,6 +2,10 @@
 
 ## Decisión de hosting (pendiente del usuario)
 
+> **Actualización (septiembre de 2026):** la opción que cuesta solo el
+> dominio es la **Opción C — Oracle Cloud Always Free**, más abajo. Las A
+> y B se mantienen como alternativa.
+
 | Criterio | Opción A: VM en GCP | Opción B: PC en la clínica + Cloudflare Tunnel |
 |---|---|---|
 | Costo mensual | ~US$35-45 (e2-medium + disco + IP) | ~US$0 (electricidad + internet ya pagados) |
@@ -33,16 +37,31 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
    nano .env   # completar TODOS los CAMBIAR- y el dominio real
    python3 -c "import secrets; print(secrets.token_urlsafe(64))"  # para la SECRET_KEY
    ```
+   **El servidor no arranca si queda algo de ejemplo.** Con
+   `docker-compose.prod.yml` (que fija `DJANGO_ENTORNO=produccion`),
+   `config/produccion.py` exige `DJANGO_DEBUG=False`, una
+   `DJANGO_SECRET_KEY` propia de 50+ caracteres, un
+   `INTERNAL_SERVICE_TOKEN` de 32+ y una `POSTGRES_PASSWORD` de 12+, y
+   rechaza cualquier valor con «CAMBIAR» o «change-me». El contenedor
+   `django-api` se detiene con la lista de lo que falta:
+   `docker compose -f docker-compose.prod.yml logs django-api`.
+   Con la clave de ejemplo, cualquiera podría firmar tokens de acceso
+   válidos y entrar sin contraseña.
 4. **Levantar:**
    ```bash
    docker compose -f docker-compose.prod.yml up -d --build
    ```
-5. **Crear el superusuario:**
+5. **Crear la cuenta del dueño de la plataforma** (Super Administrador,
+   sin clínica; desde su panel se dan de alta las clínicas):
    ```bash
-   docker compose -f docker-compose.prod.yml exec django-api python manage.py createsuperuser
+   docker compose -f docker-compose.prod.yml exec django-api python manage.py createsuperadmin --email tu@correo.com --password 'una-clave-larga'
    ```
+   No `createsuperuser`: ese crea un usuario de Django sin el rol de
+   la plataforma, que no ve el panel de Plataforma.
 6. **Verificar:** `curl -I http://localhost` debe devolver 200 (panel) y
-   `http://localhost/api/v1/schema/swagger-ui/` debe cargar.
+   `curl http://localhost/api/v1/ready/` también. La documentación de la
+   API (`/api/v1/schema/swagger-ui/`) en producción pide sesión: publicarla
+   le daría a cualquiera el mapa completo de la API.
 
 ## Opción A — VM en GCP
 
@@ -67,31 +86,99 @@ sistema sea crítico para la operación. El código es idéntico en ambas.
    curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
    sudo dpkg -i cloudflared.deb
    cloudflared tunnel login
-   cloudflared tunnel create clinica
-   cloudflared tunnel route dns clinica clinica.tudominio.ec
+   cloudflared tunnel create clinube
+   cloudflared tunnel route dns clinube app.clinube.com
    ```
 4. Configurar `/etc/cloudflared/config.yml`:
    ```yaml
-   tunnel: clinica
+   tunnel: clinube
    credentials-file: /root/.cloudflared/<ID>.json
    ingress:
-     - hostname: clinica.tudominio.ec
+     - hostname: app.clinube.com
        service: http://localhost:80
      - service: http_status:404
    ```
 5. `sudo cloudflared service install && sudo systemctl start cloudflared`
 6. En `.env`: `SECURE_SSL_REDIRECT=False` (Cloudflare ya fuerza HTTPS).
 
-## Backups CIFRADOS (obligatorio en la Opción B, recomendado en la A)
+## Opción C — Oracle Cloud «Always Free» (recomendada: solo se paga el dominio)
+
+Comparativa hecha en septiembre de 2026:
+
+| Proveedor | Qué da gratis | ¿Sirve para este sistema? |
+|---|---|---|
+| **Oracle Cloud Always Free** | VM Arm Ampere A1 de **2 OCPU y 12 GB** (recortada en junio de 2026 desde 4/24), 200 GB de disco, 10 TB/mes de salida, 20 GB de Object Storage. Sin fecha de fin. | **Sí.** Sobra para Django, PostgreSQL, Redis, Celery, Nginx y la pasarela de WhatsApp juntos. |
+| AWS | Desde julio de 2025, las cuentas nuevas reciben 100–200 US$ en créditos que caducan a los 6 meses. | No para siempre: a los 6 meses hay que pagar. |
+| Google Cloud | Una e2-micro (2 vCPU compartidas, **1 GB**) en regiones de EE. UU., sin fecha de fin. | No: 1 GB no alcanza para la base de datos y el resto. |
+| Azure | 12 meses de una B1s (1 GB) y créditos de 30 días. | No: temporal y escasa. |
+
+**Lo que hay que saber de Oracle antes de empezar:**
+
+- Pide **tarjeta** al registrarse (verificación; no cobra si no se sale
+  de lo gratuito).
+- **Recupera las VM «ociosas»** de las cuentas gratuitas: si durante 7
+  días la CPU (percentil 95), la red y la memoria quedan por debajo del
+  20 %, puede apagarla. Una clínica pequeña puede quedar por debajo.
+  Remedio recomendado: **pasar la cuenta a «Pay As You Go»** (sigue
+  costando 0 US$ mientras no se salga de lo gratuito, la regla de VM
+  ociosas no se aplica y, según el soporte de Oracle, conserva además
+  el límite anterior de 4 OCPU / 24 GB) y **crear una alerta de
+  presupuesto de 1 US$** para enterarse si algo empieza a cobrar.
+- La VM Arm a veces da «Out of capacity» al crearla: se reintenta más
+  tarde o en otro dominio de disponibilidad.
+- Todo lo del proyecto funciona en Arm: las imágenes de Python,
+  PostgreSQL, Redis y Nginx son multiarquitectura.
+
+**Pasos:**
+
+1. Cuenta en <https://www.oracle.com/cloud/free/>. Región de inicio: la
+   más cercana con capacidad (p. ej. *Brazil East (São Paulo)* o *Chile
+   Central (Santiago)*). La región de inicio no se puede cambiar después.
+2. Crear instancia: *Ubuntu 24.04*, forma **VM.Standard.A1.Flex** con
+   2 OCPU y 12 GB, disco de arranque de 100 GB. Guardar la clave SSH.
+3. En la VM: instalar Docker y seguir los **Pasos comunes** de arriba.
+4. Publicarla con **Cloudflare Tunnel** (igual que la Opción B, pasos
+   2 a 6): no hace falta abrir puertos ni IP pública, y el certificado
+   HTTPS lo pone Cloudflare gratis. El binario para esta VM es el de Arm:
+   `cloudflared-linux-arm64.deb`.
+5. Copias: `scripts/backup.sh` a diario con cron, y la copia fuera de la
+   VM en el Object Storage gratuito de Oracle (20 GB) o en Cloudflare R2
+   (10 GB gratis), con `rclone`.
+
+**Lo único que se compra: el dominio, `clinube.com`.** Cómo se reparte:
+
+| Dirección | Qué hay |
+|---|---|
+| `app.clinube.com` | El panel y la API (Nginx sirve los dos en el mismo nombre) |
+| `clinube.com` | Libre para la web comercial; mientras no exista, puede redirigir a `app.` |
+| `nombreclinica.clinube.com` | Reservado para la dirección propia de cada clínica (siguiente paso) |
+
+Un solo nivel por debajo de `clinube.com` a propósito: el certificado
+gratuito de Cloudflare cubre `*.clinube.com`, pero no `*.algo.clinube.com`.
+
+Recomendado registrarlo en
+**Cloudflare Registrar**, que lo vende a precio de coste (un `.com`
+ronda los 10–11 US$ al año) y deja el DNS y el túnel en el mismo sitio.
+Un `.ec` se compra en NIC.ec y cuesta bastante más; si se quiere, se
+apunta igualmente a Cloudflare.
+
+**Lo que NO es gratis aunque el servidor lo sea:**
+- Los mensajes de WhatsApp (Meta cobra por mensaje de plantilla, también
+  los códigos de ingreso de la app).
+- Las cuentas de las tiendas: Apple 99 US$/año, Google Play 25 US$ una vez.
+- El correo, si se superan los envíos de un plan gratuito (p. ej. Brevo
+  da 300 al día, de sobra para recuperar contraseñas).
+
+## Backups CIFRADOS (obligatorio en las opciones B y C, recomendado en la A)
 
 Hay **dos copias distintas** y conviene no confundirlas, porque protegen
 cosas diferentes y las hace gente diferente:
 
 | | Copia de la plataforma | Copia de la clínica |
 |---|---|---|
-| Qué contiene | La base entera: **todas** las clínicas | Los datos de **una** clínica |
-| Quién la hace | Quien administra el servidor | La administradora de la clínica |
-| Desde dónde | `scripts/backup.sh` en el servidor | Panel → Configuración → Copia de seguridad |
+| Qué contiene | La base entera: **todas** las clínicas | Los datos de **una** clínica (o los pacientes de un profesional) |
+| Quién la hace | Quien administra el servidor | La administradora de la clínica; cada doctor o auxiliar, la suya |
+| Desde dónde | `scripts/backup.sh` en el servidor | Panel → Configuración → Copia de seguridad, o «Mi respaldo» |
 | Clave | `BACKUP_PASSPHRASE` del `.env` | La frase que escribe en pantalla |
 | Sirve para | Recuperar el servicio ante un desastre | Que la clínica conserve y consulte sus datos |
 | Restaura | Sí, con `scripts/restore.sh` | No: solo descifra y muestra el contenido |
@@ -115,8 +202,11 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 #   puede descifrar.
 ```
 
-Backup manual: `COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh`
-(incluye verificación de integridad automática al terminar).
+Copia manual: `COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh`
+
+Los guiones funcionan **con Docker y sin él**: si no hay demonio usan el
+`pg_dump` / `psql` de la máquina. Eso permite hacer y comprobar copias
+desde un portátil sin Docker Desktop.
 
 Cron diario:
 ```bash
@@ -124,10 +214,64 @@ Cron diario:
 0 2 * * * root cd /ruta/al/repo && COMPOSE_FILE=docker-compose.prod.yml ./scripts/backup.sh >> /var/log/backup-clinica.log 2>&1
 ```
 
-Restauración ante un error:
+### Verificación: una copia sin restaurar no es una copia
+
+`backup.sh` comprueba al terminar que el volcado **está completo** —que
+el SQL termina donde `pg_dump` lo cierra—. Eso descarta el fallo más
+común y más silencioso: que la exportación se corte a la mitad porque se
+llenó el disco o se reinició el contenedor.
+
+Antes esa comprobación era `gzip -t`, que solo prueba que el archivo se
+descomprime. **Un volcado partido por la mitad comprime perfectamente y
+pasaba la prueba**: se anunciaba «correcto» una copia irrecuperable.
+Verificado cortando un volcado a propósito.
+
+Pero que el archivo esté entero no significa que se pueda restaurar. Eso
+solo lo dice restaurarlo:
+
+```bash
+./scripts/verificar-backup.sh            # la copia más reciente
+./scripts/verificar-backup.sh <archivo>  # una concreta
+```
+
+Descifra, **restaura de verdad en una base desechable**, cuenta las filas
+de las tablas que importan y la destruye al salir. Nunca toca la base
+real: el nombre de la base de prueba se genera con marca de tiempo y el
+guion aborta si coincidiera con la de producción.
+
+Devuelve `0` si la copia sirve y distinto de `0` si no, para poder
+avisar. Comprobado que **falla** ante los cuatro casos que importan: un
+volcado truncado, uno con esquema pero sin datos, la frase de cifrado
+equivocada y un archivo inexistente.
+
+Semanal:
+```bash
+# /etc/cron.d/verificar-backup-clinica  (domingos a las 03:00)
+0 3 * * 0 root cd /ruta/al/repo && COMPOSE_FILE=docker-compose.prod.yml ./scripts/verificar-backup.sh >> /var/log/verificar-backup.log 2>&1 || mail -s "FALLO: la copia de la clinica NO es restaurable" tu@correo.ec
+```
+
+### En macOS
+
+macOS trae **LibreSSL**, no OpenSSL, y su `enc` no siempre acepta
+`-pbkdf2`. Sin esa opción el cifrado caería a una derivación de clave
+mucho más débil y —lo grave— no podría descifrar las copias hechas en el
+servidor. Los tres guiones lo comprueban antes de escribir nada y
+explican qué hacer:
+
+```bash
+brew install openssl@3
+export PATH="$(brew --prefix openssl@3)/bin:$PATH"
+```
+
+### Restauración ante un error real
+
 ```bash
 COMPOSE_FILE=docker-compose.prod.yml ./scripts/restore.sh backups/clinica-2026-07-09_0200.sql.gz.enc
 ```
+
+Comprueba que la copia esté completa **antes** de tocar la base: descubrir
+que estaba truncada después de haberla borrado es la peor secuencia
+posible, y era la que permitía el guion anterior.
 
 Copiar `backups/` a un destino EXTERNO (rclone a Google Drive, disco USB
 rotado). Un backup que vive en la misma máquina no es backup. Y probar la
@@ -139,14 +283,39 @@ En **Configuración → Copia de seguridad**, la administradora de la
 clínica genera un archivo `.clinicabk` con los datos de su clínica y lo
 vuelve a abrir desde la misma pantalla escribiendo su frase de cifrado.
 
+**Cada doctor o auxiliar** puede sacar la suya desde **«Mi respaldo»**:
+los pacientes que ha atendido (con cita suya o con algo que escribió en
+su historia), la historia clínica completa de esos pacientes y su
+agenda. Sin cobros, inventario, auditoría ni pacientes de otros. Es la
+función «Respaldo cifrado de sus pacientes» de cada profesional: viene
+marcada y la administración la quita en Configuración → Usuarios.
+Recepción no la tiene (no ve datos clínicos). Un profesional solo abre
+en el panel sus propias copias; la administración, cualquiera de su
+clínica.
+
+**Lo que se descarga es un `.zip`** con la copia y lo necesario para
+abrirla sin la plataforma:
+
+| Archivo | Para qué |
+|---|---|
+| `respaldo-….clinicabk` | La copia cifrada |
+| `COMO-DESCIFRAR.txt` | Instrucciones con los datos de esa copia y la especificación del formato |
+| `descifrar.html` | Abre la copia en cualquier navegador, **sin internet**: tablas, CSV y JSON |
+| `descifrar.py` | Lo mismo en la terminal (Python 3.8+ y `cryptography`) |
+
+Las herramientas están en `django-api/apps/common/kit_respaldo/` y no
+dependen del proyecto; `tests_paquete_respaldo.py` comprueba que
+`descifrar.py` abre las copias que genera el servidor. Desde el panel
+se pueden bajar también sueltas, para copias antiguas.
+
 - Cifrado AES-256-GCM con clave derivada por PBKDF2-HMAC-SHA256
   (400 000 iteraciones). El archivo va autenticado: si se altera un solo
   byte, no se abre.
 - **La frase no se guarda en ninguna parte**, tampoco en la auditoría.
   Perderla equivale a perder el archivo.
-- Solo el rol `admin` **de la clínica**. El Super Administrador de la
-  plataforma no puede emitir ni abrir estas copias: administra el
-  servicio, no es titular de los datos de ninguna clínica.
+- El Super Administrador de la plataforma no puede emitir ni abrir
+  estas copias: administra el servicio, no es titular de los datos de
+  ninguna clínica.
 - Descifrar no restaura nada. Reponer datos sobre la base sigue siendo
   una operación de servidor (`scripts/restore.sh`), no de panel.
 - El JSON descifrado que se descarga va **sin cifrar** y contiene datos
@@ -160,6 +329,102 @@ git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 (Las migraciones corren solas en el arranque.)
+
+## Sondas de salud y orden de arranque
+
+Django expone dos rutas **públicas y sin autenticación** (un monitor no
+tiene credenciales):
+
+| Ruta | Pregunta | Toca la base de datos |
+|---|---|---|
+| `GET /api/v1/health/` | ¿Está vivo el proceso? | No |
+| `GET /api/v1/ready/` | ¿Puede atender? | Sí (`SELECT 1`) |
+
+Son dos preguntas distintas y conviene no mezclarlas. Si `/ready/`
+devuelve 503, el proceso está sano pero le falta la base: hay que sacarlo
+del reparto de tráfico, **no reiniciarlo**. Reiniciar procesos sanos
+porque la base tiene un mal momento convierte una incidencia en una
+caída.
+
+Ninguna de las dos revela versión, motor, nombre de clínica ni cuentas:
+el detalle del error va al registro, porque el mensaje de la base lleva
+host, puerto y usuario.
+
+**Orden de arranque.** `docker-compose.prod.yml` no tenía sonda en
+Postgres —el de desarrollo sí—, así que `depends_on: postgres` solo
+esperaba a que el contenedor arrancara. En un arranque en frío o tras
+reiniciar el host, `migrate` corría contra una base que aún no aceptaba
+conexiones; el contenedor moría, `restart: unless-stopped` lo reintentaba
+y acababa levantando, pero con un ciclo de caídas. Ahora:
+
+- `postgres` y `redis` tienen sonda propia.
+- `django-api` espera a que ambas estén sanas y publica la suya
+  (`/api/v1/ready/`, consultada con `urllib`: la imagen `python:3.12-slim`
+  no trae `curl` ni `wget`).
+- `celery-worker`, `celery-beat` y `nginx` esperan a que Django **atienda**,
+  no a que exista. Antes subían mientras aún corrían `migrate` y
+  `collectstatic`, y las primeras peticiones devolvían 502.
+
+Para monitorización externa (uptime, alertas), la ruta a vigilar es
+`/api/v1/ready/`.
+
+## Registro y diagnóstico
+
+**El problema que había.** El proyecto no tenía bloque `LOGGING`, y eso no
+significaba «el de Django por defecto»: significaba **silencio**.
+Comprobado con un 500 real y `DEBUG=False` — el cliente recibe su 500 y la
+traza no aparece en ningún sitio, ni en la salida estándar. El único
+logger que trae Django es `django`, con el manejador `console` filtrado
+por `require_debug_true` (callado en producción) y `mail_admins`, que
+necesita `ADMINS` y un backend de correo; `ADMINS` estaba vacío. Cuando el
+panel fallaba, nadie llegaba a enterarse de por qué.
+
+**Cómo queda.** Una línea por petición a la salida estándar, que es donde
+la recoge Docker:
+
+```
+DJANGO_LOG_FORMAT=json   # por defecto con DEBUG=False
+DJANGO_LOG_FORMAT=plain  # por defecto en desarrollo
+DJANGO_LOG_LEVEL=INFO
+```
+
+```json
+{"ts":"...","level":"ERROR","logger":"apps.request","msg":"Excepción no controlada",
+ "request_id":"34cb3d80bf9f4d4d","method":"GET","path":"/api/v1/patients/",
+ "query_keys":["search"],"user_id":"...","tenant_id":"...",
+ "exc_type":"RuntimeError","traceback":"..."}
+```
+
+**Correlación.** Cada petición lleva un `request_id` que va también en la
+cabecera `X-Request-ID` de la respuesta. Si un usuario reporta un fallo y
+da ese código, la incidencia se encuentra sin buscar por hora y a ojo.
+Si nginx o el gateway mandan ya un `X-Request-ID`, se respeta, de modo que
+una petición se sigue de punta a punta.
+
+**Qué NO va al registro.** Esto es un sistema de datos de salud y un
+registro se copia a un agregador, se conserva meses y lo lee gente que no
+tiene por qué ver la historia de nadie:
+
+| Sí | No |
+|---|---|
+| método, ruta, estado, duración | nombres, cédulas, teléfonos, correos |
+| id de usuario, rol, id de clínica | contraseñas, tokens, cabeceras de auth |
+| tipo de excepción y traza | contenido de notas clínicas |
+| **nombres** de los parámetros de consulta | **valores** de esos parámetros |
+
+Esa última fila importa más de lo que parece: `/api/v1/patients/?search=Pérez`
+lleva un apellido dentro de la URL. Se registra `query_keys: ["search"]` y
+nunca su contenido. Por el mismo motivo se descarta el logger
+`django.request`, que pasa el objeto de petición en `extra` y cuyo repr
+incluye la cadena de consulta entera.
+
+Los UUID sí se registran: son seudónimos, sin la base de datos no dicen
+quién es nadie, y sin ellos no se puede reconstruir qué pasó.
+
+**Qué monitorizar.** Alertar sobre líneas con `level: ERROR` del logger
+`apps.request`, y sobre `/api/v1/ready/` devolviendo 503. Las sondas de
+salud no se registran a propósito: un balanceador las pide cada diez
+segundos y ahogarían todo lo demás.
 
 ## Google Calendar — estado y Fase 2
 
@@ -208,9 +473,50 @@ Con `USE_CLOUD_STORAGE=True` los archivos van al bucket y esto no aplica:
 las URLs son absolutas y el control de acceso lo da el propio bucket, que debe
 quedar **privado** por el mismo motivo.
 
+## Seguridad de las dependencias
+
+Revisado con `npm audit` y `pip-audit` (septiembre de 2026). Se
+actualizó todo lo que tenía arreglo sin cambiar de versión mayor del
+framework: Django 5.2 LTS (la 5.0 ya no recibe parches), DRF, SimpleJWT,
+Pillow, cryptography, FastAPI/Starlette, python-multipart, Next.js
+14.2.35 y jsPDF 4.
+
+Quedan dos avisos de `npm audit`, **sin efecto en producción**:
+
+- **Next.js 14**: los fallos que siguen abiertos en la rama 14
+  (optimizador de imágenes, acciones de servidor, middleware) exigen un
+  servidor Next en marcha. En producción no lo hay: el panel se exporta
+  a HTML estático y lo sirve Nginx. El servidor de desarrollo
+  (`next dev`) sí los tiene: no exponerlo fuera del equipo.
+- **postcss**: lo usa Next al compilar, sobre el CSS propio.
+
+Pasar a Next 15/16 los cierra también en desarrollo, pero es una
+actualización mayor (React 19) que conviene hacer aparte.
+
+Repetir la revisión antes de cada despliegue:
+
+```bash
+cd frontend && npm audit --omit=dev
+```
+
+```bash
+pip install pip-audit && pip-audit -r django-api/requirements.txt -r whatsapp-gateway/requirements.txt
+```
+
 ## Pendientes ANTES de pacientes reales
 
 - [ ] Cambiar TODAS las contraseñas de desarrollo (Jorge2025 no va a producción).
+- [ ] **Ingreso a la app del paciente:** llega por WhatsApp con la cuenta de
+      la PLATAFORMA (`META_ACCESS_TOKEN` y `META_PHONE_NUMBER_ID` en el
+      `.env`) y dos plantillas aprobadas por Meta en la categoría
+      «Autenticación»: `otp_login` y `otp_recovery`, con el código como
+      variable `{{1}}`. Sin eso el envío queda simulado y **nadie puede
+      entrar a la app**.
+- [ ] **Correo** (`EMAIL_HOST` y compañía): sin él, la recuperación de
+      contraseña del personal no sale.
+- [ ] Dominio con HTTPS: la app móvil se compila apuntando a esa dirección
+      (`--dart-define=API_URL=https://app.clinube.com`) y no se puede
+      cambiar sin publicar otra versión.
 - [ ] Plantilla `recordatorio_cita` en Meta con 3 variables (nombre, fecha,
       instrucción de confirmación) — el webhook ya entiende "CONFIRMO"/"sí".
 - [ ] Credenciales de Meta en `.env` cuando la verificación esté aprobada

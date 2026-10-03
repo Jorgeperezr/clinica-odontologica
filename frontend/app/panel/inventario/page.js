@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { api, readList } from "../../../lib/api";
 import BackButton from "../../../lib/BackButton";
 
 const money = (v) => Number(v || 0).toFixed(2);
@@ -20,11 +20,10 @@ export default function InventarioPage() {
         api("/products/"),
         api("/inventory/alerts/expiring/?days=30"),
       ]);
-      const p = await pResp.json();
-      setProducts(p.results || p);
+      setProducts(await readList(pResp));
       const e = await eResp.json();
       setExpiring(e.expiring_batches || []);
-    } catch { setError("No se pudo cargar el inventario."); }
+    } catch (err) { setError(err?.message ? `No se pudo cargar el inventario. ${err.message}` : "No se pudo cargar el inventario."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

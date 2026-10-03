@@ -47,7 +47,7 @@ def doctor_calendar_feed(request, token):
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Clinica Odontologica//Agenda//ES",
+        "PRODID:-//Clinube//Agenda//ES",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
         f"X-WR-CALNAME:Citas — {_escape(doctor.full_name)}",
@@ -56,7 +56,7 @@ def doctor_calendar_feed(request, token):
     for a in appointments:
         lines += [
             "BEGIN:VEVENT",
-            f"UID:{a.id}@clinica-odontologica",
+            f"UID:{a.id}@clinube",
             f"DTSTAMP:{_fmt(a.updated_at if hasattr(a, 'updated_at') else a.scheduled_start)}",
             f"DTSTART:{_fmt(a.scheduled_start)}",
             f"DTEND:{_fmt(a.scheduled_end)}",

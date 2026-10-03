@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, currentUser, logout } from "../../lib/api";
+import { api, currentUser, logout, tieneFuncion } from "../../lib/api";
+import { IconoClinube, LogoClinube, MARCA } from "../../lib/marca";
 import { applyBrandingChrome, applyTheme, initColorMode, logoSrc, onBrandingUpdated, readBrandingCache, saveBrandingCache } from "../../lib/theme";
 import NavIcon from "../../lib/NavIcons";
 import ThemeSwitch from "../../lib/ThemeSwitch";
@@ -11,12 +12,21 @@ const NAV = [
   { href: "/panel/plataforma/", label: "Plataforma", iconName: "plataforma", roles: ["superadmin"] },
   { href: "/panel/", label: "Inicio", iconName: "inicio", roles: ["admin", "reception", "doctor", "auxiliary"] },
   { href: "/panel/pacientes/", label: "Pacientes", iconName: "pacientes", roles: ["admin", "reception", "doctor", "auxiliary"] },
+  // Lo que piden los pacientes desde la app; con contador de pendientes.
+  { href: "/panel/bandeja/", label: "Bandeja de la app", iconName: "bandeja", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "app_paciente", contador: "bandeja" },
   { href: "/panel/agenda/", label: "Agenda", iconName: "agenda", roles: ["admin", "reception", "doctor"] },
   { href: "/panel/firma/", label: "Mi firma", iconName: "firma", roles: ["doctor"] },
-  { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception"] },
-  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "auxiliary"] },
-  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin"] },
+  // Los módulos de gestión siguen la FUNCIÓN de cada profesional (ver
+  // lib/api.js → tieneFuncion), no solo su rol.
+  { href: "/panel/pagos/", label: "Pagos", iconName: "pagos", roles: ["admin", "reception", "doctor", "auxiliary"], funcion: "cobros" },
+  { href: "/panel/inventario/", label: "Inventario", iconName: "inventario", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "inventario", funcion: "inventario" },
+  { href: "/panel/reportes/", label: "Reportes", iconName: "reportes", roles: ["admin", "reception", "doctor", "auxiliary"], funcionalidad: "reportes", funcion: "reportes" },
   { href: "/panel/configuracion/", label: "Configuración", iconName: "configuracion", roles: ["admin"] },
+  // La copia de los pacientes de cada profesional. La administración
+  // tiene la de toda la clínica en Configuración → Copia de seguridad.
+  { href: "/panel/respaldo/", label: "Mi respaldo", iconName: "respaldo", roles: ["doctor", "auxiliary"], funcion: "respaldo" },
+  // De cada persona para sí misma: por eso la ven todos los roles de clínica.
+  { href: "/panel/preferencias/", label: "Mis preferencias", iconName: "preferencias", roles: ["admin", "reception", "doctor", "auxiliary"] },
 ];
 
 const ROLE_LABELS = {
@@ -37,6 +47,10 @@ export default function PanelLayout({ children }) {
     if (!u) { window.location.href = "/login/"; return; }
     setUser(u);
     setReady(true);
+    // Módulos o preferencias cambiados en esta sesión: el menú se
+    // actualiza sin tener que volver a entrar.
+    const alCambiarPerfil = () => setUser(currentUser());
+    window.addEventListener("perfil-actualizado", alCambiarPerfil);
     // Apariencia (claro/oscuro/sistema) antes de pintar la marca, para
     // que los tonos se deriven ya con el modo correcto.
     const stopColorMode = initColorMode();
@@ -50,6 +64,9 @@ export default function PanelLayout({ children }) {
       applyBrandingChrome(cached);
     }
     (async () => {
+      // El Super Administrador no tiene clínica y por tanto no tiene
+      // marca: pedirla solo devolvía un 403 en cada pantalla.
+      if (u.role === "superadmin") return;
       try {
         const resp = await api("/config/branding/");
         if (resp.ok) {
@@ -66,7 +83,10 @@ export default function PanelLayout({ children }) {
       applyTheme(b.theme);
       applyBrandingChrome(b);
     });
-    return () => { unsubscribe(); stopColorMode(); };
+    return () => {
+      unsubscribe(); stopColorMode();
+      window.removeEventListener("perfil-actualizado", alCambiarPerfil);
+    };
     // Recordar la preferencia de menú colapsado
     try {
       const saved = localStorage.getItem("sidebarCollapsed");
@@ -98,11 +118,43 @@ export default function PanelLayout({ children }) {
     return () => { document.body.style.overflow = ""; };
   }, [isMobile, drawerOpen]);
 
+  /* Pendientes de la bandeja de la app, para el número del menú. Se
+     pide al entrar, cada 2 minutos y cuando la propia bandeja avisa de
+     que atendió algo. Si la clínica no tiene la app, la API responde 403
+     y el número simplemente no aparece. */
+  const [pendientesBandeja, setPendientesBandeja] = useState(0);
+  useEffect(() => {
+    if (!ready || !user || user.role === "superadmin" || (user.funcionalidades || {}).app_paciente === false) return;
+    let vivo = true;
+    const pedir = () => api("/bandeja-app/resumen/")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo && d) setPendientesBandeja(d.solicitudes_pendientes + d.mensajes_sin_responder); })
+      .catch(() => {});
+    pedir();
+    const cada = setInterval(pedir, 120000);
+    window.addEventListener("bandeja-actualizada", pedir);
+    return () => { vivo = false; clearInterval(cada); window.removeEventListener("bandeja-actualizada", pedir); };
+  }, [ready, user]);
+
   if (!ready) return null;
 
-  const items = NAV.filter((n) => n.roles.includes(user.role));
+  // Rol Y funcionalidad. Esconder el módulo es cortesía; lo que de
+  // verdad lo cierra es `RequiereFuncionalidad` en la API, porque quien
+  // conozca la URL entraría igual.
+  //
+  // `!== false` y no `=== true`: si el perfil viene de una sesión
+  // anterior y todavía no trae `funcionalidades`, se enseña todo en vez
+  // de dejar al usuario sin menú hasta que vuelva a entrar.
+  const contratadas = user.funcionalidades || {};
+  const items = NAV.filter(
+    (n) => n.roles.includes(user.role)
+      && (!n.funcionalidad || contratadas[n.funcionalidad] !== false)
+      && (!n.funcion || tieneFuncion(user, n.funcion)),
+  );
   const path = typeof window !== "undefined" ? window.location.pathname : "";
   const W = isMobile ? 264 : (collapsed ? 64 : 220);
+
+  const nombreClinica = branding?.short_name || branding?.display_name || branding?.nombre_clinica || "";
 
   return (
     <div style={{ ...styles.shell, flexDirection: isMobile ? "column" : "row" }}>
@@ -113,13 +165,15 @@ export default function PanelLayout({ children }) {
                   aria-label="Abrir menú" title="Menú">
             <MenuIcon />
           </button>
-          {branding?.logo_url && (
+          {branding?.logo_url ? (
             <img src={logoSrc(branding.logo_url, branding.updated_at)} alt=""
                  style={{ height: 26, maxWidth: 40, objectFit: "contain" }} />
+          ) : (
+            <IconoClinube alto={22} tinta="#ffffff" acento="var(--mint)" />
           )}
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-.01em",
                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {branding?.short_name || branding?.display_name || "Clínica"}
+            {nombreClinica || MARCA}
           </span>
         </header>
       )}
@@ -139,22 +193,36 @@ export default function PanelLayout({ children }) {
                  boxShadow: drawerOpen ? "var(--shadow-lg)" : "none",
                } : {}),
              }}>
-        <div style={{ ...styles.logo, justifyContent: (collapsed && !isMobile) ? "center" : "flex-start" }}>
-          {branding?.logo_url ? (
+        {branding?.logo_url ? (
+          <div style={{ ...styles.logo, justifyContent: (collapsed && !isMobile) ? "center" : "flex-start" }}>
             <img src={logoSrc(branding.logo_url, branding.updated_at)} alt="Logotipo de la clínica"
                  style={{ height: (collapsed && !isMobile) ? 32 : 40, maxWidth: (collapsed && !isMobile) ? 46 : 70,
                           objectFit: "contain" }} />
-          ) : (
-            <span style={{ fontSize: 26, color: "var(--mint)" }} aria-hidden="true">◠</span>
-          )}
-          {(!collapsed || isMobile) && (
-            <span style={{ ...styles.logoText, fontSize: 15, lineHeight: 1.15,
-                           overflow: "hidden", display: "-webkit-box",
-                           WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-              {branding?.short_name || branding?.display_name || "Clínica"}
-            </span>
-          )}
-        </div>
+            {(!collapsed || isMobile) && (
+              <span style={{ ...styles.logoText, fontSize: 15, lineHeight: 1.15,
+                             overflow: "hidden", display: "-webkit-box",
+                             WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                {nombreClinica || MARCA}
+              </span>
+            )}
+          </div>
+        ) : (
+          // Sin logotipo propio la clínica lleva el de Clinube, y su nombre
+          // debajo: quien trabaja ahí sigue viendo en qué clínica está.
+          <div style={{ ...styles.logo, flexDirection: "column", gap: 6,
+                        alignItems: (collapsed && !isMobile) ? "center" : "flex-start" }}>
+            {(collapsed && !isMobile)
+              ? <IconoClinube alto={26} tinta="#ffffff" acento="var(--mint)" titulo={MARCA} />
+              : <LogoClinube alto={25} tinta="#ffffff" acento="var(--mint)" />}
+            {(!collapsed || isMobile) && nombreClinica && (
+              <span style={{ fontSize: 12.5, lineHeight: 1.25, color: "var(--nav-ink-soft)",
+                             overflow: "hidden", display: "-webkit-box",
+                             WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                {nombreClinica}
+              </span>
+            )}
+          </div>
+        )}
 
         {isMobile ? (
           <button onClick={() => setDrawerOpen(false)} style={styles.collapseBtn}
@@ -174,16 +242,26 @@ export default function PanelLayout({ children }) {
             const active = path === item.href;
             return (
               <a key={item.href} href={item.href} title={collapsed ? item.label : undefined}
+                 className="nav-item" aria-current={active ? "page" : undefined}
                  onClick={() => isMobile && setDrawerOpen(false)}
                  style={{ ...styles.navItem,
                           justifyContent: (collapsed && !isMobile) ? "center" : "flex-start",
-                          padding: (collapsed && !isMobile) ? "12px 0" : "11px 12px",
+                          padding: (collapsed && !isMobile) ? "11px 0" : "9px 12px",
                           ...(active ? styles.navActive : {}) }}>
                 <span style={{ display: "inline-flex", width: (collapsed && !isMobile) ? "auto" : 20,
                              justifyContent: "center", flexShrink: 0 }} aria-hidden="true">
                   <NavIcon name={item.iconName} />
                 </span>
                 {(!collapsed || isMobile) && <span>{item.label}</span>}
+                {item.contador === "bandeja" && pendientesBandeja > 0 && (
+                  <span aria-label={`${pendientesBandeja} pendientes`}
+                        style={{ marginLeft: (collapsed && !isMobile) ? 0 : "auto", minWidth: 20, height: 20,
+                                 padding: "0 6px", borderRadius: 999, background: "var(--red)", color: "#fff",
+                                 fontSize: 11.5, fontWeight: 700, display: "inline-flex",
+                                 alignItems: "center", justifyContent: "center" }}>
+                    {pendientesBandeja > 99 ? "99+" : pendientesBandeja}
+                  </span>
+                )}
               </a>
             );
           })}
@@ -195,15 +273,27 @@ export default function PanelLayout({ children }) {
 
         <div style={styles.userBox}>
           {(!collapsed || isMobile) && (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{user.full_name || user.email}</div>
-              <div style={{ fontSize: 12, color: "var(--mint)" }}>{ROLE_LABELS[user.role] || user.role}</div>
-            </>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Iniciales: se reconoce de un vistazo quién tiene la sesión abierta. */}
+              <span aria-hidden="true" style={styles.avatar}>{iniciales(user.full_name || user.email)}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis",
+                              whiteSpace: "nowrap" }}>{user.full_name || user.email}</div>
+                <div style={{ fontSize: 12, color: "var(--nav-ink-soft)" }}>{ROLE_LABELS[user.role] || user.role}</div>
+              </div>
+            </div>
           )}
           <button onClick={logout} style={styles.logoutBtn}
                   title="Cerrar sesión">
             {(collapsed && !isMobile) ? "⎋" : "Cerrar sesión"}
           </button>
+          {/* Con logotipo propio, la marca de la clínica va arriba y la de la
+              plataforma aquí, discreta. Sin él, Clinube ya está arriba. */}
+          {(!collapsed || isMobile) && branding?.logo_url && (
+            <div style={styles.plataforma}>
+              <LogoClinube alto={12} tinta="var(--nav-ink-soft)" acento="var(--nav-ink-soft)" />
+            </div>
+          )}
         </div>
       </aside>
 
@@ -212,6 +302,12 @@ export default function PanelLayout({ children }) {
       </main>
     </div>
   );
+}
+
+/** «Valeria Núñez» → «VN»; sin nombre, la primera letra del correo. */
+function iniciales(texto) {
+  const partes = String(texto || "?").replace(/^(dra?\.|dr\.)\s*/i, "").split(/[\s@]+/).filter(Boolean);
+  return ((partes[0]?.[0] || "?") + (partes[1]?.[0] || "")).toUpperCase();
 }
 
 /* Iconos de navegación del armazón: mismo trazo que NavIcons. */
@@ -273,9 +369,15 @@ const styles = {
   backdrop: {
     position: "fixed", inset: 0, zIndex: 55, background: "var(--overlay)",
   },
+  avatar: {
+    width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    background: "var(--nav-hover)", border: "1px solid var(--nav-line)",
+    fontSize: 12.5, fontWeight: 700, letterSpacing: ".02em",
+  },
   navItem: {
     display: "flex", alignItems: "center", gap: 11, borderRadius: 8,
-    color: "var(--nav-ink-soft)", fontSize: 14, fontWeight: 500, marginBottom: 2,
+    color: "var(--nav-ink-soft)", fontSize: 13.5, fontWeight: 500, marginBottom: 2,
     whiteSpace: "nowrap", overflow: "hidden",
   },
   navActive: { background: "var(--petrol)", color: "var(--nav-active-ink)" },
@@ -285,7 +387,11 @@ const styles = {
     color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, width: "100%",
     cursor: "pointer",
   },
+  plataforma: {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10,
+    fontSize: 11.5, fontWeight: 600, letterSpacing: ".02em", color: "var(--nav-ink-soft)",
+  },
   // Main ahora ocupa TODO el ancho restante y centra su contenido.
   main: { flex: 1, minWidth: 0, width: "100%", padding: "clamp(16px, 3vw, 28px) clamp(14px, 3vw, 40px)", display: "flex", justifyContent: "center" },
-  contentWrap: { width: "100%", maxWidth: 1200 },
+  contentWrap: { width: "100%", maxWidth: 1240 },
 };

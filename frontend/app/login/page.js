@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { login } from "../../lib/api";
+import { useEffect, useState } from "react";
+import { login, RUTA_CAMBIO } from "../../lib/api";
+import { LEMA, LogoClinube } from "../../lib/marca";
+import { initColorMode } from "../../lib/theme";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -9,13 +11,21 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Todavía no hay clínica: paleta de Clinube, con el modo y el «Sin
+  // color» que la persona tenga elegidos en este navegador.
+  useEffect(() => initColorMode(), []);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      window.location.href = "/panel/";
+      const sesion = await login(email, password);
+      // Entrar con una contraseña temporal funciona —si no, no habría
+      // forma de cambiarla—, pero el panel entero está bloqueado hasta
+      // que se elija la propia, así que se va derecho allí en vez de a
+      // un escritorio donde todo fallaría.
+      window.location.href = sesion?.must_change_password ? RUTA_CAMBIO : "/panel/";
     } catch (err) {
       setError(err.message);
     } finally {
@@ -27,9 +37,8 @@ export default function LoginPage() {
     <div style={styles.wrap}>
       <div style={styles.brandSide}>
         <div style={styles.brandInner}>
-          <div style={styles.tooth} aria-hidden="true">◠</div>
-          <h1 style={styles.brandTitle}>Clínica<br />Odontológica</h1>
-          <p style={styles.brandSub}>Sistema de gestión clínica</p>
+          <h1 style={styles.brandTitle}><LogoClinube alto={58} tinta="#ffffff" acento="var(--mint)" /></h1>
+          <p style={styles.brandSub}>{LEMA}</p>
         </div>
       </div>
 
@@ -69,12 +78,11 @@ export default function LoginPage() {
 const styles = {
   wrap: { display: "flex", minHeight: "100vh" },
   brandSide: {
-    flex: "0 0 42%", background: "var(--petrol-deep)", color: "#fff",
+    flex: "0 0 42%", background: "var(--nav-bg)", color: "#fff",
     display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
   },
   brandInner: { maxWidth: 320 },
-  tooth: { fontSize: 64, lineHeight: 1, color: "var(--mint)", marginBottom: 18 },
-  brandTitle: { fontSize: 40, lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.02em" },
+  brandTitle: { margin: 0 },
   brandSub: { marginTop: 12, color: "var(--mint)", fontSize: 15 },
   formSide: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
   form: { width: "100%", maxWidth: 380 },

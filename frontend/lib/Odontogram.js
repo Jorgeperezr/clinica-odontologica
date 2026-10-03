@@ -50,8 +50,23 @@ function isDark(hex) {
   return (r * 299 + g * 587 + b * 114) / 1000 < 140;
 }
 
+/**
+ * ¿Mesial a la DERECHA de la celda? En los cuadrantes 1, 4, 5 y 8 —la
+ * mitad izquierda del formulario— la cara mesial mira a la línea media,
+ * que queda a su derecha. En el 2, 3, 6 y 7, a su izquierda.
+ *
+ * Antes el comentario de abajo decía «se rota por lado» pero el código no
+ * lo hacía: mesial era siempre el triángulo izquierdo, así que en la mitad
+ * izquierda del formulario cada registro de mesial se dibujaba en la cara
+ * distal de la pieza (y al revés). Los datos guardados eran correctos —la
+ * superficie se guarda por su nombre—; lo que mentía era el dibujo.
+ */
+export function mesialALaDerecha(code) {
+  return ["1", "4", "5", "8"].includes(String(code)[0]);
+}
+
 // Polígonos de cada superficie (coordenadas locales dentro de la celda)
-function surfacePaths(round) {
+function surfacePaths(round, mesialDerecha) {
   if (round) {
     // Para temporales usamos el mismo esquema de rombo pero recortado
     // visualmente con un círculo (clipPath). Geometría idéntica.
@@ -62,16 +77,16 @@ function surfacePaths(round) {
     vestibular: `${M},${M} ${C},${M} ${b},${a} ${a},${a}`,
     // triángulo inferior = palatina/lingual
     palatal_lingual: `${M},${C} ${C},${C} ${b},${b} ${a},${b}`,
-    // triángulo izquierdo = distal (hemiarcada derecha) — se rota por lado
-    mesial: `${M},${M} ${a},${a} ${a},${b} ${M},${C}`,
-    distal: `${C},${M} ${b},${a} ${b},${b} ${C},${C}`,
+    // triángulos laterales: mesial mira a la línea media (ver arriba)
+    [mesialDerecha ? "distal" : "mesial"]: `${M},${M} ${a},${a} ${a},${b} ${M},${C}`,
+    [mesialDerecha ? "mesial" : "distal"]: `${C},${M} ${b},${a} ${b},${b} ${C},${C}`,
     // cuadrado central = oclusal / incisal
     occlusal: `${a},${a} ${b},${a} ${b},${b} ${a},${b}`,
   };
 }
 
 function ToothCell({ code, x, y, round, surfaces, onSurfaceClick, selected, selectedSurface }) {
-  const paths = surfacePaths(round);
+  const paths = surfacePaths(round, mesialALaDerecha(code));
   const clipId = `clip-${code}`;
   const order = ["vestibular", "distal", "palatal_lingual", "mesial", "occlusal"];
 
